@@ -70,6 +70,67 @@ function checkAuth() {
 // ============ 生命周期 ============
 onMounted(() => {
   checkAuth();
+
+  Function.prototype.myCall = function (context, ...args) {
+    context = context || globalThis
+
+    const fn = Symbol()
+
+    context[fn] = this
+
+    const result = context[fn](...args)
+
+    delete context[fn]
+
+    return result
+  }
+
+  Function.prototype.myApply = function (context, args) {
+    context = context || globalThis
+
+    const fn = Symbol()
+
+    context[fn] = this
+
+    const result = context[fn](...(args || []))
+
+    delete context[fn]
+
+    return result
+  }
+
+  Function.prototype.myBind = function (context, ...args) {
+    const self = this
+
+    function bound(...newArgs) {
+      if (this instanceof bound) {
+        return new self(...args, ...newArgs)
+      }
+
+      return self.apply(context, [...args, ...newArgs])
+    }
+
+    bound.prototype = Object.create(self.prototype)
+
+    return bound
+  }
+  function myNew(fn, ...args) {
+    const obj = Object.create(fn.prototype)
+
+    const result = fn.apply(obj, args)
+
+    return result instanceof Object ? result : obj
+  }
+
+  function say() {
+    console.log(this.name)
+  }
+
+  const person = { name: "张三" }
+
+  say.myCall(person)
+  say.myApply(person)
+  say.myBind(person)
 });
 </script>
 
@@ -93,6 +154,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden;
 }
 
 /* 用户信息栏 */
@@ -151,7 +213,7 @@ body {
 }
 
 /* 调整 ChatView 高度 */
-.main-app :deep(.app-container) {
+/*.main-app :deep(.app-container) {
   height: calc(100vh - 48px);
-}
+}*/
 </style>

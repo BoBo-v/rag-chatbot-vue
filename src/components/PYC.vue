@@ -198,7 +198,7 @@
 import { ref, nextTick, onMounted, watch } from 'vue';
 
 // ============ 配置 ============
-const API_URL = 'http://localhost:8000/api';
+const API_URL = 'http://localhost:8001/api';
 
 // ============ 状态 ============
 const question = ref('');
@@ -231,6 +231,7 @@ function autoResize() {
     textarea.style.height = 'auto';
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
   }
+  console.log('autoResize', textarea)
 }
 
 function scrollToBottom(smooth = true) {
@@ -258,7 +259,7 @@ async function createNewSession() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
-
+    console.log('Create session:', response)
     if (!response.ok) throw new Error('创建会话失败');
 
     const data = await response.json();
@@ -284,7 +285,7 @@ async function fetchSessions() {
   try {
     const response = await fetch(`${API_URL}/sessions`);
     if (!response.ok) throw new Error('获取会话列表失败');
-
+    console.log('Fetch sessions:', response)
     const data = await response.json();
     sessions.value = data.sessions || [];
     connectionError.value = false;
@@ -311,7 +312,7 @@ async function loadHistory(sessionId) {
   try {
     const response = await fetch(`${API_URL}/sessions/${sessionId}/history`);
     if (!response.ok) throw new Error('加载历史失败');
-
+    console.log('Load history:', response)
     const data = await response.json();
 
     // 转换消息格式
@@ -404,7 +405,7 @@ async function sendMessage() {
   scrollToBottom();
 
   try {
-    const response = await fetch(`${API_URL}/chat/stream`, {
+    const response = await fetch(`${API_URL}/agent/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

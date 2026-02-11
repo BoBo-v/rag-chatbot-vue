@@ -159,7 +159,7 @@
 import { ref, reactive, watch } from 'vue';
 
 // ============ 配置 ============
-const API_URL = 'http://localhost:8000/api';
+const API_URL = 'http://localhost:8001/api';
 
 // ============ Props & Emits ============
 const emit = defineEmits(['login-success']);

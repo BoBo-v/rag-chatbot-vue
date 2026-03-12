@@ -31,7 +31,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import {ref, onMounted, reactive} from 'vue';
 import AuthView from './components/AuthView.vue';
 import ChatView from './components/PYC.vue';
 
@@ -323,7 +323,177 @@ onMounted(() => {
   //公式： $距离 = 速度 \times \Delta t$（Delta Time）
   //效果： 即使因为计算量大导致帧率从 60fps 掉到 30fps，红包虽然看起来没那么连贯
   // ，但它到达终点的时间是一致的，不会产生“慢动作”的感觉。
+
+  //display:none 虽然不会参与layout和paint
+  //但是dom节点仍然存在于domTree中
+  //大量dom会带来1.创建成本2.维护成本3.样式的重新计算成本4内存压力
+  //而 虚拟列表通过只渲染可视区域dom
+  //将dom数量降至20从根本上解决浏览器需要处理的节点数量
+  //减少创建和销毁所以性能会显著提升
+
+  //在动态高度虚拟列表中，初期渲染时通常使用 estimateHeight 函数来估算一个item的高度
+  //以便快速计算列表的总高度和startIndex
+  //当元素真正渲染后，通过 getBoundingClientRect() 获取元素高度，测量真实高度
+  //虚拟列表会更新每一个item的高度缓存并重新计算累计高度数组
+  //累计高度发生变化，从而导致startIndex和translateY值变化重新计算
+  //由于scrollTop没有变化，但内部元素位置发生变化
+  //用户视觉上就会看到页面突然抖动scroll jitter
+
+  let activeEffect1=null
+  function track(target,key){
+    if(!activeEffect1) return
+    let depmap=targetMap.get(target)
+    if(!depmap){
+      targetMap.set(target,(depmap=new Map()))
+    }
+    let dep=depmap.get(key)
+    if(!dep){
+      depmap.set(key,(dep=new Set()))
+    }
+    dep.add(activeEffect1)
+  }
+  function trigger(target,key){
+    let depmap=targetMap.get(target)
+    if(!depmap) return
+    const dep=depmap.get(key)
+    if(dep){
+      dep.forEach(effect=>{
+        if(effect.scheduler){
+          effect.scheduler()
+        }else{
+          effect.run()
+        }
+      })
+    }
+  }
+
+
 });
+Function.prototype.myapply=function(context,args){
+  context = context == null ? window : Object(context)
+  const key = Symbol()
+
+  context[key] = this
+  const result = args
+      ? context[key](...args)
+      : context[key]()
+
+  delete context[key]
+
+  return result
+}
+
+Function.prototype.mybind =function (context,...bindArgs){
+  const fns=this
+  function boundF(...args){
+    const isNew=this instanceof boundF
+    const thisArg=isNew?this:context
+    return fns.apply(thisArg,[...bindArgs,...args])
+  }
+  boundF.prototype = Object.create(fns.prototype)
+  return boundF
+}
+
+class MyPromise {
+  constructor(executor) {
+    this.state="pending"
+    this.value=undefined
+    this.onFulfilledCallbacks=[]
+    this.onRejectedCallbacks=[]
+    const resolve=(value)=>{
+      if(this.state==="pending"){
+        this.state="fulfilled"
+        this.value=value
+
+        this.onFulfilledCallbacks.forEach(fn=>fn())
+      }
+    }
+    const reject=(reason)=>{
+      if(this.state==="pending"){
+        this.state="rejected"
+        this.value=reason
+        this.onRejectedCallbacks.forEach(fn=>fn())
+      }
+    }
+    executor(resolve,reject)
+  }
+  then(onFulfilled,onRejected){
+    let promise2=new MyPromise((resolve,reject)=>{
+      if(this.state === "fulfilled"){
+
+        queueMicrotask(()=>{
+
+          const x = onFulfilled(this.value)
+
+          resolvePromise(promise2,x,resolve,reject)
+
+        })
+
+      }
+
+      if(this.state === "rejected"){
+
+        const x = onRejected(this.value)
+
+        reject(x)
+
+      }
+      if(this.state === "pending"){
+
+        this.onFulfilledCallbacks.push(()=>{
+          const x = onFulfilled(this.value)
+          resolve(x)
+        })
+
+        this.onRejectedCallbacks.push(()=>{
+          const x = onRejected(this.value)
+          reject(x)
+        })
+
+      }
+    })
+    return promise2
+  }
+}
+function resolvePromise(promise2,x,resolve,reject){
+
+  if(promise2 === x){
+    return reject(new TypeError("Chaining cycle"))
+  }
+
+  let called = false; // ✅ 状态锁：确保 resolve/reject 只被调用一次
+
+
+    // 如果 x 是对象或函数，才可能有 then
+  if (x !== null && (typeof x === 'object' || typeof x === 'function')) {
+      try {
+        let then = x.then;
+        if (typeof then === 'function') {
+          // 是 thenable！我们需要执行它
+          then.call(x, (y) => {
+
+            resolvePromise(promise2, y, resolve, reject);
+
+          }, (r) => {
+            reject(r);
+          });
+        } else {
+          resolve(x); // 有 then 但不是函数，直接成功
+        }
+      } catch (e) {
+        reject(e); // 取 then 报错直接失败
+      }
+  }else{
+
+    resolve(x)
+    called = true;
+  }
+
+}
+// 曾经在处理一个多接口联动顺序调用的场景时，我研究过它底层驱动原理，即通过
+//迭代器自动执行（类似co模块）将yield产出的prmoise结果回传，这让我能更精准
+//地控制异步副作用，并在复杂的try-catch中处理错误冒泡机制定位异步异常
+
 </script>
 
 <style>

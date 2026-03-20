@@ -31,7 +31,7 @@
 </template>
 
 <script setup>
-import {ref, onMounted, reactive} from 'vue';
+import {ref, onMounted, reactive,watch} from 'vue';
 import AuthView from './components/AuthView.vue';
 import ChatView from './components/PYC.vue';
 
@@ -494,7 +494,48 @@ function resolvePromise(promise2,x,resolve,reject){
 //迭代器自动执行（类似co模块）将yield产出的prmoise结果回传，这让我能更精准
 //地控制异步副作用，并在复杂的try-catch中处理错误冒泡机制定位异步异常
 
-</script>
+//基础版diff
+function Diffs(c1,c2,container){
+  const oldLength=c1.length
+  const newLength=c2.length
+
+  const commonLength=Math.min(oldLength,newLength)
+  //更新公共部分
+  for(let i=0;i<commonLength;i++){
+    patch(c1[i],c2[i],container)
+  }
+  //新增
+  if(newLength>oldLength){
+    for(let i=commonLength;i<newLength;i++){
+      mountElement(c2[i],container)
+    }
+  }
+  //删除
+  else if(oldLength>newLength){
+    for(let i=commonLength;i<oldLength;i++){
+      container.removeChild(c1[i])
+    }
+  }
+}
+//Vite 开发不打包，生产为什么要打包？
+//开发时不打包是因为本地网络没有http请求成本，按需转译让启动和热更新极快
+//生产时必须打包是因为真实网络每个请求都有延迟，几百个ESM请求会严重拖慢首屏
+//同时需要压缩，treeShaking ,代码分割来优化传输体积和缓存策略
+
+//lodash Tree Shaking 两个必要条件
+//第一 使用ESM格式的包（lodash-es而非lodash）,因为只有静态import/export
+//才能被静态解析
+//第二 包的package.json里声明“sideEffects”:false，告诉构建工具
+//可以安全删除未引用的导出 这两点缺一不可
+
+//Vite 开发用 esbuild，生产用 Rollup，为什么
+//esbuild极快,适合开发时单文件按需转译，速度是最高优先级
+//但生产构建需要完善的代码分割，tree-shaking,css提取，这些esbuild目前不够好
+//Rollup在这方面更成书，产物更小更干净，虽然慢一点
+//但是生产只构建一次，慢几十秒完全可以接受
+//所以vite的策略是：开发用esbuild追求急速，生产用rollup追求产物质量
+
+ </script>
 
 <style>
 /* 全局样式 */

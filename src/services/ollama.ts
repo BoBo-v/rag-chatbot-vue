@@ -1,5 +1,12 @@
 import type { Message } from '../types/chat'
 
+/**
+ * 带上下文的流式文本生成，支持多轮对话
+ * @param messages - 历史消息数组，包含之前的对话记录
+ * @param userText - 用户当前输入的文本
+ * @param onChunk - 回调函数，在接收到每个数据块时调用，参数为生成的文本片段
+ * @param onDone - 回调函数，在生成完成时调用
+ */
 export async function generateStreamWithContext(
     messages: Message[],
     userText: string,

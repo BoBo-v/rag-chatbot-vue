@@ -6,5 +6,6 @@ export interface Message {
     id: string
     role: Role
     content: string
-    status: MessageStatus
+    status: MessageStatus,
+    time?: string
 }

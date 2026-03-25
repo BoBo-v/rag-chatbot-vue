@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import type { Message } from '../types/chat'
 
 export function useChat() {
+    //聊天列表
     const messages = ref<Message[]>([])
 
     /**

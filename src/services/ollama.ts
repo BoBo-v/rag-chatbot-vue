@@ -2,9 +2,11 @@
  * 调用 Ollama API 生成文本，支持流式返回
  * @param prompt - 提示词，用于引导模型生成文本
  * @param onChunk - 回调函数，在接收到每个数据块时调用，参数为生成的文本片段
+ * @param onDone - 回调函数，在生成完成时调用
  */
-export async function generateText(
-    prompt: string, onChunk: (chunk: string) => void
+export async function generateStream(
+    prompt: string, onChunk: (chunk: string) => void,
+    onDone: () => void
 ) {
     const res = await fetch('http://localhost:11434/api/generate', {
         method: 'POST',
@@ -38,14 +40,18 @@ export async function generateText(
 
         for (const line of lines) {
             if (!line.trim()) continue
-
+            console.log('line', line,JSON.parse(line))
+            const jsons = JSON.parse(line)
             try {
-                console.log('line', line,JSON.parse(line))
-                const jsons = JSON.parse(line)
                 onChunk(jsons.response || '')
             } catch (e) {
                 console.error('解析失败', line)
             }
+            let isDone = false
+            if (jsons.done && !isDone) {
+                onDone()
+            }
+
         }
     }
 }

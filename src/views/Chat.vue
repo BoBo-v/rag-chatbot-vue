@@ -9,16 +9,17 @@
 </template>
 <script setup lang="ts">
 import { useChat } from '../stores/chat'
-import { generateText } from '../services/ollama'
+import {generateStream} from '../services/ollama'
 
 const { messages,
   addMessage,
   createAssistantMessage,
   appendToMessage,
+    finishMessage
 } = useChat()
 async function handleSend() {
   addMessage({
-    id: "assistant-"+Date.now().toString(),
+    id: crypto.randomUUID(),
     role: 'user',
     content: '你好',
     status: 'done'
@@ -26,9 +27,11 @@ async function handleSend() {
   //ai占位消息
   const aiMsg = createAssistantMessage()
   //模拟流式输出
-   await generateText('你好',(chunk)=>{
+   await generateStream('你好',(chunk)=>{
     appendToMessage(aiMsg.id, chunk)
-  })
+  }, () => {
+     finishMessage(aiMsg.id)
+   })
 
 
 

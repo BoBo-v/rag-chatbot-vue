@@ -18,7 +18,7 @@ export function useChat() {
      */
     function createAssistantMessage(): Message {
         const msg: Message = {
-            id: Date.now().toString(),
+            id:crypto.randomUUID(),
             role: 'assistant',
             content: '',
             status: 'loading'

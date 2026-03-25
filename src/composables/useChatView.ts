@@ -1,6 +1,6 @@
 import { ref, nextTick, onMounted, onUnmounted } from 'vue'
 import { useChat } from '../stores/chat'
-import { generateStream } from '../services/ollama'
+import { generateStreamWithContext} from '../services/ollama'
 
 export function useChatView() {
     const { messages, addMessage, createAssistantMessage, appendToMessage, finishMessage } = useChat()
@@ -39,6 +39,7 @@ export function useChatView() {
             const el = containerRef.value
             if (el) el.scrollTop = el.scrollHeight
             isScrolling = false
+            console.log('scrollToBottom执行')
         })
     }
 
@@ -61,18 +62,19 @@ export function useChatView() {
 
     // ── 发送消息 ──────────────────────────────────────────
 
+
     async function handleSend(): Promise<void> {
         if (!inputValue.value.trim() || isStreaming.value) return
 
         isStreaming.value = true
-        const userInput = inputValue.value
+        const userText = inputValue.value
         inputValue.value = ''
 
         // 1. 写入用户消息
         addMessage({
             id: crypto.randomUUID(),
             role: 'user',
-            content: userInput,
+            content: userText,
             status: 'done',
         })
 
@@ -81,11 +83,12 @@ export function useChatView() {
 
         try {
             // 3. 流式接收
-            await generateStream(
-                userInput,
+            await generateStreamWithContext(
+                messages.value,
+                userText,
                 (chunk) => {
                     appendToMessage(aiMsg.id, chunk)
-                    // 用户不在底部时累计未读数，否则自动滚动
+
                     if (!userAtBottom) {
                         unreadCount.value++
                     } else {
@@ -93,7 +96,6 @@ export function useChatView() {
                     }
                 },
                 () => {
-                    // done 信号：关闭 loading 状态
                     finishMessage(aiMsg.id)
                 }
             )

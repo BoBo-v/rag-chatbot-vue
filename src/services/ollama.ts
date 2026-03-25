@@ -1,3 +1,44 @@
+import type { Message } from '../types/chat'
+
+export async function generateStreamWithContext(
+    messages: Message[],
+    userText: string,
+    onChunk: (chunk: string) => void,
+    onDone: () => void
+) {
+    // 1️⃣ 构建 prompt（把逻辑收进来）
+    const prompt = buildPrompt([
+        ...messages,
+        {
+            id: 'temp',
+            role: 'user',
+            content: userText,
+            status: 'done'
+        }
+    ])
+
+    // 2️⃣ 直接复用你原来的流式函数
+    return generateStream(prompt, onChunk, onDone)
+}
+/**
+ * 构建提示词，将消息数组格式化为对话文本
+ * @param messages - 消息数组，每条消息包含 role 和 content 属性
+ * @returns 格式化后的对话文本，用户消息前缀为"用户:"，AI 消息前缀为"AI:"，每行用换行符分隔
+ */
+export function buildPrompt(messages: Message[]) {
+    const recent = messages.slice(-10)
+
+    const system = `你是一个专业的 AI 助手，回答要简洁清晰。`
+
+    const history = recent.map(msg => {
+        return msg.role === 'user'
+            ? `用户: ${msg.content}`
+            : `AI: ${msg.content}`
+    }).join('\n')
+
+    return `${system}\n\n${history}\nAI:`
+}
+
 /**
  * 调用 Ollama API 生成文本，支持流式返回
  * @param prompt - 提示词，用于引导模型生成文本
@@ -8,7 +49,8 @@ export async function generateStream(
     prompt: string, onChunk: (chunk: string) => void,
     onDone: () => void
 ) {
-    const res = await fetch('http://localhost:11434/api/generate', {
+const res = await fetch('http://localhost:11434/api/generate', {
+    //const res = await fetch('http://192.168.1.142:11434/api/generate', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -40,7 +82,7 @@ export async function generateStream(
 
         for (const line of lines) {
             if (!line.trim()) continue
-            console.log('line', line,JSON.parse(line))
+            //console.log('line', line,JSON.parse(line))
             const jsons = JSON.parse(line)
             try {
                 onChunk(jsons.response || '')

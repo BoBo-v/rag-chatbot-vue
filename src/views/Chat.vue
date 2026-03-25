@@ -18,7 +18,7 @@
 <script setup lang="ts">
 import { ref ,nextTick,onMounted, onUnmounted } from 'vue'
 import { useChat } from '../stores/chat'
-import {generateStream} from '../services/ollama'
+import {generateStream,buildPrompt} from '../services/ollama'
 
 const { messages,
   addMessage,
@@ -47,6 +47,17 @@ async function scrollToBottom() {
   unreadCount.value = 0
   userAtBottom = true
 }
+
+//拼接聊天历史记录
+const prompt = buildPrompt([
+  ...messages.value,
+  {
+    id: 'temp',
+    role: 'user',
+    content: inputValue.value,
+    status: 'done'
+  }
+])
 /**
  * 处理发送消息的逻辑
  * 添加用户消息并调用 AI 生成流式响应，实时更新助手消息内容
@@ -65,7 +76,7 @@ async function handleSend() {
   const aiMsg = createAssistantMessage()
   try{ //用try处理如果网络错误会导致后续逻辑永远不会执行
     //流式输出返回数据
-    await generateStream(inputValue.value,async (chunk)=>{
+    await generateStream(prompt,async (chunk)=>{
       appendToMessage(aiMsg.id, chunk)
       //根据内容长度判断是否滚动
       //if(shouldScroll(aiMsg.content)) scheduleScroll()

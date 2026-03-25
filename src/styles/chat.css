@@ -152,7 +152,7 @@
     flex: 1;
     overflow-y: auto;
     position: relative;
-    scroll-behavior: smooth;
+    scroll-behavior: auto;
 }
 
 .chat::-webkit-scrollbar { width: 3px; }

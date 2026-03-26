@@ -11,9 +11,10 @@ export async function generateStreamWithContext(
     messages: Message[],
     userText: string,
     onChunk: (chunk: string) => void,
-    onDone: () => void
+    onDone: () => void,
+    signal?: AbortSignal
 ) {
-    // 1️⃣ 构建 prompt（把逻辑收进来）
+    //  构建 prompt（把逻辑收进来）
     const prompt = buildPrompt([
         ...messages,
         {
@@ -24,8 +25,8 @@ export async function generateStreamWithContext(
         }
     ])
 
-    // 2️⃣ 直接复用你原来的流式函数
-    return generateStream(prompt, onChunk, onDone)
+    //  直接复用原来的流式函数
+    return generateStream(prompt, onChunk, onDone,signal)
 }
 /**
  * 构建提示词，将消息数组格式化为对话文本
@@ -33,15 +34,42 @@ export async function generateStreamWithContext(
  * @returns 格式化后的对话文本，用户消息前缀为"用户:"，AI 消息前缀为"AI:"，每行用换行符分隔
  */
 export function buildPrompt(messages: Message[]) {
-    const recent = messages.slice(-10)
-
     const system = `你是一个专业的 AI 助手，回答要简洁清晰。`
 
-    const history = recent.map(msg => {
-        return msg.role === 'user'
-            ? `用户: ${msg.content}`
-            : `AI: ${msg.content}`
-    }).join('\n')
+    const MAX_TOKENS = 2000
+    let totalTokens = estimateTokens(system)
+    const selected: Message[] = []
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i]
+
+        const msgText =
+            msg.role === 'user'
+                ? `用户: ${msg.content}`
+                : `AI: ${msg.content}`
+
+        const tokens = estimateTokens(msgText)
+
+        if (totalTokens + tokens > MAX_TOKENS) {
+            break
+        }
+
+        selected.unshift(msg)
+        totalTokens += tokens
+    }
+    const history = selected
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .slice(-10)
+        .map(msg => {
+            // ❗关键：清洗 AI 输出
+            const content = msg.content
+                .replace(/^AI:\s*/g, '')
+                .replace(/^用户:\s*/g, '')
+
+            return msg.role === 'user'
+                ? `用户: ${content}`
+                : `AI: ${content}`
+        })
+        .join('\n')
 
     return `${system}\n\n${history}\nAI:`
 }
@@ -54,7 +82,7 @@ export function buildPrompt(messages: Message[]) {
  */
 export async function generateStream(
     prompt: string, onChunk: (chunk: string) => void,
-    onDone: () => void
+    onDone: () => void,signal?: AbortSignal
 ) {
 const res = await fetch('http://localhost:11434/api/generate', {
     //const res = await fetch('http://192.168.1.142:11434/api/generate', {
@@ -66,41 +94,64 @@ const res = await fetch('http://localhost:11434/api/generate', {
             model: 'qwen2.5:1.5b',
             prompt,
             stream: true // 流式返回
-        })
+        }),
+        signal
     })
 
     const reader = res.body?.getReader()
     const decoder = new TextDecoder('utf-8')
 
     let buffer = ''
+    let isDone = false
 
-    while (true) {
-        const { done, value } = await reader!.read()
+    try {
+        while (true) {
+            const {done, value} = await reader!.read()
 
-        if (done) break
+            if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
+            buffer += decoder.decode(value, {stream: true})
 
-        // 按行拆分（关键）
-        const lines = buffer.split('\n')
+            // 按行拆分（关键）
+            const lines = buffer.split('\n')
 
-        // 最后一行可能不完整，留着
-        buffer = lines.pop() || ''
+            // 最后一行可能不完整，留着
+            buffer = lines.pop() || ''
 
-        for (const line of lines) {
-            if (!line.trim()) continue
-            //console.log('line', line,JSON.parse(line))
-            const jsons = JSON.parse(line)
-            try {
-                onChunk(jsons.response || '')
-            } catch (e) {
-                console.error('解析失败', line)
+            for (const line of lines) {
+                if (!line.trim()) continue
+                //console.log('line', line,JSON.parse(line))
+                const jsons = JSON.parse(line)
+                try {
+                    onChunk(jsons.response || '')
+                } catch (e) {
+                    console.error('解析失败', line)
+                }
+
+                if (jsons.done && !isDone) {
+                    onDone()
+                }
+
             }
-            let isDone = false
-            if (jsons.done && !isDone) {
-                onDone()
-            }
-
+        }
+    } catch (err: any) {
+        if (err.name === 'AbortError') {
+            console.log('请求被中断')
+        } else {
+            console.error(err)
+        }
+    }finally {
+        if (!isDone) {
+            onDone()
         }
     }
+}
+/**
+ * 估算文本的 token 数量
+ * @param text - 需要估算的文本字符串
+ * @returns 估算的 token 数量（基于字符长度）
+ */
+function estimateTokens(text: string): number {
+    // 粗略估算：1个中文 ≈ 1 token，英文 ≈ 0.5
+    return text.length
 }

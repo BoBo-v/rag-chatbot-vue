@@ -14,7 +14,8 @@ export function useChatView() {
     // 用普通变量而非 ref，不需要模板绑定，避免响应式开销
     let userAtBottom = true
     let isScrolling  = false
-
+    let stopped = false
+    let controller: AbortController | null = null
     // ── 滚动相关 ──────────────────────────────────────────
 
     /** 判断是否已经在底部（阈值 20px） */
@@ -67,6 +68,8 @@ export function useChatView() {
         if (!inputValue.value.trim() || isStreaming.value) return
 
         isStreaming.value = true
+        stopped = false
+        controller = new AbortController()
         const userText = inputValue.value
         inputValue.value = ''
 
@@ -87,6 +90,7 @@ export function useChatView() {
                 messages.value,
                 userText,
                 (chunk) => {
+                    if (stopped) return
                     appendToMessage(aiMsg.id, chunk)
 
                     if (!userAtBottom) {
@@ -97,7 +101,8 @@ export function useChatView() {
                 },
                 () => {
                     finishMessage(aiMsg.id)
-                }
+                },
+                controller.signal
             )
         } finally {
             // 无论成功 / 报错都解除禁用
@@ -106,6 +111,20 @@ export function useChatView() {
         }
     }
 
+    /**
+     * 处理停止流式响应的操作
+     * 中止当前的请求控制器并重置流状态
+     */
+    function handleStop() {
+        if (!controller) return
+        if (controller) {
+            stopped = true
+            controller.abort()
+            controller = null
+        }
+
+        isStreaming.value = false
+    }
     // ── 生命周期 ──────────────────────────────────────────
 
     onMounted(() => {
@@ -124,8 +143,10 @@ export function useChatView() {
         isStreaming,
         unreadCount,
         containerRef,
+        controller,
         // 方法
         handleSend,
         scrollToBottom,
+        handleStop
     }
 }

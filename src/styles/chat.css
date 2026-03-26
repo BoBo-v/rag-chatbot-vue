@@ -2,7 +2,40 @@
    chat.css  —  AI Chat 界面样式
    结构：背景动效 / 顶栏 / 消息区 / 气泡 / 输入区
    ═══════════════════════════════════════════════ */
+/* ─── 停止按钮 ────────────────────────────────── */
+.stop-btn {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    letter-spacing: 0.02em;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+    animation: stop-in 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
 
+@keyframes stop-in {
+    from { opacity: 0; transform: scale(0.8); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.stop-btn:hover {
+    background: rgba(239, 68, 68, 0.22);
+    border-color: rgba(248, 113, 113, 0.7);
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.35);
+    transform: scale(1.06);
+}
+
+.stop-btn:active {
+    transform: scale(0.96);
+}
 /* ─── 背景动效 ─────────────────────────────────── */
 .bg-canvas {
     position: fixed;

@@ -80,16 +80,19 @@
             @keydown.enter="handleSend"
         />
         <button
+            v-if="isStreaming"
+            class="stop-btn"
+            @click="handleStop"
+        >■</button>
+
+        <!-- 非 streaming 时：发送按钮 -->
+        <button
+            v-else
             class="send-btn"
-            :class="{ ready: inputValue.trim() && !isStreaming }"
-            :disabled="isStreaming || !inputValue.trim()"
+            :class="{ ready: inputValue.trim() }"
+            :disabled="!inputValue.trim()"
             @click="handleSend"
-        >
-          <span v-if="!isStreaming">↑</span>
-          <span v-else class="loading-dots">
-            <span></span><span></span><span></span>
-          </span>
-        </button>
+        >↑</button>
       </div>
       <div class="input-hint">
         {{ isStreaming ? 'AI 正在回复中...' : 'Enter 发送' }}
@@ -109,6 +112,7 @@ const {
   isStreaming,
   unreadCount,
   containerRef,
+  handleStop,
   handleSend,
   scrollToBottom,
 } = useChatView()

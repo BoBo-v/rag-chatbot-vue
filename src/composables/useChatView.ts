@@ -15,7 +15,7 @@ export function useChatView() {
     let userAtBottom = true
     let isScrolling  = false
     let stopped = false
-    let controller: AbortController | null = null
+    let controller: AbortController | null = null// 流式请求控制器
     // ── 滚动相关 ──────────────────────────────────────────
 
     /** 判断是否已经在底部（阈值 20px） */
@@ -62,11 +62,14 @@ export function useChatView() {
     }
 
     // ── 发送消息 ──────────────────────────────────────────
-
+    let queue: string[] = []
+    let isFlushing = false
 
     async function handleSend(): Promise<void> {
         if (!inputValue.value.trim() || isStreaming.value) return
 
+        queue = []
+        isFlushing = false
         isStreaming.value = true
         stopped = false
         controller = new AbortController()
@@ -91,7 +94,9 @@ export function useChatView() {
                 userText,
                 (chunk) => {
                     if (stopped) return
-                    appendToMessage(aiMsg.id, chunk)
+                    // appendToMessage(aiMsg.id, chunk)
+                    queue.push(chunk)
+                    flushQueue(aiMsg.id)
 
                     if (!userAtBottom) {
                         unreadCount.value++
@@ -111,6 +116,40 @@ export function useChatView() {
         }
     }
 
+    function flushQueue(messageId: string) {
+        if (isFlushing) return
+
+        isFlushing = true
+
+        function step() {
+            if (queue.length === 0) {
+                isFlushing = false
+                return
+            }
+            //  控制“每帧输出多少”
+            const chunk = queue.shift()!
+            // 可以做更细粒度拆分（关键优化点）
+            const chars = chunk.split('')
+
+            let i = 0
+
+            function typeChar() {
+                if (i >= chars.length) {
+                    requestAnimationFrame(step)
+                    return
+                }
+
+                appendToMessage(messageId, chars[i])
+                i++
+
+                requestAnimationFrame(typeChar)
+            }
+
+            typeChar()
+        }
+
+        requestAnimationFrame(step)
+    }
     /**
      * 处理停止流式响应的操作
      * 中止当前的请求控制器并重置流状态

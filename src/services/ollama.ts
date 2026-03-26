@@ -6,6 +6,7 @@ import type { Message } from '../types/chat'
  * @param userText - 用户当前输入的文本
  * @param onChunk - 回调函数，在接收到每个数据块时调用，参数为生成的文本片段
  * @param onDone - 回调函数，在生成完成时调用
+ * @param signal - 可选的 AbortSignal 对象，用于取消请求
  */
 export async function generateStreamWithContext(
     messages: Message[],
@@ -34,7 +35,7 @@ export async function generateStreamWithContext(
  * @returns 格式化后的对话文本，用户消息前缀为"用户:"，AI 消息前缀为"AI:"，每行用换行符分隔
  */
 export function buildPrompt(messages: Message[]) {
-    const system = `你是一个专业的 AI 助手，回答要简洁清晰。`
+    const system = `你是一个专业的 AI 助手，回答要简洁清晰。问你名字就叫小智`
 
     const MAX_TOKENS = 2000
     let totalTokens = estimateTokens(system)
@@ -60,7 +61,7 @@ export function buildPrompt(messages: Message[]) {
         .filter(m => m.role === 'user' || m.role === 'assistant')
         .slice(-10)
         .map(msg => {
-            // ❗关键：清洗 AI 输出
+            // 清洗 AI 输出
             const content = msg.content
                 .replace(/^AI:\s*/g, '')
                 .replace(/^用户:\s*/g, '')
@@ -91,13 +92,13 @@ const res = await fetch('http://localhost:11434/api/generate', {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            model: 'qwen2.5:1.5b',
+            model: 'qwen2.5:7b',
             prompt,
             stream: true // 流式返回
         }),
         signal
     })
-
+    console.log('res',res)
     const reader = res.body?.getReader()
     const decoder = new TextDecoder('utf-8')
 

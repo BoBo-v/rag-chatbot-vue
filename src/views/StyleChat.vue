@@ -41,7 +41,8 @@
         >
           <!-- AI 头像（左） -->
           <div v-if="msg.role === 'assistant'" class="msg-avatar ai-avatar">A</div>
-
+          <!-- 用户头像（右） -->
+          <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">U</div>
           <!-- 气泡 -->
           <div class="msg-bubble" :class="msg.role">
             <div class="msg-content">
@@ -54,8 +55,7 @@
             </div>
           </div>
 
-          <!-- 用户头像（右） -->
-          <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">U</div>
+
         </div>
 
       </div>

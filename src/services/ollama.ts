@@ -104,9 +104,16 @@ const res = await fetch('http://localhost:11434/api/generate', {
 
     let buffer = ''
     let isDone = false
+    let aborted = false
+
+    signal?.addEventListener('abort', () => {// 取消请求
+        aborted = true
+        reader?.cancel()
+    })
 
     try {
         while (true) {
+            if (aborted) break
             const {done, value} = await reader!.read()
 
             if (done) break
@@ -142,6 +149,7 @@ const res = await fetch('http://localhost:11434/api/generate', {
             console.error(err)
         }
     }finally {
+        reader?.releaseLock()// 释放锁
         if (!isDone) {
             onDone()
         }

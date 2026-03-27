@@ -3,7 +3,7 @@ import { useChat } from '../stores/chat'
 import { generateStreamWithContext} from '../services/ollama'
 
 export function useChatView() {
-    const { messages, addMessage, createAssistantMessage, appendToMessage, finishMessage } = useChat()
+    const { messages,abortMessage, addMessage, createAssistantMessage, appendToMessage, finishMessage } = useChat()
 
     // ── 状态 ──────────────────────────────────────────────
     const inputValue   = ref<string>('')
@@ -64,6 +64,8 @@ export function useChatView() {
     // ── 发送消息 ──────────────────────────────────────────
     let queue: string[] = []
     let isFlushing = false
+    let clearblink=true
+    let streamCtrl: ReturnType<typeof createStreamController> | null = null
 
     async function handleSend(): Promise<void> {
         if (!inputValue.value.trim() || isStreaming.value) return
@@ -83,17 +85,18 @@ export function useChatView() {
             content: userText,
             status: 'done',
         })
-
+        await nextTick()
+        scheduleScroll()
         // 2. 创建 AI 占位消息，保存引用用于后续 append
         const aiMsg = createAssistantMessage()
-
+        streamCtrl = createStreamController(aiMsg.id)
         try {
             // 3. 流式接收
             await generateStreamWithContext(
                 messages.value,
                 userText,
                 (chunk) => {
-                    if (stopped) return
+                    if (streamCtrl?.isAborted) return
                     // appendToMessage(aiMsg.id, chunk)
                     queue.push(chunk)
                     flushQueue(aiMsg.id)
@@ -105,14 +108,22 @@ export function useChatView() {
                     }
                 },
                 () => {
-                    finishMessage(aiMsg.id)
+                    clearblink= false
+                    if (streamCtrl?.isAborted) {
+                        abortMessage(aiMsg.id)
+                    } else {
+                        finishMessage(aiMsg.id)
+                    }
                 },
-                controller.signal
+                streamCtrl.controller.signal
             )
         } finally {
             // 无论成功 / 报错都解除禁用
             isStreaming.value = false
             scheduleScroll()
+            if(clearblink && !streamCtrl?.isAborted){ //离开处理光标闪烁问题
+                finishMessage(aiMsg.id)
+            }
         }
     }
 
@@ -134,11 +145,19 @@ export function useChatView() {
             let i = 0
 
             function typeChar() {
+                const currentCtrl = streamCtrl
+
+                if (currentCtrl?.isAborted) return
+
                 if (i >= chars.length) {
+                    requestAnimationFrame(step) // 回到下一 chunk
+                    return
+                }
+                const char = chars[i]
+                if (!char) {
                     requestAnimationFrame(step)
                     return
                 }
-
                 appendToMessage(messageId, chars[i])
                 i++
 
@@ -150,17 +169,63 @@ export function useChatView() {
 
         requestAnimationFrame(step)
     }
+    function createStreamController(messageId: string) {
+        const controller = new AbortController()
+
+        return {
+            messageId,
+            controller,
+            reader: null as ReadableStreamDefaultReader | null,
+            isAborted: false,
+
+            abort() {
+                this.isAborted = true
+                this.controller.abort()
+                this.reader?.cancel()
+            }
+        }
+    }
+    /**
+     * 处理继续生成逻辑，基于现有消息继续流式生成内容
+     * @param messageId - 要继续生成的消息的唯一标识符
+     */
+    async function handleContinue(messageId: string) {
+        const msg = messages.value.find(m => m.id === messageId)
+        if (!msg) return
+
+        // 重新进入 streaming
+        msg.status = 'loading'
+        msg.canContinue = false
+
+        streamCtrl = createStreamController(msg.id)
+
+        await generateStreamWithContext(
+            messages.value,
+            '', // 这里关键点：不需要新用户输入
+            (chunk) => {
+                if (streamCtrl?.isAborted) return
+                appendToMessage(msg.id, chunk)
+            },
+            () => {
+                if (streamCtrl?.isAborted) {
+                    abortMessage(msg.id)
+                } else {
+                    finishMessage(msg.id)
+                }
+            },
+            streamCtrl.controller.signal
+        )
+    }
     /**
      * 处理停止流式响应的操作
      * 中止当前的请求控制器并重置流状态
      */
     function handleStop() {
-        if (!controller) return
-        if (controller) {
-            stopped = true
-            controller.abort()
-            controller = null
-        }
+        if (!streamCtrl) return
+
+        streamCtrl.abort()
+
+        abortMessage(streamCtrl.messageId)
 
         isStreaming.value = false
     }
@@ -186,6 +251,7 @@ export function useChatView() {
         // 方法
         handleSend,
         scrollToBottom,
-        handleStop
+        handleStop,
+        handleContinue
     }
 }

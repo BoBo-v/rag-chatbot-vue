@@ -1,11 +1,12 @@
 export type Role = 'user' | 'assistant'
 
-export type MessageStatus = 'loading' | 'streaming' | 'done' | 'error'
+export type MessageStatus = 'loading' | 'streaming' | 'done' | 'error' | 'aborted'
 
 export interface Message {
     id: string
     role: Role
     content: string
     status: MessageStatus,
-    time?: string
+    time?: string,
+    canContinue?: boolean
 }

@@ -40,22 +40,38 @@
             :class="msg.role"
         >
           <!-- AI 头像（左） -->
-          <div v-if="msg.role === 'assistant'" class="msg-avatar ai-avatar">A</div>
+          <div v-if="msg.role === 'assistant'" :style="msg.status === 'aborted'?'margin-bottom:40px':''"  class="msg-avatar ai-avatar">A</div>
           <!-- 用户头像（右） -->
           <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">U</div>
-          <!-- 气泡 -->
-          <div class="msg-bubble" :class="msg.role">
-            <div class="msg-content">
-              {{ msg.content }}
-              <!-- 流式光标 -->
-              <span
-                  v-if="msg.status === 'loading' || msg.status === 'streaming'"
-                  class="cursor-blink"
-              >▋</span>
+          <div class="msg-col">
+            <!-- 气泡 -->
+            <div class="msg-bubble" :style="msg.status === 'aborted'?'border:1px solid #f87171':''"  :class="msg.role">
+              <div class="msg-content">
+                {{ msg.content }}
+                <!-- 流式光标 -->
+                <span
+                    v-if="msg.status === 'loading' || msg.status === 'streaming'"
+                    class="cursor-blink"
+                >▋</span>
+              </div>
+              <template v-if="msg.status === 'aborted'">
+                <div class="abort-divider"></div>
+                <div class="abort-truncate-row">
+                  <div class="abort-truncate-dash"></div>
+                  生成中断
+                </div>
+              </template>
+            </div>
+            <div v-if="msg.status === 'aborted'" class="abort-badge-row">
+              <div class="badge-aborted">
+                <div class="abort-dot"></div>
+                已停止
+              </div>
+              <button class="btn-continue" @click="handleContinue(msg.id)">
+                ↻ 继续生成
+              </button>
             </div>
           </div>
-
-
         </div>
 
       </div>
@@ -63,7 +79,7 @@
       <!-- 新消息提示 -->
       <transition name="fade-up">
         <div v-if="unreadCount > 0" class="unread-badge" @click="scrollToBottom">
-          ↓ {{ unreadCount }} 条新消息
+          ↓  有新消息
         </div>
       </transition>
     </div>
@@ -114,6 +130,7 @@ const {
   containerRef,
   handleStop,
   handleSend,
+  handleContinue,
   scrollToBottom,
 } = useChatView()
 </script>

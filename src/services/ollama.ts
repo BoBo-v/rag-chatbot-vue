@@ -113,7 +113,7 @@ const res = await fetch('http://localhost:11434/api/generate', {
 
     try {
         while (true) {
-            if (aborted) break
+            if (aborted) break// 取消请求
             const {done, value} = await reader!.read()
 
             if (done) break

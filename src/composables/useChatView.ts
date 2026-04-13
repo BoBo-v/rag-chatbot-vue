@@ -14,7 +14,6 @@ export function useChatView() {
     // 用普通变量而非 ref，不需要模板绑定，避免响应式开销
     let userAtBottom = true
     let isScrolling  = false
-    let stopped = false
     let controller: AbortController | null = null// 流式请求控制器
     // ── 滚动相关 ──────────────────────────────────────────
 
@@ -73,7 +72,6 @@ export function useChatView() {
         queue = []
         isFlushing = false
         isStreaming.value = true
-        stopped = false
         controller = new AbortController()
         const userText = inputValue.value
         inputValue.value = ''

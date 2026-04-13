@@ -82,8 +82,10 @@ export function buildPrompt(messages: Message[]) {
  * @param onDone - 回调函数，在生成完成时调用
  */
 export async function generateStream(
-    prompt: string, onChunk: (chunk: string) => void,
-    onDone: () => void,signal?: AbortSignal
+    prompt: string,
+    onChunk: (chunk: string) => void,
+    onDone: () => void,
+    signal?: AbortSignal
 ) {
 const res = await fetch('http://localhost:11434/api/generate', {
     //const res = await fetch('http://192.168.1.142:11434/api/generate', {
@@ -137,6 +139,7 @@ const res = await fetch('http://localhost:11434/api/generate', {
                 }
 
                 if (jsons.done && !isDone) {
+                    isDone = true
                     onDone()
                 }
 
@@ -151,6 +154,7 @@ const res = await fetch('http://localhost:11434/api/generate', {
     }finally {
         reader?.releaseLock()// 释放锁
         if (!isDone) {
+            isDone = true
             onDone()
         }
     }

@@ -2,6 +2,70 @@
    chat.css  —  AI Chat 界面样式
    结构：背景动效 / 顶栏 / 消息区 / 气泡 / 输入区
    ═══════════════════════════════════════════════ */
+/* Markdown 基础样式微调 */
+.markdown-body {
+    text-align: left;
+    display: block;
+    width: 100%;
+    line-height: 1.6;
+    /* 允许正常的长单词或 URL 在必要时换行，但不会拆碎普通单词 */
+    word-break: normal;
+}
+
+/* 针对代码块的自动换行（如果你希望代码也不要横向滚动，而是换行） */
+.markdown-body pre {
+    margin: 0 0 8px 0;
+    white-space: normal;
+    display: block;
+}
+
+.markdown-body p {
+    margin-bottom: 8px;
+    white-space: normal;
+}
+
+.markdown-body pre {
+    background: #1e1e1e;
+    padding: 12px;
+    border-radius: 8px;
+    margin: 10px 0;
+    /* 关键：代码块必须允许横向滚动，不能强制换行 */
+    overflow-x: auto;
+    display: block;
+    /* 只有 pre 需要保留原始格式 */
+    white-space: pre;
+}
+
+.markdown-body code {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    /* 行内代码样式 */
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    /* 行内代码可以正常换行 */
+    white-space: pre-wrap;
+}
+
+.markdown-body ul, .markdown-body ol {
+    padding-left: 20px;
+    margin: 8px 0;
+    display: block;
+}
+
+.markdown-body li {
+    display: list-item;
+    margin-bottom: 4px;
+}
+
+/* 光标闪烁动画 */
+@keyframes blink {
+    50% { opacity: 0; }
+}
+/* 如果你在 renderContent 里加了 ▋，可以针对这个字符做动画 */
+.markdown-body:contains('▋') {
+    /* 这里的选择器比较难写，建议给 ▋ 加个标签 */
+}
+
 /* ─── 中断气泡内部 ──────────────────── */
 .msg-col {
     display: flex;
@@ -361,8 +425,14 @@
     position: relative;
     padding: 12px 16px;
     line-height: 1.75;
-    word-break: break-word;
-    white-space: pre-wrap;
+    /* 修改这里：防止单词内断行，改为更现代的溢出处理 */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: normal; /* 确保不强制在字母间断开 */
+
+    display: inline-block; /* 改为 inline-block 或 block */
+    max-width: 100%;       /* 确保不超过父容器 */
+    min-width: 40px;       /* 增加最小宽度防止坍塌 */
 }
 
 /* user → 紫色渐变，右下角小圆角 */
@@ -384,6 +454,8 @@
 }
 
 .msg-content {
+    min-width: 400px;
+    max-width: 1300px;
     font-size: 14.5px;
     font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }

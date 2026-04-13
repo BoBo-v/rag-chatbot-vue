@@ -46,14 +46,15 @@
           <div class="msg-col">
             <!-- 气泡 -->
             <div class="msg-bubble" :style="msg.status === 'aborted'?'border:1px solid #f87171':''"  :class="msg.role">
-              <div class="msg-content">
-                {{ msg.content }}
-                <!-- 流式光标 -->
-                <span
-                    v-if="msg.status === 'loading' || msg.status === 'streaming'"
-                    class="cursor-blink"
-                >▋</span>
-              </div>
+<!--              <div class="msg-content">-->
+<!--                {{ msg.content }}-->
+<!--                &lt;!&ndash; 流式光标 &ndash;&gt;-->
+<!--                <span-->
+<!--                    v-if="msg.status === 'loading' || msg.status === 'streaming'"-->
+<!--                    class="cursor-blink"-->
+<!--                >▋</span>-->
+<!--              </div>-->
+              <div class="msg-content markdown-body" v-html="renderContent(msg)"></div>
               <template v-if="msg.status === 'aborted'">
                 <div class="abort-divider"></div>
                 <div class="abort-truncate-row">
@@ -121,6 +122,19 @@
 <script setup lang="ts">
 // 唯一职责：引入逻辑层，把需要的状态和方法解构给模板
 import { useChatView } from '../composables/useChatView'
+import { renderMarkdown } from '../utils/markdown'
+// 渲染函数
+function renderContent(msg: any) {
+  let content = msg.content
+
+  // 如果正在输入，在内容末尾手动加上光标符号，再一起渲染成 Markdown
+  // 这样可以确保光标在代码块等复杂结构下显示正常
+  if (msg.status === 'loading' || msg.status === 'streaming') {
+    content += ' ▋'
+  }
+
+  return renderMarkdown(content)
+}
 
 const {
   messages,

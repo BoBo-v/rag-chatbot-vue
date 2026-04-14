@@ -123,14 +123,22 @@
 // 唯一职责：引入逻辑层，把需要的状态和方法解构给模板
 import { useChatView } from '../composables/useChatView'
 import { renderMarkdown } from '../utils/markdown'
+
+
 // 渲染函数
 function renderContent(msg: any) {
-  let content = msg.content
+  let content = msg.formattedContent || msg.content
+
 
   // 如果正在输入，在内容末尾手动加上光标符号，再一起渲染成 Markdown
   // 这样可以确保光标在代码块等复杂结构下显示正常
   if (msg.status === 'loading' || msg.status === 'streaming') {
     content += ' ▋'
+  }
+
+  // ❗如果是最终内容（已经格式化），不要再 renderMarkdown
+  if (msg.formattedContent) {
+    return msg.formattedContent
   }
 
   return renderMarkdown(content)

@@ -12,16 +12,9 @@
     word-break: normal;
 }
 
-/* 针对代码块的自动换行（如果你希望代码也不要横向滚动，而是换行） */
-.markdown-body pre {
-    margin: 0 0 8px 0;
-    white-space: normal;
-    display: block;
-}
-
 .markdown-body p {
     margin-bottom: 8px;
-    white-space: normal;
+    white-space:  pre-wrap;
 }
 
 .markdown-body pre {
@@ -29,23 +22,19 @@
     padding: 12px;
     border-radius: 8px;
     margin: 10px 0;
-    /* 关键：代码块必须允许横向滚动，不能强制换行 */
-    overflow-x: auto;
-    display: block;
-    /* 只有 pre 需要保留原始格式 */
-    white-space: pre;
-}
-
-.markdown-body code {
-    font-family: 'Fira Code', 'Consolas', monospace;
-    /* 行内代码样式 */
-    padding: 2px 4px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    /* 行内代码可以正常换行 */
     white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: hidden;
 }
 
+.markdown-body pre code {
+    background: transparent;
+    padding: 0;
+    font-family: 'Fira Code', monospace;
+    white-space: pre-wrap;   /* ❗必须和 pre 一致 */
+    word-break: break-word;
+    display: block;
+}
 .markdown-body ul, .markdown-body ol {
     padding-left: 20px;
     margin: 8px 0;
@@ -56,7 +45,6 @@
     display: list-item;
     margin-bottom: 4px;
 }
-
 /* 光标闪烁动画 */
 @keyframes blink {
     50% { opacity: 0; }
@@ -72,6 +60,7 @@
     flex-direction: column;
     gap: 6px;
     max-width: 60%;
+    min-width: 0;
 }
 
 .msg-bubble.assistant.aborted-bubble {
@@ -387,6 +376,7 @@
     align-items: flex-end;
     gap: 10px;
     animation: msg-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    min-width: 0;
 }
 @keyframes msg-in {
     from { opacity: 0; transform: translateY(12px); }
@@ -424,15 +414,15 @@
 .msg-bubble {
     position: relative;
     padding: 12px 16px;
-    line-height: 1.75;
-    /* 修改这里：防止单词内断行，改为更现代的溢出处理 */
-    word-wrap: break-word;
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-y: visible;
+    overflow-x: hidden;
+    word-break: normal;
     overflow-wrap: break-word;
-    word-break: normal; /* 确保不强制在字母间断开 */
-
-    display: inline-block; /* 改为 inline-block 或 block */
-    max-width: 100%;       /* 确保不超过父容器 */
-    min-width: 40px;       /* 增加最小宽度防止坍塌 */
+    line-height: 1.75;
 }
 
 /* user → 紫色渐变，右下角小圆角 */
@@ -454,10 +444,12 @@
 }
 
 .msg-content {
-    min-width: 400px;
-    max-width: 1300px;
+    min-width: 0;
+    max-width: 100%;
     font-size: 14.5px;
     font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    word-break: normal;
+    overflow-wrap: break-word;
 }
 
 /* ─── 流式光标 ────────────────────────────────── */
@@ -596,4 +588,131 @@
     color: rgba(255,255,255,0.14);
     margin-top: 9px;
     letter-spacing: 0.04em;
+}
+/* ═══════════════════════════════════════════════
+   响应式适配  —  breakpoint: 768px
+   ═══════════════════════════════════════════════ */
+
+/* ── 平板 / 小桌面 (≤ 1024px) ─────────────────── */
+@media (max-width: 1024px) {
+    .messages-inner {
+        max-width: 100%;
+        padding: 20px 16px 16px;
+    }
+    .input-box {
+        max-width: 100%;
+    }
+}
+
+/* ── 移动端 (≤ 768px) ──────────────────────────── */
+@media (max-width: 768px) {
+
+    /* 顶栏 */
+    .topbar {
+        padding: 0 16px;
+        height: 50px;
+    }
+    .topbar-logo {
+        font-size: 13px;
+        gap: 8px;
+    }
+    .logo-dot {
+        width: 7px;
+        height: 7px;
+    }
+    .topbar-status {
+        font-size: 11px;
+    }
+
+    /* 消息区 */
+    .messages-inner {
+        padding: 14px 10px 12px;
+        gap: 10px;
+    }
+
+    /* 气泡列（放宽到 88%，保留最小可读宽度） */
+    .msg-col {
+        max-width: 88%;
+    }
+
+    /* 头像缩小 */
+    .msg-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        font-size: 10px;
+    }
+
+    /* 消息行间距 */
+    .msg-row {
+        gap: 7px;
+    }
+
+    .msg-content {
+        font-size: 13.5px;
+    }
+
+    /* 输入区 */
+    .input-area {
+        padding: 10px 10px 16px;
+    }
+    .input-box {
+        padding: 4px 4px 4px 14px;
+        border-radius: 12px;
+    }
+    .input-field {
+        font-size: 13px;
+        padding: 6px 0;
+    }
+    .send-btn,
+    .stop-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        font-size: 16px;
+    }
+    .input-hint {
+        font-size: 10px;
+        margin-top: 7px;
+    }
+
+    /* 空状态 */
+    .empty-state {
+        height: 200px;
+    }
+    .empty-icon {
+        font-size: 28px;
+    }
+    .empty-state p {
+        font-size: 13px;
+    }
+
+    /* 新消息提示 */
+    .unread-badge {
+        padding: 6px 16px;
+        font-size: 11px;
+        bottom: 10px;
+    }
+
+    /* 中断徽章行字号缩小 */
+    .badge-aborted,
+    .btn-continue {
+        font-size: 11px;
+        padding: 3px 9px;
+    }
+}
+
+/* ── 极小屏 (≤ 375px，iPhone SE 等) ───────────── */
+@media (max-width: 375px) {
+    .msg-col {
+        max-width: 92%;
+    }
+    .msg-avatar {
+        width: 24px;
+        height: 24px;
+        font-size: 9px;
+    }
+    .msg-content {
+        font-size: 13px;
+    }
 }

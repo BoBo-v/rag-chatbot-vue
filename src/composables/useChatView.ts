@@ -66,6 +66,13 @@ export function useChatView() {
     let clearblink=true
     let streamCtrl: ReturnType<typeof createStreamController> | null = null
 
+    async function formatFinishedMessage(msgId: string) {
+        const msg = messages.value.find(m => m.id === msgId)
+        if (!msg) return
+        // 此时 msg.content 是原始 markdown 文本，格式化后替换
+        const { renderMarkdownAsync } = await import('../utils/markdown')
+        msg.formattedContent = await renderMarkdownAsync(msg.content)
+    }
     async function handleSend(): Promise<void> {
         if (!inputValue.value.trim() || isStreaming.value) return
 
@@ -111,6 +118,7 @@ export function useChatView() {
                         abortMessage(aiMsg.id)
                     } else {
                         finishMessage(aiMsg.id)
+                        formatFinishedMessage(aiMsg.id)
                     }
                 },
                 streamCtrl.controller.signal
@@ -209,6 +217,7 @@ export function useChatView() {
                     abortMessage(msg.id)
                 } else {
                     finishMessage(msg.id)
+                    formatFinishedMessage(msg.id)
                 }
             },
             streamCtrl.controller.signal

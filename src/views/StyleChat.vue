@@ -46,14 +46,17 @@
             <span class="logo-text">AI Chat</span>
           </div>
         </div>
-        <div class="topbar-status" :class="{ active: isStreaming }">
-          <span class="status-dot"></span>
-          <span>{{ isStreaming ? 'Thinking...' : 'Ready' }}</span>
+        <div class="topbar-right">
+          <div class="topbar-status" :class="{ active: isStreaming }">
+            <span class="status-dot"></span>
+            <span>{{ isStreaming ? 'Thinking...' : 'Ready' }}</span>
+          </div>
+          <button class="settings-btn" @click="settingsOpen = true" title="设置">⚙</button>
         </div>
       </header>
 
       <!-- ── 消息区 ── -->
-      <div class="chat" ref="containerRef">
+      <div class="chat" ref="containerRef" @click="handleChatClick">
         <div class="messages-inner">
 
           <!-- 空状态 -->
@@ -107,14 +110,16 @@
       <!-- ── 输入区 ── -->
       <div class="input-area">
         <div class="input-box" :class="{ disabled: isStreaming }">
-          <input
+          <textarea
+              ref="textareaRef"
               class="input-field"
-              type="text"
               v-model="inputValue"
-              placeholder="输入消息，按 Enter 发送..."
+              placeholder="输入消息，Enter 发送，Shift+Enter 换行..."
               :disabled="isStreaming"
-              @keydown.enter="handleSend"
-          />
+              rows="1"
+              @keydown.enter.exact.prevent="handleSend"
+              @input="autoResize"
+          ></textarea>
           <button v-if="isStreaming" class="stop-btn" @click="handleStop">■</button>
           <button
               v-else
@@ -125,18 +130,23 @@
           >↑</button>
         </div>
         <div class="input-hint">
-          {{ isStreaming ? 'AI 正在回复中...' : 'Enter 发送' }}
+          {{ isStreaming ? 'AI 正在回复中...' : 'Enter 发送 · Shift+Enter 换行' }}
         </div>
       </div>
 
     </div><!-- /main-content -->
 
   </div>
+
+  <!-- ── 设置面板 ── -->
+  <SettingsPanel v-if="settingsOpen" @close="settingsOpen = false" />
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { useChatView } from '../composables/useChatView'
 import { renderMarkdown } from '../utils/markdown'
+import SettingsPanel from '../components/SettingsPanel.vue'
 
 function renderContent(msg: any) {
   let content = msg.formattedContent || msg.content
@@ -166,6 +176,42 @@ const {
   handleNewConversation,
   handleDeleteConversation,
 } = useChatView()
+
+// ── 设置面板 ──────────────────────────────────────
+const settingsOpen = ref(false)
+
+// ── Textarea 自动高度 ─────────────────────────────
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+function autoResize() {
+  const el = textareaRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 200) + 'px'
+}
+
+// 发送后重置高度
+watch(inputValue, (val) => {
+  if (!val) {
+    const el = textareaRef.value
+    if (el) el.style.height = 'auto'
+  }
+})
+
+// ── 代码块复制按钮（事件委托） ────────────────────
+function handleChatClick(e: MouseEvent) {
+  const btn = (e.target as HTMLElement).closest('.code-copy-btn') as HTMLElement | null
+  if (!btn) return
+  const code = btn.closest('.code-block-wrapper')?.querySelector('code')?.textContent ?? ''
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = '已复制 ✓'
+    btn.classList.add('copied')
+    setTimeout(() => {
+      btn.textContent = '复制'
+      btn.classList.remove('copied')
+    }, 2000)
+  })
+}
 </script>
 
 <style src="../styles/chat.css" />

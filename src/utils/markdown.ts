@@ -40,17 +40,19 @@ const md = new MarkdownIt({
     linkify: true,
     typographer: true,
     highlight: function (str, lang) {
+        const langLabel = lang ? `<span class="code-lang">${lang}</span>` : ''
+        const copyBtn = `<button class="code-copy-btn" title="复制代码">复制</button>`
+        const header = `<div class="code-block-header">${langLabel}${copyBtn}</div>`
+
         if (lang && hljs.getLanguage(lang)) {
             try {
-                return `<pre class="hljs"><code>` +
-                    hljs.highlight(str, { language: lang }).value +
-                    '</code></pre>'
+                const highlighted = hljs.highlight(str, { language: lang }).value
+                return `<div class="code-block-wrapper">${header}<pre class="hljs"><code>${highlighted}</code></pre></div>`
             } catch {}
         }
 
-        return `<pre class="hljs"><code>` +
-            md.utils.escapeHtml(str) +
-            '</code></pre>'
+        const escaped = md.utils.escapeHtml(str)
+        return `<div class="code-block-wrapper">${header}<pre class="hljs"><code>${escaped}</code></pre></div>`
     }
 })
 

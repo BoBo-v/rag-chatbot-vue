@@ -25,10 +25,13 @@ export function useChatView() {
     let userAtBottom = true
     let isScrolling  = false
     let streamCtrl: ReturnType<typeof createStreamController> | null = null
+    // handleSend 内部创建新对话时，临时屏蔽 watcher 自动加载（避免清空刚写入的消息）
+    let suppressConvWatch = false
 
     // ── 对话切换 ──────────────────────────────────────────
 
     watch(currentId, async (newId) => {
+        if (suppressConvWatch) return
         if (newId !== null) {
             await loadForConversation(newId)
         } else {
@@ -132,7 +135,11 @@ export function useChatView() {
         // 确保有当前会话（首条消息时自动创建）
         let convId = currentId.value
         if (convId === null) {
+            // 屏蔽 watcher，防止 createConversation 设置 currentId 后
+            // loadForConversation 把刚写入内存的用户消息清空
+            suppressConvWatch = true
             convId = await createConversation(userText.slice(0, 28) || '新对话')
+            suppressConvWatch = false
         }
 
         const userMsgId = crypto.randomUUID()

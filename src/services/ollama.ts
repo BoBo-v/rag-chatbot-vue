@@ -35,7 +35,7 @@ export async function generateStreamWithContext(
  * @returns 格式化后的对话文本，用户消息前缀为"用户:"，AI 消息前缀为"AI:"，每行用换行符分隔
  */
 export function buildPrompt(messages: Message[]) {
-    const system = `你是一个专业的 AI 助手，回答要简洁清晰。问你名字就叫小智`
+    const system = `你是一个专业的 AI 助手，回答要简洁清晰。问你名字就叫小智来自XXX公司`
 
     const MAX_TOKENS = 2000
     let totalTokens = estimateTokens(system)

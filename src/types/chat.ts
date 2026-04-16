@@ -6,7 +6,15 @@ export interface Message {
     id: string
     role: Role
     content: string
-    status: MessageStatus,
-    time?: string,
+    status: MessageStatus
+    time?: string
     canContinue?: boolean
+    formattedContent?: string
+}
+
+export interface Conversation {
+    id: number
+    title: string
+    createdAt: number
+    updatedAt: number
 }

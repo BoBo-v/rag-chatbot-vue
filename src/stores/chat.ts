@@ -1,25 +1,39 @@
 import { ref } from 'vue'
-import type { Message,MessageStatus } from '../types/chat'
+import type { Message, MessageStatus, Role } from '../types/chat'
+import { db } from '../db'
+
+// 模块级单例 —— 所有调用共享同一份消息列表
+const messages = ref<Message[]>([])
 
 export function useChat() {
-    //聊天列表
-    const messages = ref<Message[]>([])
+    /** 从 DB 加载指定会话的消息 */
+    async function loadForConversation(conversationId: number) {
+        const dbMessages = await db.messages
+            .where('conversationId')
+            .equals(conversationId)
+            .sortBy('createdAt')
 
-    /**
-     * 添加消息到消息列表
-     * @param message - 要添加的消息对象，包含 id、role、content 等属性
-     */
+        messages.value = dbMessages.map(m => ({
+            id: m.id,
+            role: m.role as Role,
+            content: m.content,
+            status: m.status as MessageStatus,
+            canContinue: m.canContinue,
+        }))
+    }
+
+    /** 清空内存中的消息（切换到新对话时调用） */
+    function clearMessages() {
+        messages.value = []
+    }
+
     function addMessage(message: Message) {
         messages.value.push(message)
     }
 
-    /**
-     * 创建助手消息并添加到消息列表
-     * @returns 新创建的助手消息对象，包含初始化的 id、role、content 和 status 属性
-     */
     function createAssistantMessage(): Message {
         const msg: Message = {
-            id:crypto.randomUUID(),
+            id: crypto.randomUUID(),
             role: 'assistant',
             content: '',
             status: 'loading'
@@ -28,11 +42,6 @@ export function useChat() {
         return msg
     }
 
-    /**
-     * 向指定消息追加内容片段
-     * @param id - 消息的唯一标识符
-     * @param chunk - 要追加的内容片段
-     */
     function appendToMessage(id: string, chunk: string) {
         const msg = messages.value.find(m => m.id === id)
         if (msg) {
@@ -41,46 +50,35 @@ export function useChat() {
         }
     }
 
-    /**
-     * 更新指定消息的状态
-     * @param id - 消息的唯一标识符
-     * @param status - 要更新到的目标状态
-     */
     function updateMessageStatus(id: string, status: MessageStatus) {
         const msg = messages.value.find(m => m.id === id)
         if (msg) {
             msg.status = status
-            msg.canContinue=status==='aborted'
+            msg.canContinue = status === 'aborted'
         }
     }
-    /**
-     * 完成指定消息，将其状态标记为已完成
-     * @param id - 消息的唯一标识符
-     */
+
     function finishMessage(id: string) {
         updateMessageStatus(id, 'done')
     }
-    /**
-     * 中止指定消息的处理
-     * @param id - 要中止的消息的唯一标识符
-     */
+
     function abortMessage(id: string) {
         updateMessageStatus(id, 'aborted')
     }
-    /**
-     * 将指定消息标记为错误状态
-     * @param id - 要标记为错误的消息的唯一标识符
-     */
+
     function errorMessage(id: string) {
         updateMessageStatus(id, 'error')
     }
+
     return {
         messages,
         addMessage,
+        clearMessages,
+        loadForConversation,
         abortMessage,
         errorMessage,
         createAssistantMessage,
         appendToMessage,
-        finishMessage
+        finishMessage,
     }
 }

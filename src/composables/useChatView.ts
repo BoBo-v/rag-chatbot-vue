@@ -1,7 +1,7 @@
 import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useChat } from '../stores/chat'
 import { useConversations } from '../stores/conversations'
-import { generateStreamWithContext } from '../services/ollama'
+import { generateStreamWithContext } from '../services/stream'
 import { db } from '../db'
 
 export function useChatView() {

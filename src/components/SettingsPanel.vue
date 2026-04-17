@@ -3,6 +3,7 @@
     <div class="settings-overlay" @click.self="$emit('close')">
       <div class="settings-panel">
 
+        <!-- 标题栏 -->
         <div class="settings-header">
           <span class="settings-title">设置</span>
           <button class="settings-close" @click="$emit('close')">✕</button>
@@ -10,67 +11,111 @@
 
         <div class="settings-body">
 
-          <!-- Ollama 地址 -->
-          <div class="settings-group">
-            <label class="settings-label">Ollama 服务地址</label>
-            <input
-              class="settings-input"
-              v-model="draft.ollamaUrl"
-              placeholder="http://localhost:11434"
-              spellcheck="false"
-            />
+          <!-- Provider 选择标签 -->
+          <div class="provider-tabs">
+            <button
+              v-for="p in providers"
+              :key="p.value"
+              class="provider-tab"
+              :class="{ active: draft.provider === p.value }"
+              @click="draft.provider = p.value"
+            >
+              <span class="tab-icon">{{ p.icon }}</span>
+              {{ p.label }}
+            </button>
           </div>
 
-          <!-- 模型选择 -->
-          <div class="settings-group">
-            <div class="settings-label-row">
-              <label class="settings-label">模型</label>
-              <button class="btn-refresh" :class="{ loading: loadingModels }" @click="loadModels">
-                {{ loadingModels ? '获取中...' : '刷新列表' }}
-              </button>
+          <!-- ── Ollama ── -->
+          <template v-if="draft.provider === 'ollama'">
+            <div class="settings-group">
+              <label class="settings-label">服务地址</label>
+              <input class="settings-input" v-model="draft.ollama.url"
+                placeholder="http://localhost:11434" spellcheck="false" />
             </div>
-            <select v-if="modelList.length > 0" class="settings-input settings-select" v-model="draft.model">
-              <option v-for="m in modelList" :key="m" :value="m">{{ m }}</option>
-            </select>
-            <input
-              v-else
-              class="settings-input"
-              v-model="draft.model"
-              placeholder="例如：qwen2.5:7b"
-              spellcheck="false"
-            />
-            <span v-if="modelError" class="settings-hint error">{{ modelError }}</span>
-            <span v-else class="settings-hint">点击「刷新列表」从 Ollama 拉取已安装模型</span>
-          </div>
+            <div class="settings-group">
+              <div class="settings-label-row">
+                <label class="settings-label">模型</label>
+                <button class="btn-refresh" :class="{ loading: loadingModels }" @click="loadModels">
+                  {{ loadingModels ? '获取中...' : '刷新列表' }}
+                </button>
+              </div>
+              <select v-if="modelList.length > 0" class="settings-input settings-select" v-model="draft.ollama.model">
+                <option v-for="m in modelList" :key="m" :value="m">{{ m }}</option>
+              </select>
+              <input v-else class="settings-input" v-model="draft.ollama.model"
+                placeholder="例如：qwen2.5:7b" spellcheck="false" />
+              <span v-if="modelError" class="settings-hint error">{{ modelError }}</span>
+              <span v-else class="settings-hint">点击「刷新列表」从 Ollama 拉取已安装模型</span>
+            </div>
+          </template>
 
-          <!-- 系统提示词 -->
+          <!-- ── OpenAI 兼容 ── -->
+          <template v-else-if="draft.provider === 'openai'">
+            <div class="settings-group">
+              <label class="settings-label">API Key</label>
+              <input class="settings-input" v-model="draft.openai.apiKey"
+                type="password" placeholder="sk-..." spellcheck="false" />
+            </div>
+            <div class="settings-group">
+              <label class="settings-label">Base URL</label>
+              <input class="settings-input" v-model="draft.openai.baseUrl"
+                placeholder="https://api.openai.com" spellcheck="false" />
+              <span class="settings-hint">DeepSeek: https://api.deepseek.com &nbsp;|&nbsp; Kimi: https://api.moonshot.cn &nbsp;|&nbsp; 通义: https://dashscope.aliyuncs.com/compatible-mode</span>
+            </div>
+            <div class="settings-group">
+              <div class="settings-label-row">
+                <label class="settings-label">模型</label>
+                <button class="btn-refresh" :class="{ loading: loadingModels }" @click="loadModels">
+                  {{ loadingModels ? '获取中...' : '刷新列表' }}
+                </button>
+              </div>
+              <select v-if="modelList.length > 0" class="settings-input settings-select" v-model="draft.openai.model">
+                <option v-for="m in modelList" :key="m" :value="m">{{ m }}</option>
+              </select>
+              <input v-else class="settings-input" v-model="draft.openai.model"
+                placeholder="gpt-4o / deepseek-chat / moonshot-v1-8k ..." spellcheck="false" />
+              <span v-if="modelError" class="settings-hint error">{{ modelError }}</span>
+            </div>
+          </template>
+
+          <!-- ── Claude ── -->
+          <template v-else-if="draft.provider === 'claude'">
+            <div class="settings-group">
+              <label class="settings-label">API Key</label>
+              <input class="settings-input" v-model="draft.claude.apiKey"
+                type="password" placeholder="sk-ant-..." spellcheck="false" />
+              <span class="settings-hint">
+                ⚠ 浏览器直接调用 Claude API 需后端代理或允许跨域，否则请求会被拦截
+              </span>
+            </div>
+            <div class="settings-group">
+              <label class="settings-label">模型</label>
+              <select class="settings-input settings-select" v-model="draft.claude.model">
+                <option v-for="m in claudeModels" :key="m" :value="m">{{ m }}</option>
+              </select>
+            </div>
+          </template>
+
+          <!-- ── 通用设置（所有 provider 共享） ── -->
+          <div class="settings-divider"></div>
+
           <div class="settings-group">
             <label class="settings-label">系统提示词</label>
-            <textarea
-              class="settings-input settings-textarea"
-              v-model="draft.systemPrompt"
-              placeholder="输入系统提示词..."
-              rows="4"
-            ></textarea>
+            <textarea class="settings-input settings-textarea"
+              v-model="draft.systemPrompt" rows="4"
+              placeholder="输入系统提示词..."></textarea>
           </div>
 
-          <!-- 上下文长度 -->
           <div class="settings-group">
             <div class="settings-label-row">
               <label class="settings-label">上下文长度（Token 估算上限）</label>
               <span class="settings-token-val">{{ draft.maxContextTokens }}</span>
             </div>
-            <input
-              class="settings-slider"
-              type="range"
-              min="500"
-              max="8000"
-              step="500"
-              v-model.number="draft.maxContextTokens"
-            />
+            <input class="settings-slider" type="range"
+              min="500" max="8000" step="500"
+              v-model.number="draft.maxContextTokens" />
             <div class="settings-slider-labels">
-              <span>500</span>
-              <span>8000</span>
+              <span>500</span><span>8000</span>
             </div>
           </div>
 
@@ -87,36 +132,78 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { settings } from '../stores/settings'
-import { fetchOllamaModels } from '../services/ollama'
+import { fetchModels } from '../services/stream'
+import { getClaudeModels } from '../services/providers/claude'
+import type { ProviderType } from '../stores/settings'
 
 defineEmits<{ close: [] }>()
 
-// 编辑草稿，不直接修改 settings，点保存后才写入
-const draft = reactive({ ...settings })
+const providers: { value: ProviderType; label: string; icon: string }[] = [
+  { value: 'ollama',  label: 'Ollama',       icon: '🦙' },
+  { value: 'openai',  label: 'OpenAI 兼容',   icon: '⚡' },
+  { value: 'claude',  label: 'Claude',        icon: '✦' },
+]
 
-const modelList = ref<string[]>([])
+const claudeModels = getClaudeModels()
+
+// 编辑草稿，保存前不改动 settings
+const draft = reactive({
+  ...settings,
+  ollama:  { ...settings.ollama },
+  openai:  { ...settings.openai },
+  claude:  { ...settings.claude },
+})
+
+const modelList    = ref<string[]>([])
 const loadingModels = ref(false)
-const modelError = ref('')
+const modelError   = ref('')
 
 async function loadModels() {
   loadingModels.value = true
   modelError.value = ''
-  const list = await fetchOllamaModels()
+  modelList.value = []
+
+  // 用草稿里的配置临时覆盖 settings 来 fetch，fetch 完再恢复
+  const prevProvider = settings.provider
+  const prevConfig   = { ...settings[draft.provider as 'ollama' | 'openai'] }
+
+  Object.assign(settings, { provider: draft.provider })
+  Object.assign(settings[draft.provider as 'ollama' | 'openai'], draft[draft.provider as 'ollama' | 'openai'])
+
+  const list = await fetchModels()
+
+  Object.assign(settings, { provider: prevProvider })
+  Object.assign(settings[draft.provider as 'ollama' | 'openai'], prevConfig)
+
   if (list.length === 0) {
-    modelError.value = '未能获取模型列表，请确认 Ollama 服务已启动'
+    modelError.value = '未能获取模型列表，请检查地址或 Key 是否正确'
   } else {
     modelList.value = list
-    // 如果当前模型不在列表里就选第一个
-    if (!list.includes(draft.model)) draft.model = list[0]
+    const currentModel = draft.provider === 'openai' ? draft.openai.model : draft.ollama.model
+    if (!list.includes(currentModel)) {
+      if (draft.provider === 'openai') draft.openai.model = list[0]
+      else draft.ollama.model = list[0]
+    }
   }
   loadingModels.value = false
 }
 
-function save() {
-  Object.assign(settings, draft)
-}
+// 切换 provider 时重置模型列表
+watch(() => draft.provider, () => {
+  modelList.value = []
+  modelError.value = ''
+})
 
-onMounted(loadModels)
+function save() {
+  Object.assign(settings, {
+    provider:          draft.provider,
+    systemPrompt:      draft.systemPrompt,
+    maxContextTokens:  draft.maxContextTokens,
+  })
+  Object.assign(settings.ollama,  draft.ollama)
+  Object.assign(settings.openai,  draft.openai)
+  Object.assign(settings.claude,  draft.claude)
+}
 </script>

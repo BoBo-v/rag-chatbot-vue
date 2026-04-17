@@ -75,7 +75,13 @@
             <div v-if="msg.role === 'assistant'" :style="msg.status === 'aborted'?'margin-bottom:40px':''" class="msg-avatar ai-avatar">A</div>
             <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">U</div>
             <div class="msg-col">
-              <div class="msg-bubble" :style="msg.status === 'aborted'?'border:1px solid #f87171':''" :class="msg.role">
+              <div class="msg-bubble"
+                   :style="msg.status === 'aborted' ? 'border:1px solid #f87171' : ''"
+                   :class="[msg.role, {
+                     'is-loading':   msg.status === 'loading',
+                     'is-streaming': msg.status === 'streaming',
+                   }]"
+              >
                 <div class="msg-content markdown-body" v-html="renderContent(msg)"></div>
                 <template v-if="msg.status === 'aborted'">
                   <div class="abort-divider"></div>
@@ -149,14 +155,23 @@ import { renderMarkdown } from '../utils/markdown'
 import SettingsPanel from '../components/SettingsPanel.vue'
 
 function renderContent(msg: any) {
-  let content = msg.formattedContent || msg.content
-  if (msg.status === 'loading' || msg.status === 'streaming') {
-    content += ' ▋'
+  // loading：还没收到任何内容，显示"思考中"跳动点
+  if (msg.status === 'loading') {
+    return '<div class="thinking-dots"><span></span><span></span><span></span></div>'
   }
+  // 已有预渲染内容（done 状态）
   if (msg.formattedContent) {
     return msg.formattedContent
   }
-  return renderMarkdown(content)
+  // 流式输出中：渲染当前内容 + 闪烁光标（插入到最后一个闭合标签之前，确保光标紧跟文字）
+  const rendered = renderMarkdown(msg.content)
+  if (msg.status === 'streaming') {
+    const cursor = '<span class="cursor-blink">▋</span>'
+    const lastClose = rendered.lastIndexOf('</')
+    if (lastClose === -1) return rendered + cursor
+    return rendered.slice(0, lastClose) + cursor + rendered.slice(lastClose)
+  }
+  return rendered
 }
 
 const {

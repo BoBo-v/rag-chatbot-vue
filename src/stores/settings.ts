@@ -1,31 +1,67 @@
 import { reactive, watch } from 'vue'
 
+export type ProviderType = 'ollama' | 'openai' | 'claude'
+
 export interface AppSettings {
-    ollamaUrl: string
-    model: string
+    provider: ProviderType
     systemPrompt: string
     maxContextTokens: number
+    ollama: {
+        url: string
+        model: string
+    }
+    openai: {
+        apiKey: string
+        baseUrl: string   // 支持 DeepSeek / 通义 / Kimi 等兼容地址
+        model: string
+    }
+    claude: {
+        apiKey: string
+        model: string
+    }
 }
 
 const STORAGE_KEY = 'ai-chat-settings'
 
 const defaults: AppSettings = {
-    ollamaUrl: 'http://localhost:11434',
-    model: 'qwen2.5:7b',
-    systemPrompt: '你是一个专业的 AI 助手，回答要简洁清晰。问你名字就叫小智来自XXX公司',
+    provider: 'ollama',
+    systemPrompt: '你是一个专业的 AI 助手，回答要简洁清晰。',
     maxContextTokens: 2000,
+    ollama: {
+        url: 'http://localhost:11434',
+        model: 'qwen2.5:7b',
+    },
+    openai: {
+        apiKey: '',
+        baseUrl: 'https://api.openai.com',
+        model: 'gpt-4o',
+    },
+    claude: {
+        apiKey: '',
+        model: 'claude-sonnet-4-6',
+    },
 }
 
 function load(): AppSettings {
     try {
         const raw = localStorage.getItem(STORAGE_KEY)
-        if (raw) return { ...defaults, ...JSON.parse(raw) }
+        if (raw) {
+            const saved = JSON.parse(raw)
+            // 深度合并，保留未存字段的默认值
+            return {
+                ...defaults,
+                ...saved,
+                ollama: { ...defaults.ollama, ...saved.ollama },
+                openai: { ...defaults.openai, ...saved.openai },
+                claude: { ...defaults.claude, ...saved.claude },
+            }
+        }
     } catch {}
-    return { ...defaults }
+    return { ...defaults, ollama: { ...defaults.ollama }, openai: { ...defaults.openai }, claude: { ...defaults.claude } }
 }
 
 export const settings = reactive<AppSettings>(load())
 
 watch(settings, (val) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...val }))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(val))
 }, { deep: true })

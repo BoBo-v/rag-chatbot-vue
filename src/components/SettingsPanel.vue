@@ -11,6 +11,25 @@
 
         <div class="settings-body">
 
+          <!-- ── 外观主题 ── -->
+          <div class="settings-group">
+            <label class="settings-label">外观</label>
+            <div class="theme-switcher">
+              <button
+                v-for="t in themes"
+                :key="t.value"
+                class="theme-btn"
+                :class="{ active: settings.theme === t.value }"
+                @click="settings.theme = t.value"
+              >
+                {{ t.icon }} {{ t.label }}
+              </button>
+            </div>
+            <span class="settings-hint">更改立即生效，无需保存</span>
+          </div>
+
+          <div class="settings-divider"></div>
+
           <!-- Provider 选择标签 -->
           <div class="provider-tabs">
             <button
@@ -136,9 +155,15 @@ import { reactive, ref, watch } from 'vue'
 import { settings } from '../stores/settings'
 import { fetchModels } from '../services/stream'
 import { getClaudeModels } from '../services/providers/claude'
-import type { ProviderType } from '../stores/settings'
+import type { ProviderType, ThemeType } from '../stores/settings'
 
 defineEmits<{ close: [] }>()
+
+const themes: { value: ThemeType; label: string; icon: string }[] = [
+  { value: 'dark',   label: '暗色', icon: '🌙' },
+  { value: 'light',  label: '亮色', icon: '☀️' },
+  { value: 'system', label: '跟随系统', icon: '💻' },
+]
 
 const providers: { value: ProviderType; label: string; icon: string }[] = [
   { value: 'ollama',  label: 'Ollama',       icon: '🦙' },

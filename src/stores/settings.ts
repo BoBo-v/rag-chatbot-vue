@@ -1,9 +1,11 @@
 import { reactive, watch } from 'vue'
 
 export type ProviderType = 'ollama' | 'openai' | 'claude'
+export type ThemeType   = 'dark' | 'light' | 'system'
 
 export interface AppSettings {
     provider: ProviderType
+    theme: ThemeType
     systemPrompt: string
     maxContextTokens: number
     ollama: {
@@ -25,6 +27,7 @@ const STORAGE_KEY = 'ai-chat-settings'
 
 const defaults: AppSettings = {
     provider: 'ollama',
+    theme: 'dark',
     systemPrompt: '你是一个专业的 AI 助手，回答要简洁清晰。',
     maxContextTokens: 2000,
     ollama: {
@@ -51,6 +54,7 @@ function load(): AppSettings {
             return {
                 ...defaults,
                 ...saved,
+                theme:  saved.theme  ?? defaults.theme,
                 ollama: { ...defaults.ollama, ...saved.ollama },
                 openai: { ...defaults.openai, ...saved.openai },
                 claude: { ...defaults.claude, ...saved.claude },

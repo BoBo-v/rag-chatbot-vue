@@ -1,0 +1,203 @@
+/* ═══════════════════════════════════════════════
+   markdown.css  —  Markdown 渲染 & 代码块样式
+   颜色全部来自 tokens.css 的 CSS 变量
+   ═══════════════════════════════════════════════ */
+
+/* ── Markdown 基础 ──────────────────────────────── */
+.markdown-body {
+    text-align: left;
+    display: block;
+    width: 100%;
+    line-height: 1.6;
+    word-break: normal;
+}
+
+.markdown-body p {
+    margin-bottom: 8px;
+    white-space: pre-wrap;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+    padding-left: 20px;
+    margin: 8px 0;
+    display: block;
+}
+
+.markdown-body li {
+    display: list-item;
+    margin-bottom: 4px;
+}
+
+/* ── 代码块（pre + code） ───────────────────────── */
+.markdown-body pre {
+    background: var(--bg-code);
+    padding: 12px;
+    border-radius: 8px;
+    margin: 10px 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: hidden;
+}
+
+.markdown-body pre code {
+    background: transparent;
+    padding: 0;
+    /* 等宽字体优先级：Fira Code > JetBrains Mono > Consolas > 系统 mono */
+    font-family: 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+    font-size: 13.5px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: block;
+    /* 关键修复：显式设置颜色，防止系统暗黑模式覆盖导致看不清 */
+    color: var(--text-code);
+}
+
+/* ══════════════════════════════════════════════════
+   亮色模式下强制覆盖 github-dark.css 的代码块背景
+   使用 !important 确保优先级高于第三方样式表，
+   无论 Vite 打包后的 CSS 加载顺序如何都能生效。
+   ══════════════════════════════════════════════════ */
+[data-theme="light"] .markdown-body pre,
+[data-theme="light"] pre.hljs,
+[data-theme="light"] .code-block-wrapper .hljs {
+    background: var(--bg-code) !important;
+    color: var(--text-code) !important;
+}
+
+/* ── 代码块包装器（含头部工具栏） ──────────────── */
+.code-block-wrapper {
+    position: relative;
+    margin: 10px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+}
+
+.code-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: var(--bg-code-header);
+    border-bottom: 1px solid var(--border-subtle);
+    min-height: 32px;
+}
+
+.code-lang {
+    font-size: 11px;
+    font-family: 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+    color: var(--code-lang-color);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.code-copy-btn {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--code-copy-color);
+    background: var(--code-copy-bg);
+    border: 1px solid var(--code-copy-border);
+    border-radius: 5px;
+    padding: 3px 10px;
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.code-copy-btn:hover {
+    background: var(--accent-bg);
+    color: var(--accent-text);
+    border-color: var(--accent-border);
+}
+.code-copy-btn.copied {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.12);
+    border-color: rgba(74, 222, 128, 0.3);
+}
+
+/* hljs 元素本身的背景与 pre 保持一致 */
+.code-block-wrapper .hljs {
+    margin: 0;
+    border-radius: 0 0 8px 8px;
+    background: var(--bg-code);
+}
+
+/* ══════════════════════════════════════════════════
+   hljs 亮色主题覆盖（data-theme="light"）
+   原始主题 github-dark.css 的 specificity = (0,1,0)
+   这里加 [data-theme="light"] 前缀后为 (0,2,0)，优先级更高，
+   无论 CSS 加载顺序如何都能正确覆盖。
+   颜色来自 highlight.js 官方 github.css 亮色主题。
+   ══════════════════════════════════════════════════ */
+[data-theme="light"] .hljs {
+    background: var(--bg-code);
+    color: var(--text-code);
+}
+
+[data-theme="light"] .hljs-doctag,
+[data-theme="light"] .hljs-keyword,
+[data-theme="light"] .hljs-meta .hljs-keyword,
+[data-theme="light"] .hljs-template-tag,
+[data-theme="light"] .hljs-template-variable,
+[data-theme="light"] .hljs-type,
+[data-theme="light"] .hljs-variable.language_ {
+    color: #d73a49;
+}
+
+[data-theme="light"] .hljs-title,
+[data-theme="light"] .hljs-title.class_,
+[data-theme="light"] .hljs-title.class_.inherited__,
+[data-theme="light"] .hljs-title.function_ {
+    color: #6f42c1;
+}
+
+[data-theme="light"] .hljs-attr,
+[data-theme="light"] .hljs-attribute,
+[data-theme="light"] .hljs-literal,
+[data-theme="light"] .hljs-meta,
+[data-theme="light"] .hljs-number,
+[data-theme="light"] .hljs-operator,
+[data-theme="light"] .hljs-variable,
+[data-theme="light"] .hljs-selector-attr,
+[data-theme="light"] .hljs-selector-class,
+[data-theme="light"] .hljs-selector-id {
+    color: #005cc5;
+}
+
+[data-theme="light"] .hljs-regexp,
+[data-theme="light"] .hljs-string,
+[data-theme="light"] .hljs-meta .hljs-string {
+    color: #032f62;
+}
+
+[data-theme="light"] .hljs-built_in,
+[data-theme="light"] .hljs-symbol {
+    color: #e36209;
+}
+
+[data-theme="light"] .hljs-comment,
+[data-theme="light"] .hljs-code,
+[data-theme="light"] .hljs-formula {
+    color: #6a737d;
+}
+
+[data-theme="light"] .hljs-name,
+[data-theme="light"] .hljs-quote,
+[data-theme="light"] .hljs-selector-tag,
+[data-theme="light"] .hljs-selector-pseudo {
+    color: #22863a;
+}
+
+[data-theme="light"] .hljs-subst        { color: #24292e; }
+[data-theme="light"] .hljs-section      { color: #005cc5; font-weight: bold; }
+[data-theme="light"] .hljs-bullet       { color: #735c0f; }
+[data-theme="light"] .hljs-emphasis     { color: #24292e; font-style: italic; }
+[data-theme="light"] .hljs-strong       { color: #24292e; font-weight: bold; }
+[data-theme="light"] .hljs-addition     { color: #22863a; background-color: #f0fff4; }
+[data-theme="light"] .hljs-deletion     { color: #b31d28; background-color: #ffeef0; }
+[data-theme="light"] .hljs-punctuation  { color: #24292e; }
+[data-theme="light"] .hljs-tag          { color: #22863a; }
+[data-theme="light"] .hljs-tag .hljs-name { color: #22863a; }
+[data-theme="light"] .hljs-tag .hljs-attr { color: #005cc5; }

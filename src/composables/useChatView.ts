@@ -244,33 +244,44 @@ export function useChatView() {
     }
 
     async function handleContinue(messageId: string) {
+        if (isStreaming.value) return
         const msg = messages.value.find(m => m.id === messageId)
         if (!msg || currentId.value === null) return
 
+        if(msg.status !== 'aborted')return
+
+        queue = []
+        isFlushing = false
+        clearblink = true
+        isStreaming.value=true
         const convId = currentId.value
         updateMessage(msg.id, { status: 'loading', canContinue: false })
         streamCtrl = createStreamController(msg.id)
 
-        await generateStreamWithContext(
-            messages.value,
-            '',
-            (chunk) => {
-                if (streamCtrl?.isAborted) return
-                appendToMessage(msg.id, chunk)
-            },
-            async () => {
-                if (streamCtrl?.isAborted) {
-                    updateMessage(msg.id,{status: 'aborted', canContinue: true})
-                } else {
-                    updateMessage(msg.id,{status:'done'})
-                    await formatFinishedMessage(msg.id)
-                }
-                await persistMessage(msg.id, convId)
-                await db.conversations.update(convId, { updatedAt: Date.now() })
-                await refreshList()
-            },
-            streamCtrl.controller.signal
-        )
+        try {
+            await generateStreamWithContext(
+                messages.value,
+                '',
+                (chunk) => {
+                    if (streamCtrl?.isAborted) return
+                    appendToMessage(msg.id, chunk)
+                },
+                async () => {
+                    if (streamCtrl?.isAborted) {
+                        updateMessage(msg.id,{status: 'aborted', canContinue: true})
+                    } else {
+                        updateMessage(msg.id,{status:'done'})
+                        await formatFinishedMessage(msg.id)
+                    }
+                    await persistMessage(msg.id, convId)
+                    await db.conversations.update(convId, { updatedAt: Date.now() })
+                    await refreshList()
+                },
+                streamCtrl.controller.signal
+            )
+        }finally {
+            isStreaming.value = false
+        }
     }
 
     function handleStop() {

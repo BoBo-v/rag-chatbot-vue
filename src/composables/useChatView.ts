@@ -6,8 +6,8 @@ import { db } from '../db'
 
 export function useChatView() {
     const {
-        messages, abortMessage, addMessage, clearMessages,
-        loadForConversation, createAssistantMessage, appendToMessage, finishMessage,
+        messages,  addMessage, clearMessages,updateMessage,
+        loadForConversation, createAssistantMessage, appendToMessage,
     } = useChat()
 
     const {
@@ -181,9 +181,9 @@ export function useChatView() {
                 () => {
                     clearblink = false
                     if (streamCtrl?.isAborted) {
-                        abortMessage(aiMsg.id)
+                        updateMessage(aiMsg.id, {status: 'aborted', canContinue: true})
                     } else {
-                        finishMessage(aiMsg.id)
+                        updateMessage(aiMsg.id,{status:'done'})
                         formatFinishedMessage(aiMsg.id)
                     }
                 },
@@ -194,7 +194,7 @@ export function useChatView() {
             scheduleScroll()
 
             if (clearblink && !streamCtrl?.isAborted) {
-                finishMessage(aiMsg.id)
+                updateMessage(aiMsg.id,{status:'done'})
             }
 
             // 保存 AI 消息并更新会话时间
@@ -248,8 +248,7 @@ export function useChatView() {
         if (!msg || currentId.value === null) return
 
         const convId = currentId.value
-        msg.status = 'loading'
-        msg.canContinue = false
+        updateMessage(msg.id, { status: 'loading', canContinue: false })
         streamCtrl = createStreamController(msg.id)
 
         await generateStreamWithContext(
@@ -261,9 +260,9 @@ export function useChatView() {
             },
             async () => {
                 if (streamCtrl?.isAborted) {
-                    abortMessage(msg.id)
+                    updateMessage(msg.id,{status: 'aborted', canContinue: true})
                 } else {
-                    finishMessage(msg.id)
+                    updateMessage(msg.id,{status:'done'})
                     await formatFinishedMessage(msg.id)
                 }
                 await persistMessage(msg.id, convId)
@@ -277,7 +276,7 @@ export function useChatView() {
     function handleStop() {
         if (!streamCtrl) return
         streamCtrl.abort()
-        abortMessage(streamCtrl.messageId)
+        updateMessage(streamCtrl.messageId,{ status: 'aborted', canContinue: true})
         isStreaming.value = false
         // AI 消息的持久化在 handleSend 的 finally 中完成
     }

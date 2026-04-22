@@ -50,24 +50,11 @@ export function useChat() {
         }
     }
 
-    function updateMessageStatus(id: string, status: MessageStatus) {
+    function updateMessage(id:string,changes: Omit<Partial<Message>, 'id'>){
         const msg = messages.value.find(m => m.id === id)
         if (msg) {
-            msg.status = status
-            msg.canContinue = status === 'aborted'
+            Object.assign(msg, changes)
         }
-    }
-
-    function finishMessage(id: string) {
-        updateMessageStatus(id, 'done')
-    }
-
-    function abortMessage(id: string) {
-        updateMessageStatus(id, 'aborted')
-    }
-
-    function errorMessage(id: string) {
-        updateMessageStatus(id, 'error')
     }
 
     return {
@@ -75,10 +62,8 @@ export function useChat() {
         addMessage,
         clearMessages,
         loadForConversation,
-        abortMessage,
-        errorMessage,
+        updateMessage,
         createAssistantMessage,
         appendToMessage,
-        finishMessage,
     }
 }

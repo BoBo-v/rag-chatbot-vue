@@ -3,6 +3,7 @@ import { useChat } from '../stores/chat'
 import { useConversations } from '../stores/conversations'
 import { generateStreamWithContext } from '../services/stream'
 import { db } from '../db'
+import type { StreamController } from "../types/chat.ts";
 
 export function useChatView() {
     const {
@@ -27,7 +28,7 @@ export function useChatView() {
     // 防止同一帧内多次触发 scrollTop 赋值（requestAnimationFrame 节流标记）
     let isScrolling  = false
     // 当前流式请求的控制器，用于中断生成
-    let streamCtrl: ReturnType<typeof createStreamController> | null = null
+    let streamCtrl:  StreamController | null = null
     // handleSend 内部创建新对话时，临时屏蔽 watcher 的自动加载，
     // 避免 createConversation 设置 currentId 后触发 loadForConversation 把刚写入内存的消息清空
     let suppressConvWatch = false
@@ -144,7 +145,7 @@ export function useChatView() {
     // 防止 flushQueue 同时被多个 onChunk 并发启动
     let isFlushing = false
     // 标记生成是否还在进行中（用于判断 finally 里是否需要补一次 status:'done'）
-    let clearblink = true
+    let needsStatusFallback = true
 
     /**
      * 生成完成后，异步将消息内容渲染成 HTML（Markdown + 代码高亮）。
@@ -166,7 +167,7 @@ export function useChatView() {
         // 重置流式输出相关状态
         queue = []
         isFlushing = false
-        clearblink = true
+        needsStatusFallback = true
         isStreaming.value = true
         const userText = inputValue.value
         inputValue.value = ''   // 立即清空输入框，提升响应感
@@ -218,7 +219,7 @@ export function useChatView() {
                 },
                 // onDone：流结束时回调（正常结束 or 被 abort 后触发）
                 () => {
-                    clearblink = false  // 标记 onDone 已执行，finally 不需要再补 done
+                    needsStatusFallback = false  // 标记 onDone 已执行，finally 不需要再补 done
                     if (streamCtrl?.isAborted) {
                         updateMessage(aiMsg.id, { status: 'aborted', canContinue: true })
                     } else {
@@ -233,7 +234,7 @@ export function useChatView() {
             scheduleScroll()
 
             // 极少数情况：onDone 未触发（网络异常等）但流已结束，补一次 done
-            if (clearblink && !streamCtrl?.isAborted) {
+            if (needsStatusFallback && !streamCtrl?.isAborted) {
                 updateMessage(aiMsg.id, { status: 'done' })
             }
 
@@ -309,7 +310,7 @@ export function useChatView() {
 
         queue = []
         isFlushing = false
-        clearblink = true
+        needsStatusFallback = true
         isStreaming.value = true
         const convId = currentId.value
 
@@ -352,7 +353,7 @@ export function useChatView() {
     function handleStop() {
         if (!streamCtrl) return
         streamCtrl.abort()
-        updateMessage(streamCtrl.messageId, { status: 'aborted', canContinue: true })
+
         isStreaming.value = false
     }
 

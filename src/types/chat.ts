@@ -18,3 +18,10 @@ export interface Conversation {
     createdAt: number
     updatedAt: number
 }
+export interface StreamController {
+    messageId: string
+    controller: AbortController
+    reader: ReadableStreamDefaultReader | null
+    isAborted: boolean
+    abort(): void
+}

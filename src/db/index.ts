@@ -14,6 +14,7 @@ export interface DBMessage {
     content: string
     status: string
     canContinue?: boolean
+    errorMessage?: string
     createdAt: number
 }
 

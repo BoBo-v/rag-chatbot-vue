@@ -97,6 +97,200 @@
     transform: scale(1.04);
 }
 
+/* ─── 错误状态 ──────────────────────────────── */
+.error-divider {
+    height: 1px;
+    background: linear-gradient(90deg, rgba(248, 113, 113, 0.35), transparent 80%);
+    margin: 8px 0 0;
+}
+
+.error-info-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0 4px;
+    font-size: 12px;
+    color: #f87171;
+}
+
+.error-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    color: #f87171;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.error-text {
+    line-height: 1.4;
+}
+
+.error-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 2px;
+}
+
+.badge-error {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    border-radius: 20px;
+    padding: 4px 10px;
+}
+
+.error-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #f87171;
+    flex-shrink: 0;
+}
+
+.btn-retry {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 20px;
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s, transform 0.15s;
+}
+.btn-retry:hover {
+    border-color: #f87171;
+    background: rgba(239, 68, 68, 0.18);
+    transform: scale(1.04);
+}
+
+.msg-bubble.assistant.is-error {
+    animation: bubble-appear 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ─── Toast 通知 ──────────────────────────────── */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 500;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    pointer-events: auto;
+    max-width: 380px;
+    animation: toast-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.toast-item.error {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    color: #fca5a5;
+}
+
+.toast-item.warning {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    color: #fcd34d;
+}
+
+.toast-item.success {
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(74, 222, 128, 0.35);
+    color: #86efac;
+}
+
+.toast-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.toast-item.error .toast-icon {
+    background: rgba(239, 68, 68, 0.25);
+    color: #f87171;
+}
+
+.toast-item.warning .toast-icon {
+    background: rgba(245, 158, 11, 0.25);
+    color: #f59e0b;
+}
+
+.toast-item.success .toast-icon {
+    background: rgba(34, 197, 94, 0.25);
+    color: #22c55e;
+}
+
+.toast-msg {
+    line-height: 1.4;
+}
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translateX(40px) scale(0.95); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.toast-slide-enter-active { animation: toast-in 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+.toast-slide-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.toast-slide-leave-to { opacity: 0; transform: translateX(40px); }
+
+/* ─── 亮色 Toast ─────────────────────────────── */
+[data-theme="light"] .toast-item.error {
+    background: rgba(254, 226, 226, 0.95);
+    border-color: rgba(248, 113, 113, 0.4);
+    color: #dc2626;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+[data-theme="light"] .toast-item.error .toast-icon {
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+}
+[data-theme="light"] .toast-item.warning {
+    background: rgba(254, 243, 199, 0.95);
+    border-color: rgba(251, 191, 36, 0.4);
+    color: #b45309;
+}
+[data-theme="light"] .toast-item.success {
+    background: rgba(220, 252, 231, 0.95);
+    border-color: rgba(74, 222, 128, 0.4);
+    color: #16a34a;
+}
+
 /* ─── 停止按钮 ──────────────────────────────── */
 .stop-btn {
     width: 38px;
@@ -798,7 +992,10 @@
     .empty-state p { font-size: 13px; }
 
     .unread-badge { padding: 6px 16px; font-size: 11px; bottom: 10px; }
-    .badge-aborted, .btn-continue { font-size: 11px; padding: 3px 9px; }
+    .badge-aborted, .btn-continue, .badge-error, .btn-retry { font-size: 11px; padding: 3px 9px; }
+
+    .toast-container { top: 10px; right: 10px; left: 10px; }
+    .toast-item { max-width: 100%; font-size: 12px; padding: 10px 14px; }
 }
 
 @media (max-width: 375px) {

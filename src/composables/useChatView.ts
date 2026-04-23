@@ -3,6 +3,8 @@ import { useChat } from '../stores/chat'
 import { useConversations } from '../stores/conversations'
 import { generateStreamWithContext } from '../services/stream'
 import { db } from '../db'
+import { classifyError } from '../utils/error'
+import { useToast } from './useToast'
 import type { StreamController } from "../types/chat.ts";
 
 export function useChatView() {
@@ -15,6 +17,8 @@ export function useChatView() {
         conversations, currentId,
         loadAll, createConversation, selectConversation, deleteConversation, refreshList,
     } = useConversations()
+
+    const toast = useToast()
 
     // ── UI 状态 ───────────────────────────────────────────
     const inputValue   = ref<string>('')
@@ -84,6 +88,7 @@ export function useChatView() {
             content: msg.content,
             status: msg.status,
             canContinue: msg.canContinue,
+            errorMessage: msg.errorMessage,
             createdAt: Date.now(),
         })
     }
@@ -229,6 +234,15 @@ export function useChatView() {
                 },
                 streamCtrl.controller.signal
             )
+        } catch (err: unknown) {
+            if (streamCtrl?.isAborted) return
+            const chatErr = classifyError(err)
+            needsStatusFallback = false
+            updateMessage(aiMsg.id, {
+                status: 'error',
+                errorMessage: chatErr.message,
+            })
+            toast.show(chatErr.message, 'error')
         } finally {
             isStreaming.value = false
             scheduleScroll()
@@ -341,8 +355,97 @@ export function useChatView() {
                 },
                 streamCtrl.controller.signal
             )
+        } catch (err: unknown) {
+            if (streamCtrl?.isAborted) return
+            const chatErr = classifyError(err)
+            updateMessage(msg.id, {
+                status: 'error',
+                errorMessage: chatErr.message,
+            })
+            toast.show(chatErr.message, 'error')
+            await persistMessage(msg.id, convId)
         } finally {
             isStreaming.value = false
+        }
+    }
+
+    /**
+     * 重试：删除 error 状态的 AI 消息，用原始用户消息重新发送请求。
+     */
+    async function handleRetry(messageId: string) {
+        if (isStreaming.value) return
+        const msgIdx = messages.value.findIndex(m => m.id === messageId)
+        if (msgIdx === -1 || currentId.value === null) return
+        const errMsg = messages.value[msgIdx]
+        if (errMsg.status !== 'error') return
+
+        // 找到该 AI 消息前最近的用户消息
+        let userMsg = null
+        for (let i = msgIdx - 1; i >= 0; i--) {
+            if (messages.value[i].role === 'user') {
+                userMsg = messages.value[i]
+                break
+            }
+        }
+        if (!userMsg) return
+
+        // 删除错误的 AI 消息
+        await db.messages.delete(messageId)
+        messages.value.splice(msgIdx, 1)
+
+        // 重置状态并重新生成
+        queue = []
+        isFlushing = false
+        needsStatusFallback = true
+        isStreaming.value = true
+        const convId = currentId.value
+
+        const aiMsg = createAssistantMessage()
+        streamCtrl = createStreamController(aiMsg.id)
+
+        try {
+            await generateStreamWithContext(
+                messages.value,
+                userMsg.content,
+                (chunk) => {
+                    if (streamCtrl?.isAborted) return
+                    queue.push(chunk)
+                    flushQueue(aiMsg.id)
+                    if (!userAtBottom) {
+                        unreadCount.value++
+                    } else {
+                        scheduleScroll()
+                    }
+                },
+                () => {
+                    needsStatusFallback = false
+                    if (streamCtrl?.isAborted) {
+                        updateMessage(aiMsg.id, { status: 'aborted', canContinue: true })
+                    } else {
+                        updateMessage(aiMsg.id, { status: 'done' })
+                        formatFinishedMessage(aiMsg.id)
+                    }
+                },
+                streamCtrl.controller.signal
+            )
+        } catch (err: unknown) {
+            if (streamCtrl?.isAborted) return
+            const chatErr = classifyError(err)
+            needsStatusFallback = false
+            updateMessage(aiMsg.id, {
+                status: 'error',
+                errorMessage: chatErr.message,
+            })
+            toast.show(chatErr.message, 'error')
+        } finally {
+            isStreaming.value = false
+            scheduleScroll()
+            if (needsStatusFallback && !streamCtrl?.isAborted) {
+                updateMessage(aiMsg.id, { status: 'done' })
+            }
+            await persistMessage(aiMsg.id, convId)
+            await db.conversations.update(convId, { updatedAt: Date.now() })
+            await refreshList()
         }
     }
 
@@ -383,10 +486,12 @@ export function useChatView() {
         sidebarOpen,
         conversations,
         currentId,
+        toast,
         handleSend,
         scrollToBottom,
         handleStop,
         handleContinue,
+        handleRetry,
         handleSelectConversation,
         handleNewConversation,
         handleDeleteConversation,

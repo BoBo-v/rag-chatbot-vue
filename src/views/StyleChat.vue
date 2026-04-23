@@ -72,14 +72,15 @@
               class="msg-row"
               :class="msg.role"
           >
-            <div v-if="msg.role === 'assistant'" :style="msg.status === 'aborted'?'margin-bottom:40px':''" class="msg-avatar ai-avatar">A</div>
+            <div v-if="msg.role === 'assistant'" :style="msg.status === 'aborted' || msg.status === 'error' ? 'margin-bottom:40px' : ''" class="msg-avatar ai-avatar">A</div>
             <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">U</div>
             <div class="msg-col">
               <div class="msg-bubble"
-                   :style="msg.status === 'aborted' ? 'border:1px solid #f87171' : ''"
+                   :style="msg.status === 'aborted' || msg.status === 'error' ? 'border:1px solid #f87171' : ''"
                    :class="[msg.role, {
                      'is-loading':   msg.status === 'loading',
                      'is-streaming': msg.status === 'streaming',
+                     'is-error':     msg.status === 'error',
                    }]"
               >
                 <div class="msg-content markdown-body" v-html="renderContent(msg)"></div>
@@ -90,6 +91,13 @@
                     生成中断
                   </div>
                 </template>
+                <template v-if="msg.status === 'error'">
+                  <div class="error-divider"></div>
+                  <div class="error-info-row">
+                    <span class="error-icon">!</span>
+                    <span class="error-text">{{ msg.errorMessage || '生成失败' }}</span>
+                  </div>
+                </template>
               </div>
               <div v-if="msg.status === 'aborted'" class="abort-badge-row">
                 <div class="badge-aborted">
@@ -98,6 +106,15 @@
                 </div>
                 <button class="btn-continue" @click="handleContinue(msg.id)">
                   ↻ 继续生成
+                </button>
+              </div>
+              <div v-if="msg.status === 'error'" class="error-badge-row">
+                <div class="badge-error">
+                  <div class="error-dot"></div>
+                  发送失败
+                </div>
+                <button class="btn-retry" @click="handleRetry(msg.id)">
+                  ↻ 重试
                 </button>
               </div>
             </div>
@@ -142,6 +159,20 @@
 
     </div><!-- /main-content -->
 
+    <!-- ── Toast 通知 ── -->
+    <transition-group name="toast-slide" tag="div" class="toast-container">
+      <div
+          v-for="t in toast.toasts.value"
+          :key="t.id"
+          class="toast-item"
+          :class="t.type"
+          @click="toast.dismiss(t.id)"
+      >
+        <span class="toast-icon">{{ t.type === 'error' ? '✕' : t.type === 'warning' ? '!' : '✓' }}</span>
+        <span class="toast-msg">{{ t.message }}</span>
+      </div>
+    </transition-group>
+
   </div>
 
   <!-- ── 设置面板 ── -->
@@ -158,6 +189,10 @@ function renderContent(msg: any) {
   // loading：还没收到任何内容，显示"思考中"跳动点
   if (msg.status === 'loading') {
     return '<div class="thinking-dots"><span></span><span></span><span></span></div>'
+  }
+  // error 且无内容时不渲染空气泡
+  if (msg.status === 'error' && !msg.content) {
+    return ''
   }
   // 已有预渲染内容（done 状态）
   if (msg.formattedContent) {
@@ -183,9 +218,11 @@ const {
   sidebarOpen,
   conversations,
   currentId,
+  toast,
   handleStop,
   handleSend,
   handleContinue,
+  handleRetry,
   scrollToBottom,
   handleSelectConversation,
   handleNewConversation,

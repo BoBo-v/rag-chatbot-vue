@@ -10,6 +10,15 @@ export interface Message {
     time?: string
     canContinue?: boolean
     formattedContent?: string
+    errorMessage?: string
+}
+
+export type ChatErrorType = 'network' | 'auth' | 'server' | 'timeout' | 'unknown'
+
+export interface ChatError {
+    type: ChatErrorType
+    message: string
+    status?: number
 }
 
 export interface Conversation {

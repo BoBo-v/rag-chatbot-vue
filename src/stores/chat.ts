@@ -24,6 +24,7 @@ export function useChat() {
             content: m.content,
             status: m.status as MessageStatus,
             canContinue: m.canContinue,
+            errorMessage: m.errorMessage,
         }))
     }
 

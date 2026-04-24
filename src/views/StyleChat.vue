@@ -184,8 +184,9 @@ import { ref, watch } from 'vue'
 import { useChatView } from '../composables/useChatView'
 import { renderMarkdown } from '../utils/markdown'
 import SettingsPanel from '../components/SettingsPanel.vue'
+import type {Message} from "../types/chat.ts";
 
-function renderContent(msg: any) {
+function renderContent(msg: Message) {
   // loading：还没收到任何内容，显示"思考中"跳动点
   if (msg.status === 'loading') {
     return '<div class="thinking-dots"><span></span><span></span><span></span></div>'

@@ -22,6 +22,7 @@ export function useChat() {
             id: m.id,
             role: m.role as Role,
             content: m.content,
+            images: m.images,
             status: m.status as MessageStatus,
             canContinue: m.canContinue,
             errorMessage: m.errorMessage,

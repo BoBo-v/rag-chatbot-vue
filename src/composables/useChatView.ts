@@ -5,7 +5,8 @@ import { generateStreamWithContext } from '../services/stream'
 import { db } from '../db'
 import { classifyError } from '../utils/error'
 import { useToast } from './useToast'
-import type {Message, StreamController} from "../types/chat.ts";
+import { settings } from '../stores/settings'
+import type {Message, ImageAttachment, StreamController} from "../types/chat.ts";
 
 /**
  * 聊天页面核心逻辑 composable
@@ -47,6 +48,7 @@ export function useChatView() {
     const unreadCount  = ref<number>(0)
     const containerRef = ref<HTMLDivElement | null>(null)
     const sidebarOpen  = ref<boolean>(false)
+    const pendingImages = ref<ImageAttachment[]>([])
 
     // ── 非响应式标志位 ───────────────────────────────────────
     let userAtBottom = true                          // 用户是否在消息底部，控制自动滚动
@@ -100,6 +102,7 @@ export function useChatView() {
             conversationId: convId,
             role: msg.role,
             content: msg.content,
+            images: msg.images,
             status: msg.status,
             canContinue: msg.canContinue,
             errorMessage: msg.errorMessage,
@@ -219,31 +222,78 @@ export function useChatView() {
     }
 
     // 发送消息：写入用户消息 → 创建 AI 占位 → 启动流式生成
+    function addImages(files: File[]) {
+        const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+        const maxSize = 10 * 1024 * 1024
+        for (const file of files) {
+            if (!allowed.includes(file.type)) {
+                toast.show(`不支持的图片格式: ${file.name}`, 'warning')
+                continue
+            }
+            if (file.size > maxSize) {
+                toast.show(`图片过大(>10MB): ${file.name}`, 'warning')
+                continue
+            }
+            const reader = new FileReader()
+            reader.onload = () => {
+                const dataUrl = reader.result as string
+                const base64 = dataUrl.split(',')[1]
+                pendingImages.value.push({
+                    base64,
+                    mediaType: file.type as ImageAttachment['mediaType'],
+                    name: file.name,
+                })
+            }
+            reader.readAsDataURL(file)
+        }
+    }
+
+    function removeImage(index: number) {
+        pendingImages.value.splice(index, 1)
+    }
+
     async function handleSend() {
         if (isStreaming.value) return
-        const userText = inputValue.value
+        const userText = inputValue.value.trim()
+        const images = pendingImages.value.length > 0 ? [...pendingImages.value] : undefined
         inputValue.value = ''
+        pendingImages.value = []
+
+        if (!userText && !images?.length) return
+
+        if (images?.length && settings.provider === 'ollama') {
+            const model = settings.ollama.model.toLowerCase()
+            const visionModels = ['llava', 'bakllava', 'minicpm-v', 'qwen2-vl', 'llama3.2-vision', 'moondream', 'cogvlm']
+            const isVision = visionModels.some(v => model.includes(v))
+            if (!isVision) {
+                toast.show(`当前模型 ${settings.ollama.model} 可能不支持图片，建议使用 llava / minicpm-v / qwen2-vl 等视觉模型`, 'warning', 6000)
+            }
+        }
+
+        const displayText = userText || (images ? '图片' : '')
+        const promptText = userText || (images ? '请描述这张图片' : '')
 
         let convId = currentId.value
         if (convId === null) {
             suppressConvWatch = true
-            convId = await createConversation(userText.slice(0, 28) || '新对话')
+            convId = await createConversation(displayText.slice(0, 28) || '新对话')
             suppressConvWatch = false
         }
 
         const userMsgId = crypto.randomUUID()
-        addMessage({ id: userMsgId, role: 'user', content: userText, status: 'done' })
+        addMessage({ id: userMsgId, role: 'user', content: userText, images, status: 'done' })
         await db.messages.add({
             id: userMsgId,
             conversationId: convId,
             role: 'user',
             content: userText,
+            images,
             status: 'done',
             createdAt: Date.now(),
         })
 
         const aiMsg = createAssistantMessage()
-        await runStream({ aiMessageId: aiMsg.id, prompt: userText, convId })
+        await runStream({ aiMessageId: aiMsg.id, prompt: promptText, convId })
     }
 
     // 重试：删除失败的 AI 消息，用同一条用户消息重新生成
@@ -385,6 +435,7 @@ export function useChatView() {
         conversations,
         currentId,
         toast,
+        pendingImages,
         handleSend,
         scrollToBottom,
         handleStop,
@@ -393,5 +444,7 @@ export function useChatView() {
         handleSelectConversation,
         handleNewConversation,
         handleDeleteConversation,
+        addImages,
+        removeImage,
     }
 }

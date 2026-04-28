@@ -83,6 +83,14 @@
                      'is-error':     msg.status === 'error',
                    }]"
               >
+                <div v-if="msg.images?.length" class="msg-images">
+                  <img v-for="(img, idx) in msg.images" :key="idx"
+                       :src="`data:${img.mediaType};base64,${img.base64}`"
+                       :alt="img.name"
+                       class="msg-image"
+                       @click="openImagePreview(`data:${img.mediaType};base64,${img.base64}`)"
+                  />
+                </div>
                 <div class="msg-content markdown-body" v-html="renderContent(msg)"></div>
                 <template v-if="msg.status === 'aborted'">
                   <div class="abort-divider"></div>
@@ -132,7 +140,33 @@
 
       <!-- ── 输入区 ── -->
       <div class="input-area">
-        <div class="input-box" :class="{ disabled: isStreaming }">
+        <!-- 图片预览 -->
+        <div v-if="pendingImages.length > 0" class="image-preview-bar">
+          <div v-for="(img, idx) in pendingImages" :key="idx" class="image-preview-item">
+            <img :src="`data:${img.mediaType};base64,${img.base64}`" :alt="img.name" />
+            <button class="image-remove-btn" @click="removeImage(idx)">×</button>
+          </div>
+        </div>
+        <div class="input-box" :class="{ disabled: isStreaming }"
+             @dragover.prevent="dragOver = true"
+             @dragleave.prevent="dragOver = false"
+             @drop.prevent="handleDrop">
+          <input
+              ref="fileInputRef"
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              multiple
+              hidden
+              @change="handleFileSelect"
+          />
+          <button class="upload-btn"  :disabled="isStreaming" @click="fileInputRef?.click()" title="上传图片"
+                  style="border: 1px solid var(--border);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </button>
           <textarea
               ref="textareaRef"
               class="input-field"
@@ -142,18 +176,19 @@
               rows="1"
               @keydown.enter.exact.prevent="handleSend"
               @input="autoResize"
+              @paste="handlePaste"
           ></textarea>
           <button v-if="isStreaming" class="stop-btn" @click="handleStop">■</button>
           <button
               v-else
               class="send-btn"
-              :class="{ ready: inputValue.trim() }"
-              :disabled="!inputValue.trim()"
+              :class="{ ready: inputValue.trim() || pendingImages.length > 0 }"
+              :disabled="!inputValue.trim() && pendingImages.length === 0"
               @click="handleSend"
           >↑</button>
         </div>
         <div class="input-hint">
-          {{ isStreaming ? 'AI 正在回复中...' : 'Enter 发送 · Shift+Enter 换行' }}
+          {{ isStreaming ? 'AI 正在回复中...' : 'Enter 发送 · Shift+Enter 换行 · 可粘贴/拖拽图片' }}
         </div>
       </div>
 
@@ -174,6 +209,13 @@
     </transition-group>
 
   </div>
+
+  <!-- ── 图片大图预览 ── -->
+  <teleport to="body">
+    <div v-if="previewImageSrc" class="image-lightbox" @click="previewImageSrc = ''">
+      <img :src="previewImageSrc" alt="preview" />
+    </div>
+  </teleport>
 
   <!-- ── 设置面板 ── -->
   <SettingsPanel v-if="settingsOpen" @close="settingsOpen = false" />
@@ -220,6 +262,7 @@ const {
   conversations,
   currentId,
   toast,
+  pendingImages,
   handleStop,
   handleSend,
   handleContinue,
@@ -228,10 +271,53 @@ const {
   handleSelectConversation,
   handleNewConversation,
   handleDeleteConversation,
+  addImages,
+  removeImage,
 } = useChatView()
 
 // ── 设置面板 ──────────────────────────────────────
 const settingsOpen = ref(false)
+const previewImageSrc = ref('')
+const dragOver = ref(false)
+
+function openImagePreview(src: string) {
+  previewImageSrc.value = src
+}
+
+// ── 图片上传相关 ──────────────────────────────────
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function handleFileSelect(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (input.files?.length) {
+    addImages(Array.from(input.files))
+    input.value = ''
+  }
+}
+
+function handlePaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  const imageFiles: File[] = []
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) imageFiles.push(file)
+    }
+  }
+  if (imageFiles.length) {
+    e.preventDefault()
+    addImages(imageFiles)
+  }
+}
+
+function handleDrop(e: DragEvent) {
+  dragOver.value = false
+  const files = e.dataTransfer?.files
+  if (!files) return
+  const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'))
+  if (imageFiles.length) addImages(imageFiles)
+}
 
 // ── Textarea 自动高度 ─────────────────────────────
 const textareaRef = ref<HTMLTextAreaElement | null>(null)

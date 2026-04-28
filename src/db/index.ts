@@ -7,11 +7,18 @@ export interface DBConversation {
     updatedAt: number
 }
 
+export interface DBImage {
+    base64: string
+    mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+    name: string
+}
+
 export interface DBMessage {
     id: string
     conversationId: number
     role: 'user' | 'assistant'
     content: string
+    images?: DBImage[]
     status: string
     canContinue?: boolean
     errorMessage?: string
@@ -25,6 +32,10 @@ class ChatDB extends Dexie {
     constructor() {
         super('ai-chat-db')
         this.version(1).stores({
+            conversations: '++id, updatedAt',
+            messages: 'id, conversationId'
+        })
+        this.version(2).stores({
             conversations: '++id, updatedAt',
             messages: 'id, conversationId'
         })

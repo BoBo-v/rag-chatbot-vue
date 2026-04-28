@@ -2,10 +2,17 @@ export type Role = 'user' | 'assistant'
 
 export type MessageStatus = 'loading' | 'streaming' | 'done' | 'error' | 'aborted'
 
+export interface ImageAttachment {
+    base64: string
+    mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+    name: string
+}
+
 export interface Message {
     id: string
     role: Role
     content: string
+    images?: ImageAttachment[]
     status: MessageStatus
     time?: string
     canContinue?: boolean

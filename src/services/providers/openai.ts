@@ -2,11 +2,6 @@ import type { Message } from '../../types/chat'
 import { buildMessages } from '../context'
 import { settings } from '../../stores/settings'
 
-/**
- * OpenAI 兼容接口（OpenAI / DeepSeek / 通义千问 / Kimi 等）
- * 协议：SSE，每行 "data: {...}" 或 "data: [DONE]"
- * 内容字段：obj.choices[0].delta.content
- */
 export async function openaiStream(
     messages: Message[],
     userText: string,
@@ -23,6 +18,23 @@ export async function openaiStream(
         settings.maxContextTokens
     )
 
+    const openaiMessages = chatMessages.map(m => {
+        if (m.images?.length) {
+            const content: Record<string, unknown>[] = []
+            for (const img of m.images) {
+                content.push({
+                    type: 'image_url',
+                    image_url: { url: `data:${img.mediaType};base64,${img.base64}` },
+                })
+            }
+            if (m.content) {
+                content.push({ type: 'text', text: m.content })
+            }
+            return { role: m.role, content }
+        }
+        return { role: m.role, content: m.content }
+    })
+
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
@@ -31,7 +43,7 @@ export async function openaiStream(
         },
         body: JSON.stringify({
             model: cfg.model,
-            messages: chatMessages,
+            messages: openaiMessages,
             stream: true,
         }),
         signal,
@@ -51,15 +63,12 @@ export async function openaiStream(
             const obj = JSON.parse(data)
             const chunk: string = obj.choices?.[0]?.delta?.content ?? ''
             if (chunk) onChunk(chunk)
-            // 部分服务在 choices[0].finish_reason === 'stop' 时不发 [DONE]
             if (obj.choices?.[0]?.finish_reason === 'stop') onDone()
         } catch {
-            // 忽略解析异常
         }
     })
 }
 
-/** 拉取 OpenAI 兼容接口的模型列表 */
 export async function fetchOpenAIModels(): Promise<string[]> {
     const cfg = settings.openai
     if (!cfg.apiKey) return []
@@ -79,7 +88,6 @@ export async function fetchOpenAIModels(): Promise<string[]> {
     }
 }
 
-// ── 通用 SSE 解析器 ────────────────────────────────────────────
 export async function parseSSE(
     body: ReadableStream<Uint8Array>,
     signal: AbortSignal | undefined,
@@ -103,7 +111,6 @@ export async function parseSSE(
             if (done) break
 
             buffer += decoder.decode(value, { stream: true })
-            // SSE 用 \n\n 分隔事件块，但也可能逐行到来
             const lines = buffer.split('\n')
             buffer = lines.pop() ?? ''
 

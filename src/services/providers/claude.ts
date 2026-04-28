@@ -3,15 +3,6 @@ import { buildMessages } from '../context'
 import { settings } from '../../stores/settings'
 import { parseSSE } from './openai'
 
-/**
- * Anthropic Claude API
- * 协议：SSE，带 event 字段
- * event: content_block_delta → data: {"delta":{"text":"chunk"}}
- * event: message_stop        → 结束
- *
- * 注意：浏览器直接调用需要后端代理，或在请求头加
- *   anthropic-dangerous-direct-browser-access: true
- */
 export async function claudeStream(
     messages: Message[],
     userText: string,
@@ -27,11 +18,29 @@ export async function claudeStream(
         settings.maxContextTokens
     )
 
-    // Claude API：system 单独传，messages 只含 user/assistant
     const system = allMsgs.find(m => m.role === 'system')?.content ?? settings.systemPrompt
     const chatMessages = allMsgs
         .filter(m => m.role !== 'system')
-        .map(m => ({ role: m.role, content: m.content }))
+        .map(m => {
+            if (m.images?.length) {
+                const content: Record<string, unknown>[] = []
+                for (const img of m.images) {
+                    content.push({
+                        type: 'image',
+                        source: {
+                            type: 'base64',
+                            media_type: img.mediaType,
+                            data: img.base64,
+                        },
+                    })
+                }
+                if (m.content) {
+                    content.push({ type: 'text', text: m.content })
+                }
+                return { role: m.role, content }
+            }
+            return { role: m.role, content: m.content }
+        })
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -62,7 +71,6 @@ export async function claudeStream(
         if (event === 'message_stop' || event === 'message_delta') {
             try {
                 const obj = JSON.parse(data)
-                // message_delta 里的 stop_reason 也代表结束
                 if (obj.type === 'message_stop' || obj.delta?.stop_reason) {
                     if (!doneCalled) { doneCalled = true; onDone() }
                 }
@@ -86,7 +94,6 @@ export async function claudeStream(
     if (!doneCalled) onDone()
 }
 
-/** Claude 已知可用模型（API 无列表接口） */
 export function getClaudeModels(): string[] {
     return [
         'claude-opus-4-6',

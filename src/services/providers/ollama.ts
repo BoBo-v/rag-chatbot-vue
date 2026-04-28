@@ -2,10 +2,6 @@ import type { Message } from '../../types/chat'
 import { buildMessages } from '../context'
 import { settings } from '../../stores/settings'
 
-/**
- * Ollama /api/chat — NDJSON 流式
- * 每行：{"message":{"content":"chunk"},"done":false}
- */
 export async function ollamaStream(
     messages: Message[],
     userText: string,
@@ -21,12 +17,20 @@ export async function ollamaStream(
         settings.maxContextTokens
     )
 
+    const ollamaMessages = chatMessages.map(m => {
+        const msg: Record<string, unknown> = { role: m.role, content: m.content }
+        if (m.images?.length) {
+            msg.images = m.images.map(img => img.base64)
+        }
+        return msg
+    })
+
     const res = await fetch(`${cfg.url}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             model: cfg.model,
-            messages: chatMessages,
+            messages: ollamaMessages,
             stream: true,
         }),
         signal,
@@ -66,7 +70,6 @@ export async function ollamaStream(
                         onDone()
                     }
                 } catch {
-                    // 忽略单行解析失败
                 }
             }
         }
@@ -81,7 +84,6 @@ export async function ollamaStream(
     }
 }
 
-/** 拉取 Ollama 已安装模型列表 */
 export async function fetchOllamaModels(): Promise<string[]> {
     try {
         const res = await fetch(`${settings.ollama.url}/api/tags`)

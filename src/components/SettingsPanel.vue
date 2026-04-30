@@ -130,15 +130,20 @@
               <label class="settings-label">上下文长度（Token 估算上限）</label>
               <span class="settings-token-val">{{ contextTokenLabel }}</span>
             </div>
-            <input class="settings-slider" type="range"
-              min="1000" max="1100000" step="1000"
-              v-model.number="draft.maxContextTokens" />
             <div class="context-presets">
-              <button v-for="p in contextPresets" :key="p.value"
+              <button v-for="(tier, idx) in contextTiers" :key="tier.label"
                 class="context-preset-btn"
-                :class="{ active: draft.maxContextTokens === p.value }"
-                @click="draft.maxContextTokens = p.value"
-              >{{ p.label }}</button>
+                :class="{ active: activeTierIndex === idx }"
+                @click="selectTier(idx)"
+              >{{ tier.label }}</button>
+            </div>
+            <input v-if="activeTier.max !== UNLIMITED"
+              class="settings-slider" type="range"
+              :min="activeTier.min" :max="activeTier.max" :step="activeTier.step"
+              v-model.number="draft.maxContextTokens" />
+            <div v-if="activeTier.max !== UNLIMITED" class="settings-slider-labels">
+              <span>{{ activeTier.min >= 1000 ? (activeTier.min / 1000) + 'K' : activeTier.min }}</span>
+              <span>{{ activeTier.max >= 1000000 ? (activeTier.max / 1000000) + 'M' : (activeTier.max / 1000) + 'K' }}</span>
             </div>
           </div>
 
@@ -163,22 +168,24 @@ import type { ProviderType, ThemeType } from '../stores/settings'
 
 const emit = defineEmits<{ close: [] }>()
 
-const contextPresets = [
-  { label: '8K',   value: 8000 },
-  { label: '32K',  value: 32000 },
-  { label: '128K', value: 128000 },
-  { label: '256K', value: 256000 },
-  { label: '1M',   value: 1000000 },
-  { label: '无限制', value: 1100000 },
+const UNLIMITED = 1100000
+
+const contextTiers = [
+  { label: '8K',    max: 8000,    min: 500,    step: 500 },
+  { label: '32K',   max: 32000,   min: 1000,   step: 1000 },
+  { label: '128K',  max: 128000,  min: 2000,   step: 2000 },
+  { label: '256K',  max: 256000,  min: 4000,   step: 4000 },
+  { label: '1M',    max: 1000000, min: 10000,  step: 10000 },
+  { label: '无限制', max: UNLIMITED, min: UNLIMITED, step: 1 },
 ]
 
-const contextTokenLabel = computed(() => {
-  const v = draft.maxContextTokens
-  if (v >= 1100000) return '无限制'
-  if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M'
-  if (v >= 1000) return (v / 1000).toFixed(0) + 'K'
-  return String(v)
-})
+function findTierIndex(value: number): number {
+  if (value >= UNLIMITED) return contextTiers.length - 1
+  for (let i = contextTiers.length - 2; i >= 0; i--) {
+    if (value <= contextTiers[i].max) return i
+  }
+  return 0
+}
 
 const themes: { value: ThemeType; label: string; icon: string }[] = [
   { value: 'dark',   label: '暗色', icon: '🌙' },
@@ -200,6 +207,27 @@ const draft = reactive({
   ollama:  { ...settings.ollama },
   openai:  { ...settings.openai },
   claude:  { ...settings.claude },
+})
+
+const activeTierIndex = ref(findTierIndex(draft.maxContextTokens))
+const activeTier = computed(() => contextTiers[activeTierIndex.value])
+
+function selectTier(index: number) {
+  activeTierIndex.value = index
+  const tier = contextTiers[index]
+  if (tier.max === UNLIMITED) {
+    draft.maxContextTokens = UNLIMITED
+  } else {
+    draft.maxContextTokens = Math.min(Math.max(draft.maxContextTokens, tier.min), tier.max)
+  }
+}
+
+const contextTokenLabel = computed(() => {
+  const v = draft.maxContextTokens
+  if (v >= UNLIMITED) return '无限制'
+  if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M'
+  if (v >= 1000) return Math.round(v / 1000) + 'K'
+  return String(v)
 })
 
 const modelList    = ref<string[]>([])

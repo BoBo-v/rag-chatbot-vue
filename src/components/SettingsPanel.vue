@@ -157,7 +157,7 @@ import { fetchModels } from '../services/stream'
 import { getClaudeModels } from '../services/providers/claude'
 import type { ProviderType, ThemeType } from '../stores/settings'
 
-defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: [] }>()
 
 const themes: { value: ThemeType; label: string; icon: string }[] = [
   { value: 'dark',   label: '暗色', icon: '🌙' },
@@ -230,5 +230,6 @@ function save() {
   Object.assign(settings.ollama,  draft.ollama)
   Object.assign(settings.openai,  draft.openai)
   Object.assign(settings.claude,  draft.claude)
+  emit('close')
 }
 </script>

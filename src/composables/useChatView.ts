@@ -157,6 +157,8 @@ export function useChatView() {
     let queue: string[] = []
     let isFlushing = false
     let needsStatusFallback = true
+    let pendingDoneId: string | null = null
+    let pendingDoneResolve: (() => void) | null = null
 
     // 生成结束后将原始 Markdown 渲染为 HTML（懒加载 markdown 工具）
     async function formatFinishedMessage(msgId: string) {
@@ -178,7 +180,18 @@ export function useChatView() {
         isFlushing = true
 
         function step() {
-            if (queue.length === 0) { isFlushing = false; return }
+            if (queue.length === 0) {
+                isFlushing = false
+                if (pendingDoneId) {
+                    const id = pendingDoneId
+                    pendingDoneId = null
+                    updateMessage(id, { status: 'done' })
+                    formatFinishedMessage(id)
+                    pendingDoneResolve?.()
+                    pendingDoneResolve = null
+                }
+                return
+            }
             const chunk = queue.shift()!
             const chars = chunk.split('')
             let i = 0
@@ -355,6 +368,8 @@ export function useChatView() {
         queue = []
         isFlushing = false
         needsStatusFallback = true
+        pendingDoneId = null
+        pendingDoneResolve = null
         isStreaming.value = true
         await nextTick()
         scheduleScroll()
@@ -378,6 +393,8 @@ export function useChatView() {
                     needsStatusFallback = false
                     if (streamCtrl?.isAborted) {
                         updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
+                    } else if (queue.length > 0 || isFlushing) {
+                        pendingDoneId = options.aiMessageId
                     } else {
                         updateMessage(options.aiMessageId, { status: 'done' })
                         formatFinishedMessage(options.aiMessageId)
@@ -395,10 +412,13 @@ export function useChatView() {
             })
             toast.show(chatErr.message, 'error')
         } finally {
+            if (pendingDoneId) {
+                await new Promise<void>(resolve => { pendingDoneResolve = resolve })
+            }
+
             isStreaming.value = false
             scheduleScroll()
 
-            // 兜底：极少数情况 onDone 未触发（如网络中断），补一次 done
             if (needsStatusFallback && !streamCtrl?.isAborted) {
                 updateMessage(options.aiMessageId, { status: 'done' })
             }

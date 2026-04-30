@@ -307,10 +307,24 @@ export function useChatView() {
     }
 
     async function handleSend() {
-        if (isStreaming.value) return
+        console.log('[handleSend]', {
+            isStreaming: isStreaming.value,
+            text: inputValue.value.trim().slice(0, 20),
+            images: pendingImages.value.length,
+            files: pendingFiles.value.length,
+            provider: settings.provider,
+        })
+        if (isStreaming.value) {
+            console.warn('[handleSend] blocked: isStreaming is true')
+            return
+        }
         const userText = inputValue.value.trim()
-        const images = pendingImages.value.length > 0 ? [...pendingImages.value] : undefined
-        const files = pendingFiles.value.length > 0 ? [...pendingFiles.value] : undefined
+        const images = pendingImages.value.length > 0
+            ? pendingImages.value.map(img => ({ base64: img.base64, mediaType: img.mediaType, name: img.name }))
+            : undefined
+        const files = pendingFiles.value.length > 0
+            ? pendingFiles.value.map(f => ({ name: f.name, content: f.content, size: f.size }))
+            : undefined
         inputValue.value = ''
         pendingImages.value = []
         pendingFiles.value = []
@@ -457,7 +471,15 @@ export function useChatView() {
             toast.show(chatErr.message, 'error')
         } finally {
             if (pendingDoneId) {
-                await new Promise<void>(resolve => { pendingDoneResolve = resolve })
+                await Promise.race([
+                    new Promise<void>(resolve => { pendingDoneResolve = resolve }),
+                    new Promise<void>(resolve => setTimeout(resolve, 10000)),
+                ])
+                if (pendingDoneId) {
+                    updateMessage(pendingDoneId, { status: 'done' })
+                    formatFinishedMessage(pendingDoneId)
+                    pendingDoneId = null
+                }
             }
 
             isStreaming.value = false

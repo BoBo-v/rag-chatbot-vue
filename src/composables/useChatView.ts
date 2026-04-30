@@ -6,7 +6,7 @@ import { db } from '../db'
 import { classifyError } from '../utils/error'
 import { useToast } from './useToast'
 import { settings } from '../stores/settings'
-import type {Message, ImageAttachment, StreamController} from "../types/chat.ts";
+import type {Message, ImageAttachment, FileAttachment, StreamController} from "../types/chat.ts";
 
 /**
  * 聊天页面核心逻辑 composable
@@ -49,6 +49,7 @@ export function useChatView() {
     const containerRef = ref<HTMLDivElement | null>(null)
     const sidebarOpen  = ref<boolean>(false)
     const pendingImages = ref<ImageAttachment[]>([])
+    const pendingFiles = ref<FileAttachment[]>([])
 
     // ── 非响应式标志位 ───────────────────────────────────────
     let userAtBottom = true                          // 用户是否在消息底部，控制自动滚动
@@ -103,6 +104,7 @@ export function useChatView() {
             role: msg.role,
             content: msg.content,
             images: msg.images,
+            files: msg.files,
             status: msg.status,
             canContinue: msg.canContinue,
             errorMessage: msg.errorMessage,
@@ -265,14 +267,55 @@ export function useChatView() {
         pendingImages.value.splice(index, 1)
     }
 
+    const TEXT_EXTENSIONS = [
+        '.txt', '.md', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml',
+        '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte',
+        '.py', '.go', '.rs', '.java', '.kt', '.c', '.cpp', '.h', '.hpp', '.cs',
+        '.rb', '.php', '.swift', '.sh', '.bash', '.zsh', '.bat', '.ps1',
+        '.html', '.css', '.scss', '.less', '.sass',
+        '.sql', '.graphql', '.proto',
+        '.env', '.ini', '.conf', '.cfg', '.log',
+    ]
+
+    const MAX_FILE_SIZE = 5 * 1024 * 1024
+
+    function addFiles(files: File[]) {
+        for (const file of files) {
+            const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+            if (!TEXT_EXTENSIONS.includes(ext)) {
+                toast.show(`不支持的文件类型: ${file.name}，仅支持文本/代码文件`, 'warning')
+                continue
+            }
+            if (file.size > MAX_FILE_SIZE) {
+                toast.show(`文件过大(>5MB): ${file.name}`, 'warning')
+                continue
+            }
+            const reader = new FileReader()
+            reader.onload = () => {
+                pendingFiles.value.push({
+                    name: file.name,
+                    content: reader.result as string,
+                    size: file.size,
+                })
+            }
+            reader.readAsText(file)
+        }
+    }
+
+    function removeFile(index: number) {
+        pendingFiles.value.splice(index, 1)
+    }
+
     async function handleSend() {
         if (isStreaming.value) return
         const userText = inputValue.value.trim()
         const images = pendingImages.value.length > 0 ? [...pendingImages.value] : undefined
+        const files = pendingFiles.value.length > 0 ? [...pendingFiles.value] : undefined
         inputValue.value = ''
         pendingImages.value = []
+        pendingFiles.value = []
 
-        if (!userText && !images?.length) return
+        if (!userText && !images?.length && !files?.length) return
 
         if (images?.length && settings.provider === 'ollama') {
             const model = settings.ollama.model.toLowerCase()
@@ -283,8 +326,8 @@ export function useChatView() {
             }
         }
 
-        const displayText = userText || (images ? '图片' : '')
-        const promptText = userText || (images ? '请描述这张图片' : '')
+        const displayText = userText || (images ? '图片' : '') || (files ? files.map(f => f.name).join(', ') : '')
+        const promptText = userText || (images ? '请描述这张图片' : '') || (files ? '请分析这些文件' : '')
 
         let convId = currentId.value
         if (convId === null) {
@@ -294,13 +337,14 @@ export function useChatView() {
         }
 
         const userMsgId = crypto.randomUUID()
-        addMessage({ id: userMsgId, role: 'user', content: userText, images, status: 'done' })
+        addMessage({ id: userMsgId, role: 'user', content: userText, images, files, status: 'done' })
         await db.messages.add({
             id: userMsgId,
             conversationId: convId,
             role: 'user',
             content: userText,
             images,
+            files,
             status: 'done',
             createdAt: Date.now(),
         })
@@ -456,6 +500,7 @@ export function useChatView() {
         currentId,
         toast,
         pendingImages,
+        pendingFiles,
         handleSend,
         scrollToBottom,
         handleStop,
@@ -466,5 +511,7 @@ export function useChatView() {
         handleDeleteConversation,
         addImages,
         removeImage,
+        addFiles,
+        removeFile,
     }
 }

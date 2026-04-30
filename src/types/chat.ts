@@ -8,11 +8,18 @@ export interface ImageAttachment {
     name: string
 }
 
+export interface FileAttachment {
+    name: string
+    content: string
+    size: number
+}
+
 export interface Message {
     id: string
     role: Role
     content: string
     images?: ImageAttachment[]
+    files?: FileAttachment[]
     status: MessageStatus
     time?: string
     canContinue?: boolean

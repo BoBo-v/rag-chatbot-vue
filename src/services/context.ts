@@ -4,6 +4,7 @@ export interface ChatMessage {
     role: 'system' | 'user' | 'assistant'
     content: string
     images?: { base64: string; mediaType: string }[]
+    files?: { name: string; content: string }[]
 }
 export interface Tool{
     name: string
@@ -38,9 +39,18 @@ export function buildMessages(
     for (let i = finished.length - 1; i >= 0; i--) {
         const m = finished[i]
         if (m.role !== 'user' && m.role !== 'assistant') continue
-        const t = estimateTokens(m.content) + (m.images?.length ?? 0) * IMAGE_TOKEN_COST
+        let fileTokens = 0
+        if (m.files?.length) {
+            for (const f of m.files) fileTokens += estimateTokens(f.content)
+        }
+        const t = estimateTokens(m.content) + (m.images?.length ?? 0) * IMAGE_TOKEN_COST + fileTokens
         if (used + t > budget) break
-        const chatMsg: ChatMessage = { role: m.role, content: m.content }
+        let content = m.content
+        if (m.files?.length) {
+            const fileBlocks = m.files.map(f => `<file name="${f.name}">\n${f.content}\n</file>`).join('\n\n')
+            content = fileBlocks + (content ? '\n\n' + content : '')
+        }
+        const chatMsg: ChatMessage = { role: m.role, content }
         if (m.images?.length) {
             chatMsg.images = m.images.map(img => ({ base64: img.base64, mediaType: img.mediaType }))
         }

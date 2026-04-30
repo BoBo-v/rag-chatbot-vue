@@ -83,6 +83,13 @@
                      'is-error':     msg.status === 'error',
                    }]"
               >
+                <div v-if="msg.files?.length" class="msg-files">
+                  <div v-for="(file, idx) in msg.files" :key="idx" class="msg-file-chip">
+                    <span class="file-icon">📄</span>
+                    <span class="file-name">{{ file.name }}</span>
+                    <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                  </div>
+                </div>
                 <div v-if="msg.images?.length" class="msg-images">
                   <img v-for="(img, idx) in msg.images" :key="idx"
                        :src="`data:${img.mediaType};base64,${img.base64}`"
@@ -140,6 +147,15 @@
 
       <!-- ── 输入区 ── -->
       <div class="input-area">
+        <!-- 文件预览 -->
+        <div v-if="pendingFiles.length > 0" class="file-preview-bar">
+          <div v-for="(file, idx) in pendingFiles" :key="idx" class="file-preview-item">
+            <span class="file-icon">📄</span>
+            <span class="file-name">{{ file.name }}</span>
+            <span class="file-size">{{ formatFileSize(file.size) }}</span>
+            <button class="file-remove-btn" @click="removeFile(idx)">×</button>
+          </div>
+        </div>
         <!-- 图片预览 -->
         <div v-if="pendingImages.length > 0" class="image-preview-bar">
           <div v-for="(img, idx) in pendingImages" :key="idx" class="image-preview-item">
@@ -152,19 +168,37 @@
              @dragleave.prevent="dragOver = false"
              @drop.prevent="handleDrop">
           <input
-              ref="fileInputRef"
+              ref="imageInputRef"
               type="file"
               accept="image/png,image/jpeg,image/gif,image/webp"
               multiple
               hidden
+              @change="handleImageSelect"
+          />
+          <input
+              ref="fileInputRef"
+              type="file"
+              accept=".txt,.md,.csv,.json,.xml,.yaml,.yml,.toml,.js,.ts,.jsx,.tsx,.vue,.svelte,.py,.go,.rs,.java,.kt,.c,.cpp,.h,.hpp,.cs,.rb,.php,.swift,.sh,.bash,.zsh,.bat,.ps1,.html,.css,.scss,.less,.sass,.sql,.graphql,.proto,.env,.ini,.conf,.cfg,.log"
+              multiple
+              hidden
               @change="handleFileSelect"
           />
-          <button class="upload-btn"  :disabled="isStreaming" @click="fileInputRef?.click()" title="上传图片"
+          <button class="upload-btn" :disabled="isStreaming" @click="imageInputRef?.click()" title="上传图片"
                   style="border: 1px solid var(--border);">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
               <circle cx="8.5" cy="8.5" r="1.5"/>
               <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </button>
+          <button class="upload-btn" :disabled="isStreaming" @click="fileInputRef?.click()" title="上传文件"
+                  style="border: 1px solid var(--border);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
             </svg>
           </button>
           <textarea
@@ -182,13 +216,13 @@
           <button
               v-else
               class="send-btn"
-              :class="{ ready: inputValue.trim() || pendingImages.length > 0 }"
-              :disabled="!inputValue.trim() && pendingImages.length === 0"
+              :class="{ ready: inputValue.trim() || pendingImages.length > 0 || pendingFiles.length > 0 }"
+              :disabled="!inputValue.trim() && pendingImages.length === 0 && pendingFiles.length === 0"
               @click="handleSend"
           >↑</button>
         </div>
         <div class="input-hint">
-          {{ isStreaming ? 'AI 正在回复中...' : 'Enter 发送 · Shift+Enter 换行 · 可粘贴/拖拽图片' }}
+          {{ isStreaming ? 'AI 正在回复中...' : 'Enter 发送 · Shift+Enter 换行 · 可粘贴/拖拽图片 · 支持上传文件' }}
         </div>
       </div>
 
@@ -263,6 +297,7 @@ const {
   currentId,
   toast,
   pendingImages,
+  pendingFiles,
   handleStop,
   handleSend,
   handleContinue,
@@ -273,6 +308,8 @@ const {
   handleDeleteConversation,
   addImages,
   removeImage,
+  addFiles,
+  removeFile,
 } = useChatView()
 
 // ── 设置面板 ──────────────────────────────────────
@@ -284,15 +321,30 @@ function openImagePreview(src: string) {
   previewImageSrc.value = src
 }
 
-// ── 图片上传相关 ──────────────────────────────────
+// ── 上传相关 ──────────────────────────────────────
+const imageInputRef = ref<HTMLInputElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-function handleFileSelect(e: Event) {
+function handleImageSelect(e: Event) {
   const input = e.target as HTMLInputElement
   if (input.files?.length) {
     addImages(Array.from(input.files))
     input.value = ''
   }
+}
+
+function handleFileSelect(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (input.files?.length) {
+    addFiles(Array.from(input.files))
+    input.value = ''
+  }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
 function handlePaste(e: ClipboardEvent) {

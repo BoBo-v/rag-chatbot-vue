@@ -973,6 +973,98 @@
     opacity: 1;
 }
 
+/* ─── 文件预览条（输入区上方） ──────────────────── */
+.file-preview-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 0 8px;
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.file-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.file-preview-item .file-name {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.file-preview-item .file-size {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.file-remove-btn {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+.file-remove-btn:hover {
+    background: rgba(248, 113, 113, 0.4);
+}
+
+/* ─── 消息内文件标签 ───────────────────────────── */
+.msg-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.msg-file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.msg-file-chip .file-icon {
+    font-size: 14px;
+}
+
+.msg-file-chip .file-name {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.msg-file-chip .file-size {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
 /* ─── 消息内图片 ─────────────────────────────── */
 .msg-images {
     display: flex;

@@ -13,12 +13,19 @@ export interface DBImage {
     name: string
 }
 
+export interface DBFile {
+    name: string
+    content: string
+    size: number
+}
+
 export interface DBMessage {
     id: string
     conversationId: number
     role: 'user' | 'assistant'
     content: string
     images?: DBImage[]
+    files?: DBFile[]
     status: string
     canContinue?: boolean
     errorMessage?: string

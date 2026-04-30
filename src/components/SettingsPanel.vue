@@ -128,13 +128,17 @@
           <div class="settings-group">
             <div class="settings-label-row">
               <label class="settings-label">上下文长度（Token 估算上限）</label>
-              <span class="settings-token-val">{{ draft.maxContextTokens }}</span>
+              <span class="settings-token-val">{{ contextTokenLabel }}</span>
             </div>
             <input class="settings-slider" type="range"
-              min="500" max="8000" step="500"
+              min="1000" max="1100000" step="1000"
               v-model.number="draft.maxContextTokens" />
-            <div class="settings-slider-labels">
-              <span>500</span><span>8000</span>
+            <div class="context-presets">
+              <button v-for="p in contextPresets" :key="p.value"
+                class="context-preset-btn"
+                :class="{ active: draft.maxContextTokens === p.value }"
+                @click="draft.maxContextTokens = p.value"
+              >{{ p.label }}</button>
             </div>
           </div>
 
@@ -151,13 +155,30 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, computed } from 'vue'
 import { settings } from '../stores/settings'
 import { fetchModels } from '../services/stream'
 import { getClaudeModels } from '../services/providers/claude'
 import type { ProviderType, ThemeType } from '../stores/settings'
 
 const emit = defineEmits<{ close: [] }>()
+
+const contextPresets = [
+  { label: '8K',   value: 8000 },
+  { label: '32K',  value: 32000 },
+  { label: '128K', value: 128000 },
+  { label: '256K', value: 256000 },
+  { label: '1M',   value: 1000000 },
+  { label: '无限制', value: 1100000 },
+]
+
+const contextTokenLabel = computed(() => {
+  const v = draft.maxContextTokens
+  if (v >= 1100000) return '无限制'
+  if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M'
+  if (v >= 1000) return (v / 1000).toFixed(0) + 'K'
+  return String(v)
+})
 
 const themes: { value: ThemeType; label: string; icon: string }[] = [
   { value: 'dark',   label: '暗色', icon: '🌙' },

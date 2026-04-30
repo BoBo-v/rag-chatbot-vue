@@ -1434,6 +1434,33 @@
     margin-top: 2px;
 }
 
+.context-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.context-preset-btn {
+    padding: 4px 12px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface-2);
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.context-preset-btn:hover {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+}
+.context-preset-btn.active {
+    background: var(--accent-bg);
+    border-color: var(--accent-border);
+    color: var(--accent-text);
+}
+
 .settings-footer {
     display: flex;
     align-items: center;

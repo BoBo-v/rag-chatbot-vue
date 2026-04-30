@@ -29,7 +29,7 @@ const defaults: AppSettings = {
     provider: 'ollama',
     theme: 'dark',
     systemPrompt: '你是一个专业的 AI 助手，回答要简洁清晰。',
-    maxContextTokens: 2000,
+    maxContextTokens: 128000,
     ollama: {
         url: 'http://localhost:11434',
         model: 'qwen2.5:7b',

@@ -8,6 +8,7 @@ export interface AppSettings {
     theme: ThemeType
     systemPrompt: string
     maxContextTokens: number
+    showModelInTopbar: boolean
     ollama: {
         url: string
         model: string
@@ -30,6 +31,7 @@ const defaults: AppSettings = {
     theme: 'dark',
     systemPrompt: '你是一个专业的 AI 助手，回答要简洁清晰。',
     maxContextTokens: 128000,
+    showModelInTopbar: true,
     ollama: {
         url: 'http://localhost:11434',
         model: 'qwen2.5:7b',

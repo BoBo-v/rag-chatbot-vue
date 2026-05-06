@@ -51,6 +51,7 @@
           <div class="topbar-logo">
             <span class="logo-dot"></span>
             <span class="logo-text">AI Chat</span>
+            <span v-if="currentSettings.showModelInTopbar" class="topbar-model">{{ currentModelName }}</span>
           </div>
         </div>
         <div class="topbar-right">
@@ -287,9 +288,17 @@ import { ref, computed, watch } from 'vue'
 import { useChatView } from '../composables/useChatView'
 import { useSpeechRecognition } from '../composables/useSpeechRecognition'
 import { renderMarkdown } from '../utils/markdown'
+import { settings as currentSettings } from '../stores/settings'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import type {Message} from "../types/chat.ts";
 import type {Conversation} from "../types/chat.ts";
+
+const currentModelName = computed(() => {
+  const p = currentSettings.provider
+  if (p === 'ollama') return currentSettings.ollama.model
+  if (p === 'openai') return currentSettings.openai.model
+  return currentSettings.claude.model
+})
 
 function renderContent(msg: Message) {
   // loading：还没收到任何内容，显示"思考中"跳动点

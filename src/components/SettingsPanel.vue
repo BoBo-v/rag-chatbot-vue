@@ -58,13 +58,13 @@
                   {{ loadingModels ? '获取中...' : '刷新列表' }}
                 </button>
               </div>
-              <select v-if="modelList.length > 0" class="settings-input settings-select" v-model="draft.ollama.model">
-                <option v-for="m in modelList" :key="m" :value="m">{{ m }}</option>
-              </select>
-              <input v-else class="settings-input" v-model="draft.ollama.model"
-                placeholder="例如：qwen2.5:7b" spellcheck="false" />
+              <input class="settings-input" v-model="draft.ollama.model"
+                list="ollama-models" placeholder="例如：qwen2.5:7b" spellcheck="false" autocomplete="off" />
+              <datalist id="ollama-models">
+                <option v-for="m in modelList" :key="m" :value="m" />
+              </datalist>
               <span v-if="modelError" class="settings-hint error">{{ modelError }}</span>
-              <span v-else class="settings-hint">点击「刷新列表」从 Ollama 拉取已安装模型</span>
+              <span v-else class="settings-hint">支持下拉选择或手动输入模型名称</span>
             </div>
           </template>
 
@@ -88,11 +88,11 @@
                   {{ loadingModels ? '获取中...' : '刷新列表' }}
                 </button>
               </div>
-              <select v-if="modelList.length > 0" class="settings-input settings-select" v-model="draft.openai.model">
-                <option v-for="m in modelList" :key="m" :value="m">{{ m }}</option>
-              </select>
-              <input v-else class="settings-input" v-model="draft.openai.model"
-                placeholder="gpt-4o / deepseek-chat / moonshot-v1-8k ..." spellcheck="false" />
+              <input class="settings-input" v-model="draft.openai.model"
+                list="openai-models" placeholder="gpt-4o / deepseek-chat / moonshot-v1-8k ..." spellcheck="false" autocomplete="off" />
+              <datalist id="openai-models">
+                <option v-for="m in modelList" :key="m" :value="m" />
+              </datalist>
               <span v-if="modelError" class="settings-hint error">{{ modelError }}</span>
             </div>
           </template>
@@ -109,14 +109,27 @@
             </div>
             <div class="settings-group">
               <label class="settings-label">模型</label>
-              <select class="settings-input settings-select" v-model="draft.claude.model">
-                <option v-for="m in claudeModels" :key="m" :value="m">{{ m }}</option>
-              </select>
+              <input class="settings-input" v-model="draft.claude.model"
+                list="claude-models" placeholder="claude-sonnet-4-6" spellcheck="false" autocomplete="off" />
+              <datalist id="claude-models">
+                <option v-for="m in claudeModels" :key="m" :value="m" />
+              </datalist>
             </div>
           </template>
 
           <!-- ── 通用设置（所有 provider 共享） ── -->
           <div class="settings-divider"></div>
+
+          <div class="settings-group">
+            <div class="settings-label-row">
+              <label class="settings-label">顶栏显示模型</label>
+              <label class="settings-toggle">
+                <input type="checkbox" v-model="draft.showModelInTopbar" />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </div>
+            <span class="settings-hint">在标题旁显示当前使用的模型名称</span>
+          </div>
 
           <div class="settings-group">
             <label class="settings-label">系统提示词</label>
@@ -264,17 +277,22 @@ async function loadModels() {
   loadingModels.value = false
 }
 
-// 切换 provider 时重置模型列表
+// 切换 provider 时重置并自动拉取模型列表
 watch(() => draft.provider, () => {
   modelList.value = []
   modelError.value = ''
+  if (draft.provider !== 'claude') loadModels()
 })
+
+// 打开面板时自动拉取
+if (draft.provider !== 'claude') loadModels()
 
 function save() {
   Object.assign(settings, {
     provider:          draft.provider,
     systemPrompt:      draft.systemPrompt,
     maxContextTokens:  draft.maxContextTokens,
+    showModelInTopbar: draft.showModelInTopbar,
   })
   Object.assign(settings.ollama,  draft.ollama)
   Object.assign(settings.openai,  draft.openai)

@@ -17,16 +17,23 @@
         <button class="new-chat-btn" @click="handleNewConversation" title="新对话">＋</button>
       </div>
       <div class="sidebar-body">
-        <div
-            v-for="conv in conversations"
-            :key="conv.id"
-            class="conv-item"
-            :class="{ active: conv.id === currentId }"
-            @click="handleSelectConversation(conv.id)"
-        >
-          <span class="conv-title">{{ conv.title }}</span>
-          <button class="conv-del" @click.stop="handleDeleteConversation(conv.id)" title="删除">×</button>
-        </div>
+        <button class="new-chat-big-btn" @click="handleNewConversation">
+          <span class="new-chat-icon">✎</span>
+          新建对话
+        </button>
+        <template v-for="group in groupedConversations" :key="group.label">
+          <div class="conv-group-label">{{ group.label }}</div>
+          <div
+              v-for="conv in group.items"
+              :key="conv.id"
+              class="conv-item"
+              :class="{ active: conv.id === currentId }"
+              @click="handleSelectConversation(conv.id)"
+          >
+            <span class="conv-title">{{ conv.title }}</span>
+            <button class="conv-del" @click.stop="handleDeleteConversation(conv.id)" title="删除">×</button>
+          </div>
+        </template>
         <div v-if="conversations.length === 0" class="conv-empty">暂无对话记录</div>
       </div>
     </aside>
@@ -183,46 +190,66 @@
               hidden
               @change="handleFileSelect"
           />
-          <button class="upload-btn" :disabled="isStreaming" @click="imageInputRef?.click()" title="上传图片"
-                  style="border: 1px solid var(--border);">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
-            </svg>
-          </button>
-          <button class="upload-btn" :disabled="isStreaming" @click="fileInputRef?.click()" title="上传文件"
-                  style="border: 1px solid var(--border);">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-              <polyline points="10 9 9 9 8 9"/>
-            </svg>
-          </button>
           <textarea
               ref="textareaRef"
               class="input-field"
               v-model="inputValue"
-              placeholder="输入消息，Enter 发送，Shift+Enter 换行..."
+              placeholder="输入消息..."
               :disabled="isStreaming"
               rows="1"
               @keydown.enter.exact.prevent="handleSend"
               @input="autoResize"
               @paste="handlePaste"
           ></textarea>
-          <button v-if="isStreaming" class="stop-btn" @click="handleStop">■</button>
-          <button
-              v-else
-              class="send-btn"
-              :class="{ ready: inputValue.trim() || pendingImages.length > 0 || pendingFiles.length > 0 }"
-              :disabled="!inputValue.trim() && pendingImages.length === 0 && pendingFiles.length === 0"
-              @click="handleSend"
-          >↑</button>
+          <div class="input-toolbar">
+            <div class="toolbar-left">
+              <button class="tool-btn" :disabled="isStreaming" @click="imageInputRef?.click()" title="上传图片">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </button>
+              <button class="tool-btn" :disabled="isStreaming" @click="fileInputRef?.click()" title="上传文件">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </button>
+              <button v-if="speechSupported"
+                      class="tool-btn voice-btn"
+                      :class="{ 'is-listening': isListening }"
+                      :disabled="isStreaming"
+                      @click="toggleVoice"
+                      :title="isListening ? '停止语音输入' : '语音输入'">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/>
+                  <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+              </button>
+            </div>
+            <div class="toolbar-right">
+              <button v-if="isStreaming" class="stop-btn" @click="handleStop">■</button>
+              <button
+                  v-else
+                  class="send-btn"
+                  :class="{ ready: inputValue.trim() || pendingImages.length > 0 || pendingFiles.length > 0 }"
+                  :disabled="!inputValue.trim() && pendingImages.length === 0 && pendingFiles.length === 0"
+                  @click="handleSend"
+              >↑</button>
+            </div>
+          </div>
         </div>
         <div class="input-hint">
-          {{ isStreaming ? 'AI 正在回复中...' : 'Enter 发送 · Shift+Enter 换行 · 可粘贴/拖拽图片 · 支持上传文件' }}
+          <template v-if="isStreaming">AI 正在回复中...</template>
+          <template v-else>
+            <span class="hint-key">Enter</span> 发送 · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 支持粘贴/拖拽图片 · 上传文件
+          </template>
         </div>
       </div>
 
@@ -256,11 +283,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useChatView } from '../composables/useChatView'
+import { useSpeechRecognition } from '../composables/useSpeechRecognition'
 import { renderMarkdown } from '../utils/markdown'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import type {Message} from "../types/chat.ts";
+import type {Conversation} from "../types/chat.ts";
 
 function renderContent(msg: Message) {
   // loading：还没收到任何内容，显示"思考中"跳动点
@@ -312,6 +341,50 @@ const {
   removeFile,
 } = useChatView()
 void containerRef
+
+// ── 对话日期分组 ──────────────────────────────────
+function getDateLabel(timestamp: number): string {
+  const now = new Date()
+  const date = new Date(timestamp)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diffDays = Math.floor((today.getTime() - target.getTime()) / 86400000)
+
+  if (diffDays === 0) return '今天'
+  if (diffDays === 1) return '昨天'
+  if (diffDays <= 7) return `${diffDays}天前`
+  if (diffDays <= 14) return '上周'
+  if (diffDays <= 30) return '上月'
+  return `${date.getFullYear()}/${date.getMonth() + 1}`
+}
+
+const groupedConversations = computed(() => {
+  const groups: { label: string; items: Conversation[] }[] = []
+  let currentLabel = ''
+  for (const conv of conversations.value) {
+    const label = getDateLabel(conv.updatedAt)
+    if (label !== currentLabel) {
+      currentLabel = label
+      groups.push({ label, items: [] })
+    }
+    groups[groups.length - 1].items.push(conv)
+  }
+  return groups
+})
+
+// ── 语音输入 ──────────────────────────────────────
+const { isListening, isSupported: speechSupported, start: startSpeech, stop: stopSpeech } = useSpeechRecognition()
+
+function toggleVoice() {
+  if (isListening.value) {
+    stopSpeech()
+  } else {
+    startSpeech(
+        (text) => { inputValue.value = text },
+        (err) => { toast.show(err, 'warning') }
+    )
+  }
+}
 
 // ── 设置面板 ──────────────────────────────────────
 const settingsOpen = ref(false)

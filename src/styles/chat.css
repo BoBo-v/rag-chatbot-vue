@@ -293,9 +293,9 @@
 
 /* ─── 停止按钮 ──────────────────────────────── */
 .stop-btn {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
     border: 1px solid rgba(248, 113, 113, 0.4);
     background: rgba(239, 68, 68, 0.12);
     color: #f87171;
@@ -424,7 +424,7 @@
     display: flex;
     flex-direction: column;
     background: var(--bg-sidebar);
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--border-subtle);
     backdrop-filter: blur(24px);
     z-index: 10;
     overflow: hidden;
@@ -452,7 +452,7 @@
     width: 26px;
     height: 26px;
     border-radius: 7px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     background: var(--bg-surface-3);
     color: var(--text-secondary);
     font-size: 16px;
@@ -469,10 +469,36 @@
     color: var(--accent);
 }
 
+.new-chat-big-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 10px 0;
+    margin-bottom: 6px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent-deep), var(--accent-deeper));
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 2px 12px var(--accent-glow);
+}
+.new-chat-big-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 20px var(--accent-glow);
+}
+.new-chat-icon {
+    font-size: 14px;
+}
+
 .sidebar-body {
     flex: 1;
     overflow-y: auto;
-    padding: 6px;
+    padding: 8px 10px;
 }
 .sidebar-body::-webkit-scrollbar { width: 3px; }
 .sidebar-body::-webkit-scrollbar-track { background: transparent; }
@@ -481,18 +507,31 @@
     border-radius: 3px;
 }
 
+.conv-group-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    padding: 10px 8px 4px;
+    text-transform: uppercase;
+}
+
 .conv-item {
     display: flex;
     align-items: center;
     gap: 4px;
     padding: 9px 10px;
     border-radius: 8px;
+    border-left: 3px solid transparent;
     cursor: pointer;
-    transition: background 0.18s;
+    transition: background 0.18s, border-color 0.18s;
     min-width: 0;
 }
 .conv-item:hover { background: var(--border-subtle); }
-.conv-item.active { background: var(--accent-bg); }
+.conv-item.active {
+    background: var(--accent-bg);
+    border-left-color: var(--accent);
+}
 .conv-item.active .conv-title { color: var(--accent-text); }
 
 .conv-title {
@@ -713,7 +752,7 @@
 
 .ai-avatar {
     background: var(--bg-surface);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     color: var(--text-secondary);
 }
 
@@ -815,12 +854,11 @@
 
 .input-box {
     display: flex;
-    align-items: flex-end;
-    gap: 10px;
+    flex-direction: column;
     background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 6px 6px 6px 18px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 18px;
+    padding: 14px 16px 10px;
     max-width: 860px;
     margin: 0 auto;
     transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
@@ -832,30 +870,51 @@
 .input-box.disabled { opacity: 0.42; }
 
 .input-field {
-    flex: 1;
+    width: 100%;
     background: transparent;
     border: none;
     outline: none;
     color: var(--text-primary);
     font-size: 14px;
     font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    padding: 8px 0;
+    padding: 0 0 10px;
     caret-color: var(--accent);
     resize: none;
     line-height: 1.6;
-    min-height: 38px;
+    min-height: 32px;
     max-height: 200px;
     overflow-y: auto;
-    align-self: flex-end;
     scrollbar-width: none;
+    box-sizing: border-box;
 }
 .input-field::-webkit-scrollbar { display: none; }
-.input-field::placeholder { color: var(--text-placeholder); }
+.input-field::placeholder { color: var(--text-placeholder); font-style: italic; }
 
-/* ─── 发送按钮 ───────────────────────────────── */
-.send-btn {
-    width: 38px; height: 38px;
+.input-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 2px;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--bg-surface-2);
     border-radius: 10px;
+    padding: 3px 4px;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+}
+
+/* ─── 发送按钮（圆形） ──────────────────────────── */
+.send-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
     border: none;
     background: var(--bg-surface);
     color: var(--text-muted);
@@ -897,11 +956,11 @@
     40%          { transform: scale(1);   opacity: 1; }
 }
 
-/* ─── 上传按钮 ──────────────────────────────── */
-.upload-btn {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
+/* ─── 工具栏按钮 ──────────────────────────────── */
+.tool-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
     border: none;
     background: transparent;
     color: var(--text-muted);
@@ -912,13 +971,24 @@
     flex-shrink: 0;
     transition: color 0.2s, background 0.2s;
 }
-.upload-btn:hover {
+.tool-btn:hover {
     color: var(--accent);
     background: var(--accent-bg);
 }
-.upload-btn:disabled {
+.tool-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+/* ─── 语音输入按钮 ───────────────────────────── */
+.voice-btn.is-listening {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+    animation: voice-pulse 1.5s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
+    50%      { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
 }
 
 /* ─── 图片预览条 ─────────────────────────────── */
@@ -941,7 +1011,7 @@
     height: 72px;
     border-radius: 10px;
     overflow: hidden;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     background: var(--bg-surface);
 }
 .image-preview-item img {
@@ -990,7 +1060,7 @@
     gap: 6px;
     padding: 6px 10px;
     border-radius: 8px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     background: var(--bg-surface);
     font-size: 12px;
     color: var(--text-secondary);
@@ -1043,7 +1113,7 @@
     padding: 4px 10px;
     border-radius: 6px;
     background: var(--bg-surface);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     font-size: 12px;
     color: var(--text-secondary);
 }
@@ -1116,6 +1186,19 @@
     color: var(--text-faint);
     margin-top: 9px;
     letter-spacing: 0.04em;
+}
+
+.hint-key {
+    display: inline-block;
+    padding: 1px 5px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    font-size: 10px;
+    font-family: monospace;
+    color: var(--text-muted);
+    background: var(--bg-surface-2);
+    line-height: 1.4;
+    vertical-align: middle;
 }
 
 /* ═══════════════════════════════════════════════
@@ -1194,10 +1277,11 @@
     .msg-content    { font-size: 13.5px; }
 
     .input-area  { padding: 10px 10px 16px; }
-    .input-box   { padding: 4px 4px 4px 14px; border-radius: 12px; }
-    .input-field { font-size: 13px; padding: 6px 0; }
-    .upload-btn { width: 34px; height: 34px; }
-    .send-btn, .stop-btn { width: 34px; height: 34px; border-radius: 8px; font-size: 16px; }
+    .input-box   { padding: 10px 12px 8px; border-radius: 16px; }
+    .input-field { font-size: 13px; padding: 0 0 8px; min-height: 28px; }
+    .tool-btn { width: 32px; height: 32px; }
+    .send-btn, .stop-btn { width: 36px; height: 36px; font-size: 16px; }
+    .stop-btn { border-radius: 50%; }
     .image-preview-item { width: 56px; height: 56px; border-radius: 8px; }
     .msg-image { max-width: 150px; max-height: 150px; }
     .input-hint  { font-size: 10px; margin-top: 7px; }
@@ -1231,7 +1315,7 @@
 .settings-btn {
     width: 32px; height: 32px;
     border-radius: 8px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     background: var(--bg-surface-2);
     color: var(--text-secondary);
     font-size: 16px;
@@ -1264,7 +1348,7 @@
 
 .settings-panel {
     background: var(--settings-bg);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     border-radius: 18px;
     width: 100%;
     max-width: 500px;
@@ -1300,7 +1384,7 @@
 .settings-close {
     width: 28px; height: 28px;
     border-radius: 7px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     background: var(--bg-surface-2);
     color: var(--text-secondary);
     font-size: 13px;
@@ -1349,7 +1433,7 @@
 
 .settings-input {
     background: var(--settings-input-bg);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     border-radius: 10px;
     padding: 10px 14px;
     color: var(--text-primary);
@@ -1444,7 +1528,7 @@
 .context-preset-btn {
     padding: 4px 12px;
     border-radius: 16px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     background: var(--bg-surface-2);
     color: var(--text-secondary);
     font-size: 11.5px;
@@ -1474,7 +1558,7 @@
 .btn-cancel {
     padding: 8px 20px;
     border-radius: 10px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     background: var(--bg-surface-2);
     color: var(--text-secondary);
     font-size: 13px;
@@ -1549,7 +1633,7 @@
     flex: 1;
     padding: 9px 8px;
     border-radius: 9px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     background: var(--bg-surface-2);
     color: var(--text-secondary);
     font-size: 12.5px;

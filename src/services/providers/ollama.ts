@@ -73,6 +73,19 @@ export async function ollamaStream(
                 }
             }
         }
+
+        if (buffer.trim()) {
+            try {
+                const obj = JSON.parse(buffer.trim())
+                const chunk: string = obj.message?.content ?? ''
+                if (chunk) onChunk(chunk)
+                if (obj.done && !isDone) {
+                    isDone = true
+                    onDone()
+                }
+            } catch {
+            }
+        }
     } catch (err: any) {
         if (err.name !== 'AbortError') throw err
     } finally {

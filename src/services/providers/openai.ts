@@ -54,19 +54,24 @@ export async function openaiStream(
         throw new Error(`OpenAI error ${res.status}: ${errText}`)
     }
 
+    let doneCalled = false
     await parseSSE(res.body!, signal, (_event, data) => {
         if (data === '[DONE]') {
-            onDone()
+            if (!doneCalled) { doneCalled = true; onDone() }
             return
         }
         try {
             const obj = JSON.parse(data)
             const chunk: string = obj.choices?.[0]?.delta?.content ?? ''
             if (chunk) onChunk(chunk)
-            if (obj.choices?.[0]?.finish_reason === 'stop') onDone()
+            if (obj.choices?.[0]?.finish_reason === 'stop' && !doneCalled) {
+                doneCalled = true
+                onDone()
+            }
         } catch {
         }
     })
+    if (!doneCalled) onDone()
 }
 
 export async function fetchOpenAIModels(): Promise<string[]> {
@@ -126,6 +131,13 @@ export async function parseSSE(
                 } else if (line === '') {
                     currentEvent = ''
                 }
+            }
+        }
+        if (buffer.trim()) {
+            const line = buffer.trim()
+            if (line.startsWith('data:')) {
+                const data = line.slice(5).trim()
+                if (data) onLine('', data)
             }
         }
     } catch (err: any) {

@@ -194,20 +194,17 @@ export function useChatView() {
                 }
                 return
             }
-            const chunk = queue.shift()!
-            const chars = chunk.split('')
-            let i = 0
 
-            function typeChar() {
-                if (streamCtrl?.isAborted) return
-                if (i >= chars.length) { requestAnimationFrame(step); return }
-                const char = chars[i]
-                if (!char) { requestAnimationFrame(step); return }
-                appendToMessage(messageId, chars[i])
-                i++
-                requestAnimationFrame(typeChar)
+            if (streamCtrl?.isAborted) return
+
+            let text = ''
+            const batchSize = Math.min(queue.length, 3)
+            for (let i = 0; i < batchSize; i++) {
+                text += queue.shift()!
             }
-            typeChar()
+            appendToMessage(messageId, text)
+            scheduleScroll()
+            requestAnimationFrame(step)
         }
         requestAnimationFrame(step)
     }
@@ -473,12 +470,18 @@ export function useChatView() {
             if (pendingDoneId) {
                 await Promise.race([
                     new Promise<void>(resolve => { pendingDoneResolve = resolve }),
-                    new Promise<void>(resolve => setTimeout(resolve, 10000)),
+                    new Promise<void>(resolve => setTimeout(resolve, 30000)),
                 ])
                 if (pendingDoneId) {
-                    updateMessage(pendingDoneId, { status: 'done' })
-                    formatFinishedMessage(pendingDoneId)
+                    const id = pendingDoneId
                     pendingDoneId = null
+                    if (queue.length > 0) {
+                        const remaining = queue.splice(0).join('')
+                        appendToMessage(id, remaining)
+                    }
+                    isFlushing = false
+                    updateMessage(id, { status: 'done' })
+                    formatFinishedMessage(id)
                 }
             }
 

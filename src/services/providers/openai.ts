@@ -54,7 +54,7 @@ export async function openaiStream(
         throw new Error(`OpenAI error ${res.status}: ${errText}`)
     }
 
-    await parseSSE(res.body!, signal, (event, data) => {
+    await parseSSE(res.body!, signal, (_event, data) => {
         if (data === '[DONE]') {
             onDone()
             return
@@ -97,7 +97,6 @@ export async function parseSSE(
     const decoder = new TextDecoder()
     let buffer = ''
     let aborted = false
-    let isDone = false
 
     signal?.addEventListener('abort', () => {
         aborted = true
@@ -122,7 +121,6 @@ export async function parseSSE(
                     const data = line.slice(5).trim()
                     if (data) {
                         onLine(currentEvent, data)
-                        if (data === '[DONE]') isDone = true
                         currentEvent = ''
                     }
                 } else if (line === '') {

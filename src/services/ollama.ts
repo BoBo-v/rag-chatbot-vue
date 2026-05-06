@@ -55,7 +55,7 @@ export function buildPrompt(messages: Message[]) {
  */
 export async function fetchOllamaModels(): Promise<string[]> {
     try {
-        const res = await fetch(`${settings.ollamaUrl}/api/tags`)
+        const res = await fetch(`${settings.ollama.url}/api/tags`)
         if (!res.ok) return []
         const data = await res.json()
         return (data.models ?? []).map((m: { name: string }) => m.name)
@@ -73,11 +73,11 @@ export async function generateStream(
     onDone: () => void,
     signal?: AbortSignal
 ) {
-    const res = await fetch(`${settings.ollamaUrl}/api/generate`, {
+    const res = await fetch(`${settings.ollama.url}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: settings.model,
+            model: settings.ollama.model,
             prompt,
             stream: true
         }),

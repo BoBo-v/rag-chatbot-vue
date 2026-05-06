@@ -311,6 +311,7 @@ const {
   addFiles,
   removeFile,
 } = useChatView()
+void containerRef
 
 // ── 设置面板 ──────────────────────────────────────
 const settingsOpen = ref(false)

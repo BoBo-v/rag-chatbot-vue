@@ -24,7 +24,7 @@ const { messages,
   addMessage,
   createAssistantMessage,
   appendToMessage,
-    finishMessage
+  updateMessage
 } = useChat()
 let inputValue = ref<string>('')
 let userAtBottom = true//是否在底部
@@ -86,7 +86,7 @@ async function handleSend() {
       }
       scheduleScroll()
     }, () => {
-      finishMessage(aiMsg.id)
+      updateMessage(aiMsg.id, { status: 'done' })
     })
   }finally {
     //赋值后清空

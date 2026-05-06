@@ -35,11 +35,11 @@ async function formatCode(str: string, lang: string): Promise<string> {
     }
 }
 
-const md = new MarkdownIt({
+const md: MarkdownIt = new MarkdownIt({
     html: true,
     linkify: true,
     typographer: true,
-    highlight: function (str, lang) {
+    highlight: function (str: string, lang: string): string {
         const langLabel = lang ? `<span class="code-lang">${lang}</span>` : ''
         const copyBtn = `<button class="code-copy-btn" title="复制代码">复制</button>`
         const header = `<div class="code-block-header">${langLabel}${copyBtn}</div>`
@@ -51,7 +51,7 @@ const md = new MarkdownIt({
             } catch {}
         }
 
-        const escaped = md.utils.escapeHtml(str)
+        const escaped: string = md.utils.escapeHtml(str)
         return `<div class="code-block-wrapper">${header}<pre class="hljs"><code>${escaped}</code></pre></div>`
     }
 })

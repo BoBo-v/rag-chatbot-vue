@@ -14,7 +14,7 @@
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
         <span class="sidebar-title">对话列表</span>
-        <button class="new-chat-btn" @click="handleNewConversation" title="新对话">＋</button>
+        <button class="new-chat-btn" title="新对话" @click="handleNewConversation">＋</button>
       </div>
       <div class="sidebar-body">
         <button class="new-chat-big-btn" @click="handleNewConversation">
@@ -31,7 +31,7 @@
               @click="handleSelectConversation(conv.id)"
           >
             <span class="conv-title">{{ conv.title }}</span>
-            <button class="conv-del" @click.stop="handleDeleteConversation(conv.id)" title="删除">×</button>
+            <button class="conv-del" title="删除" @click.stop="handleDeleteConversation(conv.id)">×</button>
           </div>
         </template>
         <div v-if="conversations.length === 0" class="conv-empty">暂无对话记录</div>
@@ -59,12 +59,12 @@
             <span class="status-dot"></span>
             <span>{{ isStreaming ? 'Thinking...' : 'Ready' }}</span>
           </div>
-          <button class="settings-btn" @click="settingsOpen = true" title="设置">⚙</button>
+          <button class="settings-btn" title="设置" @click="settingsOpen = true">⚙</button>
         </div>
       </header>
 
       <!-- ── 消息区 ── -->
-      <div class="chat" ref="containerRef" @click="handleChatClick">
+      <div ref="containerRef" class="chat" @click="handleChatClick">
         <div class="messages-inner">
 
           <!-- 空状态 -->
@@ -83,7 +83,8 @@
             <div v-if="msg.role === 'assistant'" :style="msg.status === 'aborted' || msg.status === 'error' ? 'margin-bottom:40px' : ''" class="msg-avatar ai-avatar">A</div>
             <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">U</div>
             <div class="msg-col">
-              <div class="msg-bubble"
+              <div
+class="msg-bubble"
                    :style="msg.status === 'aborted' || msg.status === 'error' ? 'border:1px solid #f87171' : ''"
                    :class="[msg.role, {
                      'is-loading':   msg.status === 'loading',
@@ -99,7 +100,8 @@
                   </div>
                 </div>
                 <div v-if="msg.images?.length" class="msg-images">
-                  <img v-for="(img, idx) in msg.images" :key="idx"
+                  <img
+v-for="(img, idx) in msg.images" :key="idx"
                        :src="`data:${img.mediaType};base64,${img.base64}`"
                        :alt="img.name"
                        class="msg-image"
@@ -171,7 +173,8 @@
             <button class="image-remove-btn" @click="removeImage(idx)">×</button>
           </div>
         </div>
-        <div class="input-box" :class="{ disabled: isStreaming }"
+        <div
+class="input-box" :class="{ disabled: isStreaming }"
              @dragover.prevent="dragOver = true"
              @dragleave.prevent="dragOver = false"
              @drop.prevent="handleDrop">
@@ -193,8 +196,8 @@
           />
           <textarea
               ref="textareaRef"
-              class="input-field"
               v-model="inputValue"
+              class="input-field"
               placeholder="输入消息..."
               :disabled="isStreaming"
               rows="1"
@@ -204,14 +207,14 @@
           ></textarea>
           <div class="input-toolbar">
             <div class="toolbar-left">
-              <button class="tool-btn" :disabled="isStreaming" @click="imageInputRef?.click()" title="上传图片">
+              <button class="tool-btn" :disabled="isStreaming" title="上传图片" @click="imageInputRef?.click()">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                   <circle cx="8.5" cy="8.5" r="1.5"/>
                   <polyline points="21 15 16 10 5 21"/>
                 </svg>
               </button>
-              <button class="tool-btn" :disabled="isStreaming" @click="fileInputRef?.click()" title="上传文件">
+              <button class="tool-btn" :disabled="isStreaming" title="上传文件" @click="fileInputRef?.click()">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                   <polyline points="14 2 14 8 20 8"/>
@@ -220,12 +223,13 @@
                   <polyline points="10 9 9 9 8 9"/>
                 </svg>
               </button>
-              <button v-if="speechSupported"
+              <button
+v-if="speechSupported"
                       class="tool-btn voice-btn"
                       :class="{ 'is-listening': isListening }"
                       :disabled="isStreaming"
-                      @click="toggleVoice"
-                      :title="isListening ? '停止语音输入' : '语音输入'">
+                      :title="isListening ? '停止语音输入' : '语音输入'"
+                      @click="toggleVoice">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>

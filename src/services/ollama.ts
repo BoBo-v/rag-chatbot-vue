@@ -137,7 +137,6 @@ export async function generateStream(
     }finally {
         reader?.releaseLock()// 释放锁
         if (!isDone) {
-            isDone = true
             onDone()
         }
     }

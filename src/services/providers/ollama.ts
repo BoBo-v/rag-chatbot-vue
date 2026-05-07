@@ -91,7 +91,6 @@ export async function ollamaStream(
     } finally {
         reader.releaseLock()
         if (!isDone) {
-            isDone = true
             onDone()
         }
     }

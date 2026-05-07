@@ -48,7 +48,8 @@
           <template v-if="draft.provider === 'ollama'">
             <div class="settings-group">
               <label class="settings-label">服务地址</label>
-              <input class="settings-input" v-model="draft.ollama.url"
+              <input
+v-model="draft.ollama.url" class="settings-input"
                 placeholder="http://localhost:11434" spellcheck="false" />
             </div>
             <div class="settings-group">
@@ -58,7 +59,8 @@
                   {{ loadingModels ? '获取中...' : '刷新列表' }}
                 </button>
               </div>
-              <input class="settings-input" v-model="draft.ollama.model"
+              <input
+v-model="draft.ollama.model" class="settings-input"
                 list="ollama-models" placeholder="例如：qwen2.5:7b" spellcheck="false" autocomplete="off" />
               <datalist id="ollama-models">
                 <option v-for="m in modelList" :key="m" :value="m" />
@@ -72,12 +74,14 @@
           <template v-else-if="draft.provider === 'openai'">
             <div class="settings-group">
               <label class="settings-label">API Key</label>
-              <input class="settings-input" v-model="draft.openai.apiKey"
+              <input
+v-model="draft.openai.apiKey" class="settings-input"
                 type="password" placeholder="sk-..." spellcheck="false" />
             </div>
             <div class="settings-group">
               <label class="settings-label">Base URL</label>
-              <input class="settings-input" v-model="draft.openai.baseUrl"
+              <input
+v-model="draft.openai.baseUrl" class="settings-input"
                 placeholder="https://api.openai.com" spellcheck="false" />
               <span class="settings-hint">DeepSeek: https://api.deepseek.com &nbsp;|&nbsp; Kimi: https://api.moonshot.cn &nbsp;|&nbsp; 通义: https://dashscope.aliyuncs.com/compatible-mode</span>
             </div>
@@ -88,7 +92,8 @@
                   {{ loadingModels ? '获取中...' : '刷新列表' }}
                 </button>
               </div>
-              <input class="settings-input" v-model="draft.openai.model"
+              <input
+v-model="draft.openai.model" class="settings-input"
                 list="openai-models" placeholder="gpt-4o / deepseek-chat / moonshot-v1-8k ..." spellcheck="false" autocomplete="off" />
               <datalist id="openai-models">
                 <option v-for="m in modelList" :key="m" :value="m" />
@@ -101,7 +106,8 @@
           <template v-else-if="draft.provider === 'claude'">
             <div class="settings-group">
               <label class="settings-label">API Key</label>
-              <input class="settings-input" v-model="draft.claude.apiKey"
+              <input
+v-model="draft.claude.apiKey" class="settings-input"
                 type="password" placeholder="sk-ant-..." spellcheck="false" />
               <span class="settings-hint">
                 ⚠ 浏览器直接调用 Claude API 需后端代理或允许跨域，否则请求会被拦截
@@ -109,7 +115,8 @@
             </div>
             <div class="settings-group">
               <label class="settings-label">模型</label>
-              <input class="settings-input" v-model="draft.claude.model"
+              <input
+v-model="draft.claude.model" class="settings-input"
                 list="claude-models" placeholder="claude-sonnet-4-6" spellcheck="false" autocomplete="off" />
               <datalist id="claude-models">
                 <option v-for="m in claudeModels" :key="m" :value="m" />
@@ -124,7 +131,7 @@
             <div class="settings-label-row">
               <label class="settings-label">顶栏显示模型</label>
               <label class="settings-toggle">
-                <input type="checkbox" v-model="draft.showModelInTopbar" />
+                <input v-model="draft.showModelInTopbar" type="checkbox" />
                 <span class="toggle-track"><span class="toggle-thumb"></span></span>
               </label>
             </div>
@@ -133,8 +140,9 @@
 
           <div class="settings-group">
             <label class="settings-label">系统提示词</label>
-            <textarea class="settings-input settings-textarea"
-              v-model="draft.systemPrompt" rows="4"
+            <textarea
+v-model="draft.systemPrompt"
+              class="settings-input settings-textarea" rows="4"
               placeholder="输入系统提示词..."></textarea>
           </div>
 
@@ -144,16 +152,18 @@
               <span class="settings-token-val">{{ contextTokenLabel }}</span>
             </div>
             <div class="context-presets">
-              <button v-for="(tier, idx) in contextTiers" :key="tier.label"
+              <button
+v-for="(tier, idx) in contextTiers" :key="tier.label"
                 class="context-preset-btn"
                 :class="{ active: activeTierIndex === idx }"
                 @click="selectTier(idx)"
               >{{ tier.label }}</button>
             </div>
-            <input v-if="activeTier.max !== UNLIMITED"
-              class="settings-slider" type="range"
-              :min="activeTier.min" :max="activeTier.max" :step="activeTier.step"
-              v-model.number="draft.maxContextTokens" />
+            <input
+v-if="activeTier.max !== UNLIMITED"
+              v-model.number="draft.maxContextTokens" class="settings-slider"
+              type="range" :min="activeTier.min" :max="activeTier.max"
+              :step="activeTier.step" />
             <div v-if="activeTier.max !== UNLIMITED" class="settings-slider-labels">
               <span>{{ activeTier.min >= 1000 ? (activeTier.min / 1000) + 'K' : activeTier.min }}</span>
               <span>{{ activeTier.max >= 1000000 ? (activeTier.max / 1000000) + 'M' : (activeTier.max / 1000) + 'K' }}</span>

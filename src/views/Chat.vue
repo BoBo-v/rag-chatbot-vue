@@ -1,6 +1,6 @@
 <template>
   <div class="">
-    <div class="chat" ref="containerRef">
+    <div ref="containerRef" class="chat">
       <div v-for="msg in messages" :key="msg.id">
         {{ msg.role }}: {{ msg.content }}
       </div>
@@ -9,7 +9,7 @@
       </div>
     </div>
     <div class="input-wrapper">
-      <input :disabled="isStreaming" type="text" v-model="inputValue" placeholder="请输入...">
+      <input v-model="inputValue" :disabled="isStreaming" type="text" placeholder="请输入...">
     </div>
     <button :disabled="isStreaming" @click="handleSend">发送测试</button>
 

@@ -47,6 +47,84 @@
     margin-bottom: 4px;
 }
 
+/* ── 表格 ──────────────────────────────────────── */
+.markdown-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 14px;
+    overflow-x: auto;
+    display: block;
+}
+
+.markdown-body thead tr {
+    background: var(--bg-surface-2);
+}
+
+.markdown-body th,
+.markdown-body td {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.markdown-body th {
+    font-weight: 600;
+}
+
+.markdown-body tbody tr:nth-child(even) {
+    background: var(--bg-surface-3);
+}
+
+/* ── 任务列表 ──────────────────────────────────── */
+.markdown-body .task-list-item {
+    list-style: none;
+    margin-left: -20px;
+    padding-left: 4px;
+}
+
+.markdown-body .task-list-item input[type="checkbox"] {
+    margin-right: 6px;
+    vertical-align: middle;
+    accent-color: var(--accent);
+}
+
+/* ── 行内代码 ──────────────────────────────────── */
+.markdown-body code:not(pre code) {
+    background: var(--bg-surface-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+}
+
+/* ── 引用块 ────────────────────────────────────── */
+.markdown-body blockquote {
+    margin: 8px 0;
+    padding: 4px 16px;
+    border-left: 3px solid var(--accent);
+    color: var(--text-secondary);
+    background: var(--bg-surface-3);
+    border-radius: 0 4px 4px 0;
+}
+
+/* ── 分割线 ────────────────────────────────────── */
+.markdown-body hr {
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    margin: 16px 0;
+}
+
+/* ── 链接 ──────────────────────────────────────── */
+.markdown-body a {
+    color: var(--accent);
+    text-decoration: none;
+}
+.markdown-body a:hover {
+    text-decoration: underline;
+}
+
 /* ── 代码块（pre + code） ───────────────────────── */
 .markdown-body pre {
     background: var(--bg-code);

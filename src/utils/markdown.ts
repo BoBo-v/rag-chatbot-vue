@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it'
+import taskLists from 'markdown-it-task-lists'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import * as prettier from 'prettier'
@@ -39,6 +40,7 @@ const md: MarkdownIt = new MarkdownIt({
     html: true,
     linkify: true,
     typographer: true,
+    breaks: true,
     highlight: function (str: string, lang: string): string {
         const langLabel = lang ? `<span class="code-lang">${lang}</span>` : ''
         const copyBtn = `<button class="code-copy-btn" title="复制代码">复制</button>`
@@ -55,6 +57,8 @@ const md: MarkdownIt = new MarkdownIt({
         return `<div class="code-block-wrapper">${header}<pre class="hljs"><code>${escaped}</code></pre></div>`
     }
 })
+
+md.use(taskLists, { enabled: true, label: true })
 
 // 异步版本，流式输出完成后调用
 export async function renderMarkdownAsync(text: string): Promise<string> {

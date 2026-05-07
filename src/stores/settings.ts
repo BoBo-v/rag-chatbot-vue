@@ -69,5 +69,9 @@ function load(): AppSettings {
 export const settings = reactive<AppSettings>(load())
 
 watch(settings, (val) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(val))
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(val))
+    } catch (e) {
+        console.warn('设置保存失败，可能存储空间不足', e)
+    }
 }, { deep: true })

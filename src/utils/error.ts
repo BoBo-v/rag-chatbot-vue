@@ -1,8 +1,13 @@
 import type { ChatError } from '../types/chat'
 
 export function classifyError(err: unknown): ChatError {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-        return { type: 'network', message: '请求已取消' }
+    if (err instanceof DOMException) {
+        if (err.name === 'TimeoutError') {
+            return { type: 'timeout', message: '请求超时（30 秒无响应），请检查网络连接后重试' }
+        }
+        if (err.name === 'AbortError') {
+            return { type: 'network', message: '请求已取消' }
+        }
     }
 
     if (err instanceof TypeError && err.message.includes('fetch')) {
@@ -29,7 +34,7 @@ export function classifyError(err: unknown): ChatError {
         }
 
         if (msg.includes('timeout') || msg.includes('Timeout')) {
-            return { type: 'timeout', message: '请求超时，请检查网络连接' }
+            return { type: 'timeout', message: '请求超时，请检查网络连接后重试' }
         }
 
         return { type: 'unknown', message: msg, status }

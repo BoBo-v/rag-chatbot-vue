@@ -166,7 +166,7 @@ export function useChatView() {
     async function formatFinishedMessage(msgId: string) {
         const msg = messages.value.find(m => m.id === msgId)
         if (!msg) return
-        const { renderMarkdownAsync } = await import('../utils/markdown')
+        const { renderMarkdownAsync } = await import('../utils/markdownAsync')
         msg.formattedContent = await renderMarkdownAsync(msg.content)
     }
 

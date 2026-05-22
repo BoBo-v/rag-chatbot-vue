@@ -6,6 +6,7 @@ import { db } from '../db'
 import { classifyError } from '../utils/error'
 import { useToast } from './useToast'
 import { settings } from '../stores/settings'
+import { searchService } from '../search/SearchService'
 import type {Message, ImageAttachment, FileAttachment, StreamController} from "../types/chat.ts";
 
 /**
@@ -90,6 +91,9 @@ export function useChatView() {
 
     async function handleDeleteConversation(id: number) {
         await deleteConversation(id)
+        void searchService.deleteConversation(id).catch(err => {
+            console.warn('[search] 删除会话索引失败', err)
+        })
     }
 
     // ── 持久化 ───────────────────────────────────────────────
@@ -109,6 +113,23 @@ export function useChatView() {
             canContinue: msg.canContinue,
             errorMessage: msg.errorMessage,
             createdAt: Date.now(),
+        })
+    }
+
+    function queueSearchIndex(msg: Message, convId: number, createdAt: number, updatedAt = createdAt) {
+        const conversation = conversations.value.find(conv => conv.id === convId)
+        if (!conversation) return
+
+        void searchService.indexMessage({
+            message: msg,
+            conversation: {
+                ...conversation,
+                updatedAt,
+            },
+            createdAt,
+            updatedAt,
+        }).catch(err => {
+            console.warn('[search] 索引消息失败', err)
         })
     }
 
@@ -348,7 +369,9 @@ export function useChatView() {
         }
 
         const userMsgId = crypto.randomUUID()
-        addMessage({ id: userMsgId, role: 'user', content: userText, images, files, status: 'done' })
+        const userCreatedAt = Date.now()
+        const userMessage: Message = { id: userMsgId, role: 'user', content: userText, images, files, status: 'done' }
+        addMessage(userMessage)
         await db.messages.add({
             id: userMsgId,
             conversationId: convId,
@@ -357,8 +380,9 @@ export function useChatView() {
             images,
             files,
             status: 'done',
-            createdAt: Date.now(),
+            createdAt: userCreatedAt,
         })
+        queueSearchIndex(userMessage, convId, userCreatedAt)
 
         const aiMsg = createAssistantMessage()
         await runStream({ aiMessageId: aiMsg.id, prompt: promptText, convId })
@@ -493,8 +517,13 @@ export function useChatView() {
             }
 
             await persistMessage(options.aiMessageId, options.convId)
-            await db.conversations.update(options.convId, { updatedAt: Date.now() })
+            const updatedAt = Date.now()
+            await db.conversations.update(options.convId, { updatedAt })
             await refreshList()
+            const aiMessage = messages.value.find(msg => msg.id === options.aiMessageId)
+            if (aiMessage) {
+                queueSearchIndex(aiMessage, options.convId, updatedAt, updatedAt)
+            }
         }
     }
 

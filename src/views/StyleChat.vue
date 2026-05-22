@@ -21,20 +21,64 @@
           <span class="new-chat-icon">✎</span>
           新建对话
         </button>
-        <template v-for="group in groupedConversations" :key="group.label">
-          <div class="conv-group-label">{{ group.label }}</div>
-          <div
-              v-for="conv in group.items"
-              :key="conv.id"
-              class="conv-item"
-              :class="{ active: conv.id === currentId }"
-              @click="handleSelectConversation(conv.id)"
+        <div class="sidebar-search">
+          <span class="sidebar-search-icon">⌕</span>
+          <input
+              v-model="conversationSearchDraft"
+              class="sidebar-search-input"
+              type="search"
+              placeholder="搜索对话..."
+              aria-label="搜索对话"
+          />
+          <button
+              v-if="conversationSearchDraft"
+              class="sidebar-search-clear"
+              type="button"
+              aria-label="清空搜索"
+              @click="conversationSearchDraft = ''"
           >
-            <span class="conv-title">{{ conv.title }}</span>
-            <button class="conv-del" title="删除" @click.stop="handleDeleteConversation(conv.id)">×</button>
+            ×
+          </button>
+        </div>
+
+        <div v-if="isSearchMode" class="search-results">
+          <div class="conv-group-label search-label">
+            搜索结果
+            <span v-if="isSearchLoading" class="search-status">搜索中...</span>
+            <span v-else class="search-status">{{ searchResults.length }} 条</span>
           </div>
+          <div
+              v-for="result in searchResults"
+              :key="`${result.conversationId}-${result.messageId}`"
+              class="search-result-item"
+              :class="{ active: result.conversationId === currentId }"
+              @click="handleSearchResultClick(result.conversationId)"
+          >
+            <div class="search-result-title">{{ result.title }}</div>
+            <div class="search-result-snippet">{{ result.snippet || '无内容预览' }}</div>
+          </div>
+          <div v-if="searchError" class="conv-empty search-empty">{{ searchError }}</div>
+          <div v-else-if="!isSearchLoading && searchResults.length === 0" class="conv-empty search-empty">
+            没有匹配的对话
+          </div>
+        </div>
+
+        <template v-else>
+          <template v-for="group in groupedConversations" :key="group.label">
+            <div class="conv-group-label">{{ group.label }}</div>
+            <div
+                v-for="conv in group.items"
+                :key="conv.id"
+                class="conv-item"
+                :class="{ active: conv.id === currentId }"
+                @click="handleSelectConversation(conv.id)"
+            >
+              <span class="conv-title">{{ conv.title }}</span>
+              <button class="conv-del" title="删除" @click.stop="handleDeleteConversation(conv.id)">×</button>
+            </div>
+          </template>
+          <div v-if="conversations.length === 0" class="conv-empty">暂无对话记录</div>
         </template>
-        <div v-if="conversations.length === 0" class="conv-empty">暂无对话记录</div>
       </div>
     </aside>
 
@@ -293,9 +337,18 @@ import { useChatView } from '../composables/useChatView'
 import { useSpeechRecognition } from '../composables/useSpeechRecognition'
 import { renderMarkdown } from '../utils/markdown'
 import { settings as currentSettings } from '../stores/settings'
+import { searchService } from '../search/SearchService'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import type {Message} from "../types/chat.ts";
 import type {Conversation} from "../types/chat.ts";
+import type {SearchResult} from "../search/types.ts";
+
+const conversationSearchDraft = ref('')
+const isSearchLoading = ref(false)
+const searchError = ref('')
+const searchResults = ref<SearchResult[]>([])
+const isSearchMode = computed(() => conversationSearchDraft.value.trim().length > 0)
+let searchRequestSeq = 0
 
 const currentModelName = computed(() => {
   const p = currentSettings.provider
@@ -384,6 +437,41 @@ const groupedConversations = computed(() => {
   }
   return groups
 })
+
+watch(conversationSearchDraft, (value) => {
+  const query = value.trim()
+  const requestSeq = ++searchRequestSeq
+  searchError.value = ''
+
+  if (!query) {
+    isSearchLoading.value = false
+    searchResults.value = []
+    return
+  }
+
+  isSearchLoading.value = true
+  window.setTimeout(async () => {
+    if (requestSeq !== searchRequestSeq) return
+    try {
+      const results = await searchService.search({ query, limit: 20 })
+      if (requestSeq !== searchRequestSeq) return
+      searchResults.value = results
+    } catch (err: unknown) {
+      if (requestSeq !== searchRequestSeq) return
+      searchResults.value = []
+      searchError.value = err instanceof Error ? err.message : '搜索失败'
+    } finally {
+      if (requestSeq === searchRequestSeq) {
+        isSearchLoading.value = false
+      }
+    }
+  }, 250)
+})
+
+function handleSearchResultClick(conversationId: number) {
+  if (isStreaming.value) return
+  handleSelectConversation(conversationId)
+}
 
 // ── 语音输入 ──────────────────────────────────────
 const { isListening, isSupported: speechSupported, start: startSpeech, stop: stopSpeech } = useSpeechRecognition()

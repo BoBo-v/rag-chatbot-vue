@@ -32,9 +32,59 @@ export interface DBMessage {
     createdAt: number
 }
 
+export interface DBSearchDoc {
+    docId?: number
+    messageId: string
+    conversationId: number
+    role: 'user' | 'assistant'
+    title: string
+    content: string
+    createdAt: number
+    updatedAt: number
+    length: number
+    tags: string[]
+}
+
+export interface DBSearchTerm {
+    term: string
+    docId: number
+    tf: number
+    positions?: number[]
+}
+
+export interface DBSearchTermStat {
+    term: string
+    df: number
+    updatedAt: number
+}
+
+export interface DBSearchTag {
+    tag: string
+    docId: number
+}
+
+export interface DBRecentSearch {
+    id?: number
+    query: string
+    filtersHash: string
+    usedAt: number
+    hitCount: number
+}
+
+export interface DBSearchMeta {
+    key: string
+    value: string
+}
+
 class ChatDB extends Dexie {
     conversations!: Table<DBConversation, number>
     messages!: Table<DBMessage, string>
+    searchDocs!: Table<DBSearchDoc, number>
+    searchTerms!: Table<DBSearchTerm, [string, number]>
+    searchTermStats!: Table<DBSearchTermStat, string>
+    searchTags!: Table<DBSearchTag, [string, number]>
+    recentSearches!: Table<DBRecentSearch, number>
+    searchMeta!: Table<DBSearchMeta, string>
 
     constructor() {
         super('ai-chat-db')
@@ -45,6 +95,16 @@ class ChatDB extends Dexie {
         this.version(2).stores({
             conversations: '++id, updatedAt',
             messages: 'id, conversationId'
+        })
+        this.version(3).stores({
+            conversations: '++id, updatedAt',
+            messages: 'id, conversationId',
+            searchDocs: '++docId, &messageId, conversationId, updatedAt, createdAt, role',
+            searchTerms: '[term+docId], term, docId',
+            searchTermStats: 'term',
+            searchTags: '[tag+docId], tag, docId',
+            recentSearches: '++id, query, usedAt',
+            searchMeta: 'key'
         })
     }
 }

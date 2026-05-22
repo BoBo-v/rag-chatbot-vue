@@ -108,7 +108,7 @@
       </header>
 
       <!-- ── 消息区 ── -->
-      <div ref="containerRef" class="chat" @click="handleChatClick">
+      <div ref="containerRef" class="chat" @click="handleCodeBlockCopy">
         <div class="messages-inner">
 
           <!-- 空状态 -->
@@ -332,54 +332,14 @@ v-if="speechSupported"
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useChatView } from '../composables/useChatView'
 import { useSpeechRecognition } from '../composables/useSpeechRecognition'
-import { renderMarkdown } from '../utils/markdown'
+import { useConversationSearch } from '../composables/useConversationSearch'
+import { useMessageRenderer } from '../composables/useMessageRenderer'
+import { useConversationGroups } from '../composables/useConversationGroups'
 import { settings as currentSettings } from '../stores/settings'
-import { searchService } from '../search/SearchService'
 import SettingsPanel from '../components/SettingsPanel.vue'
-import type {Message} from "../types/chat.ts";
-import type {Conversation} from "../types/chat.ts";
-import type {SearchResult} from "../search/types.ts";
-
-const conversationSearchDraft = ref('')
-const isSearchLoading = ref(false)
-const searchError = ref('')
-const searchResults = ref<SearchResult[]>([])
-const isSearchMode = computed(() => conversationSearchDraft.value.trim().length > 0)
-let searchRequestSeq = 0
-
-const currentModelName = computed(() => {
-  const p = currentSettings.provider
-  if (p === 'ollama') return currentSettings.ollama.model
-  if (p === 'openai') return currentSettings.openai.model
-  return currentSettings.claude.model
-})
-
-function renderContent(msg: Message) {
-  // loading：还没收到任何内容，显示"思考中"跳动点
-  if (msg.status === 'loading') {
-    return '<div class="thinking-dots"><span></span><span></span><span></span></div>'
-  }
-  // error 且无内容时不渲染空气泡
-  if (msg.status === 'error' && !msg.content) {
-    return ''
-  }
-  // 已有预渲染内容（done 状态）
-  if (msg.formattedContent) {
-    return msg.formattedContent
-  }
-  // 流式输出中：渲染当前内容 + 闪烁光标（插入到最后一个闭合标签之前，确保光标紧跟文字）
-  const rendered = renderMarkdown(msg.content)
-  if (msg.status === 'streaming') {
-    const cursor = '<span class="cursor-blink">▋</span>'
-    const lastClose = rendered.lastIndexOf('</')
-    if (lastClose === -1) return rendered + cursor
-    return rendered.slice(0, lastClose) + cursor + rendered.slice(lastClose)
-  }
-  return rendered
-}
 
 const {
   messages,
@@ -408,70 +368,19 @@ const {
 } = useChatView()
 void containerRef
 
-// ── 对话日期分组 ──────────────────────────────────
-function getDateLabel(timestamp: number): string {
-  const now = new Date()
-  const date = new Date(timestamp)
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const diffDays = Math.floor((today.getTime() - target.getTime()) / 86400000)
-
-  if (diffDays === 0) return '今天'
-  if (diffDays === 1) return '昨天'
-  if (diffDays <= 7) return `${diffDays}天前`
-  if (diffDays <= 14) return '上周'
-  if (diffDays <= 30) return '上月'
-  return `${date.getFullYear()}/${date.getMonth() + 1}`
-}
-
-const groupedConversations = computed(() => {
-  const groups: { label: string; items: Conversation[] }[] = []
-  let currentLabel = ''
-  for (const conv of conversations.value) {
-    const label = getDateLabel(conv.updatedAt)
-    if (label !== currentLabel) {
-      currentLabel = label
-      groups.push({ label, items: [] })
-    }
-    groups[groups.length - 1].items.push(conv)
-  }
-  return groups
+const { renderContent, handleCodeBlockCopy } = useMessageRenderer()
+const { groupedConversations, currentModelName } = useConversationGroups(conversations)
+const {
+  conversationSearchDraft,
+  isSearchLoading,
+  searchError,
+  searchResults,
+  isSearchMode,
+  handleSearchResultClick,
+} = useConversationSearch({
+  onSelect: handleSelectConversation,
+  canSelect: () => !isStreaming.value,
 })
-
-watch(conversationSearchDraft, (value) => {
-  const query = value.trim()
-  const requestSeq = ++searchRequestSeq
-  searchError.value = ''
-
-  if (!query) {
-    isSearchLoading.value = false
-    searchResults.value = []
-    return
-  }
-
-  isSearchLoading.value = true
-  window.setTimeout(async () => {
-    if (requestSeq !== searchRequestSeq) return
-    try {
-      const results = await searchService.search({ query, limit: 20 })
-      if (requestSeq !== searchRequestSeq) return
-      searchResults.value = results
-    } catch (err: unknown) {
-      if (requestSeq !== searchRequestSeq) return
-      searchResults.value = []
-      searchError.value = err instanceof Error ? err.message : '搜索失败'
-    } finally {
-      if (requestSeq === searchRequestSeq) {
-        isSearchLoading.value = false
-      }
-    }
-  }, 250)
-})
-
-function handleSearchResultClick(conversationId: number) {
-  if (isStreaming.value) return
-  handleSelectConversation(conversationId)
-}
 
 // ── 语音输入 ──────────────────────────────────────
 const { isListening, isSupported: speechSupported, start: startSpeech, stop: stopSpeech } = useSpeechRecognition()
@@ -564,20 +473,6 @@ watch(inputValue, (val) => {
   }
 })
 
-// ── 代码块复制按钮（事件委托） ────────────────────
-function handleChatClick(e: MouseEvent) {
-  const btn = (e.target as HTMLElement).closest('.code-copy-btn') as HTMLElement | null
-  if (!btn) return
-  const code = btn.closest('.code-block-wrapper')?.querySelector('code')?.textContent ?? ''
-  navigator.clipboard.writeText(code).then(() => {
-    btn.textContent = '已复制 ✓'
-    btn.classList.add('copied')
-    setTimeout(() => {
-      btn.textContent = '复制'
-      btn.classList.remove('copied')
-    }, 2000)
-  })
-}
 </script>
 
 <style src="../styles/chat.css" />

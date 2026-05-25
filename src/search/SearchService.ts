@@ -1,6 +1,8 @@
 import { SearchWorkerClient } from './SearchWorkerClient'
 import type { RecentSearch, SearchIndexInput, SearchQuery, SearchResult } from './types'
 
+// 搜索服务是 UI 层使用的门面。
+// UI 不直接操作 worker，只调用这里的方法：indexMessage/search/rebuildIndex 等。
 class SearchService {
     private readonly client = new SearchWorkerClient()
 
@@ -35,6 +37,10 @@ class SearchService {
 
     clearRecentSearches(): Promise<void> {
         return this.client.request<void>({ type: 'CLEAR_RECENT_SEARCHES' })
+    }
+
+    ensureIndex(): Promise<void> {
+        return this.client.request<void>({ type: 'ENSURE_INDEX' })
     }
 
     rebuildIndex(): Promise<void> {

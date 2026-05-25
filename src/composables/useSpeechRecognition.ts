@@ -1,7 +1,10 @@
 import { ref } from 'vue'
 
+// 浏览器语音识别 API 不是标准化程度很高的 API，不同浏览器名字不同。
+// Chrome 系浏览器通常暴露 webkitSpeechRecognition。
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
 
+// 把浏览器语音识别封装成 Vue composable，页面只需要关心“是否正在听”和 start/stop。
 export function useSpeechRecognition() {
     const isListening = ref(false)
     const isSupported = !!SpeechRecognition
@@ -19,6 +22,7 @@ export function useSpeechRecognition() {
         }
 
         recognition = new SpeechRecognition()
+        // 中文识别；interimResults 允许实时拿到尚未最终确认的临时文本。
         recognition.lang = 'zh-CN'
         recognition.interimResults = true
         recognition.continuous = true
@@ -27,6 +31,7 @@ export function useSpeechRecognition() {
 
         recognition.onresult = (e: any) => {
             let interim = ''
+            // finalTranscript 保存已经确认的文字；interim 保存当前这轮临时识别结果。
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 const transcript = e.results[i][0].transcript
                 if (e.results[i].isFinal) {

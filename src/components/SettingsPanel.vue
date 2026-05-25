@@ -191,8 +191,13 @@ import type { ProviderType, ThemeType } from '../stores/settings'
 
 const emit = defineEmits<{ close: [] }>()
 
+// SettingsPanel edits a local draft first.
+// The global settings object is updated only when the user clicks Save.
+
 const UNLIMITED = 1100000
 
+// Context presets shown as buttons in the settings panel.
+// UNLIMITED is a sentinel value meaning "do not actively trim context".
 const contextTiers = [
   { label: '8K',    max: 8000,    min: 500,    step: 500 },
   { label: '32K',   max: 32000,   min: 1000,   step: 1000 },
@@ -203,6 +208,7 @@ const contextTiers = [
 ]
 
 function findTierIndex(value: number): number {
+  // Convert a numeric maxContextTokens value back into the active preset index.
   if (value >= UNLIMITED) return contextTiers.length - 1
   for (let i = contextTiers.length - 2; i >= 0; i--) {
     if (value <= contextTiers[i].max) return i
@@ -236,6 +242,7 @@ const activeTierIndex = ref(findTierIndex(draft.maxContextTokens))
 const activeTier = computed(() => contextTiers[activeTierIndex.value])
 
 function selectTier(index: number) {
+  // Clicking a preset updates both the active preset and the actual numeric setting.
   activeTierIndex.value = index
   const tier = contextTiers[index]
   if (tier.max === UNLIMITED) {
@@ -258,6 +265,8 @@ const loadingModels = ref(false)
 const modelError   = ref('')
 
 async function loadModels() {
+  // fetchModels reads from global settings, so this function temporarily applies the draft provider config,
+  // fetches the list, and then restores the previous global settings.
   loadingModels.value = true
   modelError.value = ''
   modelList.value = []
@@ -298,6 +307,7 @@ watch(() => draft.provider, () => {
 if (draft.provider !== 'claude') loadModels()
 
 function save() {
+  // Copy draft values back to global settings. The settings store persists them to localStorage.
   Object.assign(settings, {
     provider:          draft.provider,
     systemPrompt:      draft.systemPrompt,

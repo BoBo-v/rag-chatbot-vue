@@ -341,6 +341,9 @@ import { useConversationGroups } from '../composables/useConversationGroups'
 import { settings as currentSettings } from '../stores/settings'
 import SettingsPanel from '../components/SettingsPanel.vue'
 
+// StyleChat 是主聊天页面组件。
+// 模板负责布局和绑定事件；具体业务逻辑尽量放在 composable 里，避免单文件过大。
+
 const {
   messages,
   inputValue,
@@ -368,6 +371,7 @@ const {
 } = useChatView()
 void containerRef
 
+// 三个 composable 分别负责：消息 Markdown 渲染、侧边栏会话分组、侧边栏搜索。
 const { renderContent, handleCodeBlockCopy } = useMessageRenderer()
 const { groupedConversations, currentModelName } = useConversationGroups(conversations)
 const {
@@ -401,6 +405,7 @@ const settingsOpen = ref(false)
 const previewImageSrc = ref('')
 const dragOver = ref(false)
 
+// 点击聊天里的图片时，把 data URL 存到 previewImageSrc，模板中的 lightbox 会显示大图。
 function openImagePreview(src: string) {
   previewImageSrc.value = src
 }
@@ -410,6 +415,7 @@ const imageInputRef = ref<HTMLInputElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
 function handleImageSelect(e: Event) {
+  // 文件 input 选中图片后，把 FileList 转成数组交给 useChatView 校验和读取。
   const input = e.target as HTMLInputElement
   if (input.files?.length) {
     addImages(Array.from(input.files))
@@ -418,6 +424,7 @@ function handleImageSelect(e: Event) {
 }
 
 function handleFileSelect(e: Event) {
+  // 文本文件和代码文件走 addFiles，内容会被读取后随消息保存。
   const input = e.target as HTMLInputElement
   if (input.files?.length) {
     addFiles(Array.from(input.files))
@@ -426,12 +433,14 @@ function handleFileSelect(e: Event) {
 }
 
 function formatFileSize(bytes: number): string {
+  // UI 展示用，把字节数转成 B/KB/MB。
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
 function handlePaste(e: ClipboardEvent) {
+  // 支持直接粘贴截图或图片文件。
   const items = e.clipboardData?.items
   if (!items) return
   const imageFiles: File[] = []
@@ -448,6 +457,7 @@ function handlePaste(e: ClipboardEvent) {
 }
 
 function handleDrop(e: DragEvent) {
+  // 支持把图片拖到输入框区域上传。
   dragOver.value = false
   const files = e.dataTransfer?.files
   if (!files) return
@@ -459,6 +469,7 @@ function handleDrop(e: DragEvent) {
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
 function autoResize() {
+  // textarea 根据内容自动增高，但最多 200px，避免输入框占满屏幕。
   const el = textareaRef.value
   if (!el) return
   el.style.height = 'auto'

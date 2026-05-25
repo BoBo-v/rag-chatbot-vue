@@ -43,6 +43,9 @@ export function useChatView() {
 
     const toast = useToast()
 
+    // These refs are the state used directly by StyleChat.vue.
+    // In script code we read/write .value; Vue templates unwrap refs automatically.
+
     // ── 响应式状态（模板绑定） ────────────────────────────────
     const inputValue   = ref<string>('')
     const isStreaming  = ref<boolean>(false)
@@ -59,11 +62,15 @@ export function useChatView() {
     // createConversation 会设置 currentId，触发 watcher 加载消息——
     // 但 handleSend 中刚写入内存的消息会被 loadForConversation 覆盖清空，
     // 所以在 handleSend 创建会话期间用此标志临时屏蔽 watcher
+    // Creating the first message also creates a conversation and changes currentId.
+    // This flag skips the currentId watcher once so it does not reload and wipe the just-added message.
     let suppressConvWatch = false
 
     // ── 会话切换 ─────────────────────────────────────────────
 
     watch(currentId, async (newId) => {
+        // currentId is the single source of truth for conversation switching.
+        // When it changes, load that conversation's messages into the chat window.
         if (suppressConvWatch) return
         if (newId !== null) {
             await loadForConversation(newId)
@@ -78,6 +85,7 @@ export function useChatView() {
     })
 
     function handleSelectConversation(id: number) {
+        // Do not switch conversations while streaming, otherwise the in-flight reply could be persisted to the wrong place.
         if (isStreaming.value) return
         selectConversation(id)
         sidebarOpen.value = false
@@ -91,6 +99,7 @@ export function useChatView() {
 
     async function handleDeleteConversation(id: number) {
         await deleteConversation(id)
+        // Search index data is derived data. If cleanup fails, chat deletion should still succeed.
         void searchService.deleteConversation(id).catch(err => {
             console.warn('[search] 删除会话索引失败', err)
         })
@@ -100,6 +109,8 @@ export function useChatView() {
 
     // upsert 一条消息到 IndexedDB（runStream finally 中调用）
     async function persistMessage(msgId: string, convId: number) {
+        // Persist the final in-memory message into IndexedDB.
+        // AI messages are written after streaming finishes so the stored content is complete.
         const msg = messages.value.find(m => m.id === msgId)
         if (!msg) return
         await db.messages.put({
@@ -117,6 +128,7 @@ export function useChatView() {
     }
 
     function queueSearchIndex(msg: Message, convId: number, createdAt: number, updatedAt = createdAt) {
+        // Indexing runs in the background through a worker and should not block the chat UI.
         const conversation = conversations.value.find(conv => conv.id === convId)
         if (!conversation) return
 
@@ -143,6 +155,8 @@ export function useChatView() {
 
     // rAF + nextTick 调度滚动，仅在用户已在底部时执行
     function scheduleScroll(): void {
+        // Auto-scroll only if the user is already at the bottom.
+        // If they are reading older messages, keep their scroll position stable.
         if (!userAtBottom || isScrolling) return
         isScrolling = true
         requestAnimationFrame(async () => {
@@ -199,6 +213,8 @@ export function useChatView() {
      *                                 └→ typeChar（逐字符写入，每字符一帧）
      */
     function flushQueue(messageId: string) {
+        // Server chunks first enter queue, then requestAnimationFrame drains them gradually.
+        // This creates a smoother typing effect than appending every network chunk immediately.
         if (isFlushing) return
         isFlushing = true
 
@@ -232,6 +248,7 @@ export function useChatView() {
 
     // 封装 AbortController，abort() 同时中断网络请求 + ReadableStream + 标记 isAborted
     function createStreamController(messageId: string) {
+        // AbortController cancels fetch; reader.cancel() stops reading the response stream.
         const ctrl = new AbortController()
         return {
             messageId,
@@ -249,6 +266,7 @@ export function useChatView() {
     // ── 用户操作入口 ─────────────────────────────────────────
 
     function handleStop() {
+        // Stop generation from the UI. The provider request and stream reader are both cancelled.
         if (!streamCtrl) return
         streamCtrl.abort()
         isStreaming.value = false
@@ -256,6 +274,7 @@ export function useChatView() {
 
     // 发送消息：写入用户消息 → 创建 AI 占位 → 启动流式生成
     function addImages(files: File[]) {
+        // Images are stored as base64 so they can be sent directly to vision-capable providers later.
         const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
         const maxSize = 10 * 1024 * 1024
         for (const file of files) {
@@ -298,6 +317,7 @@ export function useChatView() {
     const MAX_FILE_SIZE = 5 * 1024 * 1024
 
     function addFiles(files: File[]) {
+        // Only text/code files are accepted because their content is read and inserted into the model prompt.
         for (const file of files) {
             const ext = '.' + file.name.split('.').pop()?.toLowerCase()
             if (!TEXT_EXTENSIONS.includes(ext)) {
@@ -325,6 +345,12 @@ export function useChatView() {
     }
 
     async function handleSend() {
+        // Main send flow:
+        // 1. Read text and attachments from the input area.
+        // 2. Create a conversation if this is the first message.
+        // 3. Save the user message.
+        // 4. Create an assistant placeholder.
+        // 5. Start the streaming model request.
         console.log('[handleSend]', {
             isStreaming: isStreaming.value,
             text: inputValue.value.trim().slice(0, 20),
@@ -390,6 +416,7 @@ export function useChatView() {
 
     // 重试：删除失败的 AI 消息，用同一条用户消息重新生成
     async function handleRetry(messageId: string) {
+        // Retry removes the failed assistant message, finds the previous user message, and asks again.
         if (isStreaming.value) return
         const msgIdx = messages.value.findIndex(m => m.id === messageId)
         if (msgIdx === -1 || currentId.value === null) return
@@ -417,6 +444,7 @@ export function useChatView() {
 
     // 继续生成：复用已中断的 AI 消息，以空 prompt 续写
     async function handleContinue(messageId: string) {
+        // Continue reuses an aborted assistant message and appends more content to it.
         if (isStreaming.value) return
         const msg = messages.value.find(m => m.id === messageId)
         if (!msg || currentId.value === null) return
@@ -444,6 +472,8 @@ export function useChatView() {
      *   5. finally 持久化到 DB、刷新侧边栏
      */
     async function runStream(options: RunStreamOptions): Promise<void> {
+        // Every generation path ends here: normal send, retry, and continue.
+        // Reset transient stream state before starting a new provider request.
         queue = []
         isFlushing = false
         needsStatusFallback = true
@@ -455,6 +485,7 @@ export function useChatView() {
         streamCtrl = createStreamController(options.aiMessageId)
 
         try {
+            // generateStreamWithContext chooses the active provider and calls onChunk for every text delta.
             await generateStreamWithContext(
                 messages.value,
                 options.prompt,
@@ -491,6 +522,8 @@ export function useChatView() {
             })
             toast.show(chatErr.message, 'error')
         } finally {
+            // This block runs for success, error, and abort.
+            // It persists the assistant message, updates the conversation timestamp, and refreshes search.
             if (pendingDoneId) {
                 await Promise.race([
                     new Promise<void>(resolve => { pendingDoneResolve = resolve }),
@@ -530,8 +563,12 @@ export function useChatView() {
     // ── 生命周期 ─────────────────────────────────────────────
 
     onMounted(async () => {
+        // Page startup: attach scroll listener, load conversations, warm up search index, then open latest conversation.
         containerRef.value?.addEventListener('scroll', handleScroll)
         await loadAll()
+        void searchService.ensureIndex().catch(err => {
+            console.warn('[search] 初始化索引失败', err)
+        })
         if (conversations.value.length > 0 && currentId.value === null) {
             selectConversation(conversations.value[0].id!)
         }

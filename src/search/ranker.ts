@@ -4,6 +4,8 @@ const TITLE_BOOST = 3
 const USER_MESSAGE_BOOST = 1.4
 const ASSISTANT_MESSAGE_BOOST = 1
 
+// 给一个搜索文档打分。分数越高，搜索结果越靠前。
+// 当前规则很直观：标题命中加更多分，用户消息略微优先于 AI 回复。
 export function scoreDoc(doc: DBSearchDoc, queryTerms: string[], matchedTerms: Set<string>): number {
     if (matchedTerms.size === 0) return 0
 
@@ -22,6 +24,7 @@ export function scoreDoc(doc: DBSearchDoc, queryTerms: string[], matchedTerms: S
     return score
 }
 
+// 从内容中截取一段搜索摘要，尽量让第一个命中的关键词出现在摘要中间附近。
 export function createSnippet(content: string, terms: string[], maxLength = 120): string {
     if (!content) return ''
 

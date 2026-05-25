@@ -3,6 +3,7 @@ import { buildMessages } from '../context'
 import { settings } from '../../stores/settings'
 import { parseSSE } from './openai'
 
+// Claude API 适配器。Claude 的消息格式和 OpenAI 不完全一样，所以单独转换。
 export async function claudeStream(
     messages: Message[],
     userText: string,
@@ -11,6 +12,7 @@ export async function claudeStream(
     signal?: AbortSignal
 ): Promise<void> {
     const cfg = settings.claude
+    // buildMessages 返回统一上下文，其中 system 消息要单独放到 Claude 的 system 字段。
     const allMsgs = buildMessages(
         messages,
         userText,
@@ -23,6 +25,7 @@ export async function claudeStream(
         .filter(m => m.role !== 'system')
         .map(m => {
             if (m.images?.length) {
+                // Claude 的图片格式是 base64 source，不是 OpenAI 的 image_url。
                 const content: Record<string, unknown>[] = []
                 for (const img of m.images) {
                     content.push({
@@ -68,6 +71,7 @@ export async function claudeStream(
     let doneCalled = false
 
     await parseSSE(res.body!, signal, (event, data) => {
+        // Claude 流式事件按 event 类型区分：文本增量在 content_block_delta 里。
         if (event === 'message_stop' || event === 'message_delta') {
             try {
                 const obj = JSON.parse(data)
@@ -95,6 +99,7 @@ export async function claudeStream(
 }
 
 export function getClaudeModels(): string[] {
+    // Claude 这里暂时使用静态列表，因为浏览器端直接拉模型列表并不稳定。
     return [
         'claude-opus-4-6',
         'claude-sonnet-4-6',

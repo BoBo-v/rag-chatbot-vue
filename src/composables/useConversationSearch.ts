@@ -7,12 +7,16 @@ interface UseConversationSearchOptions {
     canSelect?: () => boolean
 }
 
+// 管理侧边栏搜索框的状态和请求节流。
+// 组件只关心输入框、loading、结果列表和点击结果，真正搜索由 searchService 交给 Web Worker 执行。
 export function useConversationSearch(options: UseConversationSearchOptions) {
     const conversationSearchDraft = ref('')
     const isSearchLoading = ref(false)
     const searchError = ref('')
     const searchResults = ref<SearchResult[]>([])
     const isSearchMode = computed(() => conversationSearchDraft.value.trim().length > 0)
+
+    // 每次输入变化都会递增序号。旧请求回来时如果序号不一致，就丢弃它，避免旧结果覆盖新结果。
     let searchRequestSeq = 0
 
     watch(conversationSearchDraft, (value) => {
@@ -27,6 +31,7 @@ export function useConversationSearch(options: UseConversationSearchOptions) {
         }
 
         isSearchLoading.value = true
+        // 简单防抖：用户停止输入 250ms 后再真正搜索，减少 worker 和 IndexedDB 压力。
         window.setTimeout(async () => {
             if (requestSeq !== searchRequestSeq) return
             try {

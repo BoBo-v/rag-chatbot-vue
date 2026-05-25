@@ -1,4 +1,5 @@
-import { db, type DBSearchDoc } from '../db'
+import { db, type DBMessage, type DBSearchDoc } from '../db'
+import type { Conversation } from '../types/chat'
 import { countTerms, tokenize } from './tokenizer'
 import { createSnippet, scoreDoc } from './ranker'
 import { LruCache } from './cache'
@@ -11,9 +12,11 @@ import type {
     WorkerResponse,
 } from './types'
 
-const SEARCH_INDEX_VERSION = '1'
+const SEARCH_INDEX_VERSION = '2'
 const resultCache = new LruCache<string, SearchResult[]>(100)
+let rebuildPromise: Promise<void> | null = null
 
+// 搜索 worker 运行在后台线程，避免 IndexedDB 查询和索引计算阻塞聊天 UI。
 self.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
     void handleRequest(event.data)
 })
@@ -23,6 +26,7 @@ async function handleRequest(request: WorkerRequest): Promise<void> {
         let payload: unknown
 
         switch (request.type) {
+            // 写入/更新一条消息的搜索索引。
             case 'INDEX_MESSAGE':
                 await indexMessage(request.payload)
                 break
@@ -41,6 +45,9 @@ async function handleRequest(request: WorkerRequest): Promise<void> {
             case 'CLEAR_RECENT_SEARCHES':
                 await db.recentSearches.clear()
                 break
+            case 'ENSURE_INDEX':
+                await ensureIndex()
+                break
             case 'REBUILD_INDEX':
                 await rebuildIndex()
                 break
@@ -57,11 +64,29 @@ async function handleRequest(request: WorkerRequest): Promise<void> {
 }
 
 async function indexMessage(input: SearchIndexInput): Promise<void> {
+    // 写新索引前先确保旧索引已升级，避免新旧版本混在一起。
+    await ensureIndex()
+    await putSearchDoc(input)
+}
+
+type SearchableMessage = Pick<DBMessage, 'id' | 'role' | 'content' | 'files' | 'images'>
+
+interface PutSearchDocInput {
+    message: SearchableMessage
+    conversation: Conversation
+    createdAt?: number
+    updatedAt?: number
+    tags?: string[]
+}
+
+async function putSearchDoc(input: PutSearchDocInput, markIndexReady = true): Promise<void> {
     const { message, conversation } = input
     const createdAt = input.createdAt ?? Date.now()
     const updatedAt = input.updatedAt ?? conversation.updatedAt ?? createdAt
     const tags = input.tags ?? []
-    const terms = tokenize(`${conversation.title} ${message.content}`)
+    const content = getSearchableMessageContent(message)
+    // 搜索词来自“会话标题 + 消息内容 + 附件文本/文件名”。
+    const terms = tokenize(`${conversation.title} ${content}`)
     const termCounts = countTerms(terms)
 
     await db.transaction(
@@ -76,6 +101,7 @@ async function indexMessage(input: SearchIndexInput): Promise<void> {
         async () => {
             const existing = await db.searchDocs.where('messageId').equals(message.id).first()
             if (existing?.docId !== undefined) {
+                // 同一条消息可能被重试或继续生成后再次索引，先删旧文档再写新文档。
                 await removeDoc(existing.docId)
             }
 
@@ -84,7 +110,7 @@ async function indexMessage(input: SearchIndexInput): Promise<void> {
                 conversationId: conversation.id,
                 role: message.role,
                 title: conversation.title,
-                content: message.content,
+                content,
                 createdAt,
                 updatedAt,
                 length: Math.max(terms.length, 1),
@@ -107,14 +133,28 @@ async function indexMessage(input: SearchIndexInput): Promise<void> {
                 await db.searchTags.bulkPut(tags.map(tag => ({ tag, docId })))
             }
 
-            await db.searchMeta.put({ key: 'indexVersion', value: SEARCH_INDEX_VERSION })
+            if (markIndexReady) {
+                await db.searchMeta.put({ key: 'indexVersion', value: SEARCH_INDEX_VERSION })
+            }
         },
     )
 
     resultCache.clear()
 }
 
+function getSearchableMessageContent(message: Pick<DBMessage, 'content' | 'files' | 'images'>): string {
+    // 让上传文件的文件名/内容、图片名也能被侧边栏搜索到。
+    const fileText = message.files
+        ?.map(file => `${file.name} ${file.content}`)
+        .join(' ') ?? ''
+    const imageText = message.images
+        ?.map(image => image.name)
+        .join(' ') ?? ''
+    return [message.content, fileText, imageText].filter(Boolean).join(' ')
+}
+
 async function removeDoc(docId: number): Promise<void> {
+    // 删除搜索文档时必须同时清理倒排索引和标签索引。
     const oldTerms = await db.searchTerms.where('docId').equals(docId).toArray()
     await db.searchTerms.where('docId').equals(docId).delete()
     await db.searchTags.where('docId').equals(docId).delete()
@@ -123,6 +163,7 @@ async function removeDoc(docId: number): Promise<void> {
 }
 
 async function refreshTermStat(term: string): Promise<void> {
+    // 重新计算一个词出现在多少个文档里。
     const df = await db.searchTerms.where('term').equals(term).count()
     if (df === 0) {
         await db.searchTermStats.delete(term)
@@ -142,6 +183,7 @@ async function deleteConversationIndex(conversationId: number): Promise<void> {
 }
 
 async function search(input: SearchQuery): Promise<SearchResult[]> {
+    await ensureIndex()
     const queryTerms = tokenize(input.query)
     const limit = input.limit ?? 20
     const filtersHash = JSON.stringify(input.filters ?? {})
@@ -151,6 +193,7 @@ async function search(input: SearchQuery): Promise<SearchResult[]> {
 
     if (queryTerms.length === 0) return []
 
+    // 倒排索引查询：先查每个词对应的 docId，再合并候选文档。
     const postings = await Promise.all(
         queryTerms.map(term => db.searchTerms.where('term').equals(term).toArray()),
     )
@@ -166,7 +209,7 @@ async function search(input: SearchQuery): Promise<SearchResult[]> {
     })
 
     const docs = await db.searchDocs.bulkGet([...candidateScores.keys()])
-    const results: SearchResult[] = []
+    const resultsByConversation = new Map<number, SearchResult>()
 
     for (const doc of docs) {
         if (!doc || doc.docId === undefined) continue
@@ -175,16 +218,22 @@ async function search(input: SearchQuery): Promise<SearchResult[]> {
         const matchedTerms = candidateScores.get(doc.docId)
         if (!matchedTerms) continue
 
-        results.push({
+        const result = {
             conversationId: doc.conversationId,
             messageId: doc.messageId,
             title: doc.title,
             snippet: createSnippet(doc.content, queryTerms),
             score: scoreDoc(doc, queryTerms, matchedTerms),
             updatedAt: doc.updatedAt,
-        })
+        }
+        const existing = resultsByConversation.get(doc.conversationId)
+        // 侧边栏按“会话”展示，所以同一会话多条消息命中时只保留最佳结果。
+        if (!existing || result.score > existing.score || (result.score === existing.score && result.updatedAt > existing.updatedAt)) {
+            resultsByConversation.set(doc.conversationId, result)
+        }
     }
 
+    const results = [...resultsByConversation.values()]
     results.sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt)
     const topResults = results.slice(0, limit)
     resultCache.set(cacheKey, topResults)
@@ -246,6 +295,15 @@ async function getRecentSearches(limit = 10): Promise<RecentSearch[]> {
 }
 
 async function rebuildIndex(): Promise<void> {
+    // 完整重建索引：先读取所有会话和消息，再清空搜索表，最后逐条重新写入。
+    const conversations = await db.conversations.toArray()
+    const conversationsById = new Map(
+        conversations
+            .filter(conversation => conversation.id !== undefined)
+            .map(conversation => [conversation.id!, conversation]),
+    )
+    const messages = await db.messages.toArray()
+
     await db.transaction(
         'rw',
         [
@@ -260,10 +318,40 @@ async function rebuildIndex(): Promise<void> {
             await db.searchTerms.clear()
             await db.searchTermStats.clear()
             await db.searchTags.clear()
-            await db.searchMeta.put({ key: 'indexVersion', value: SEARCH_INDEX_VERSION })
+            // 重建完成前先删除版本号，防止中途失败后被误认为索引可用。
+            await db.searchMeta.delete('indexVersion')
         },
     )
+
+    for (const message of messages) {
+        const conversation = conversationsById.get(message.conversationId)
+        if (!conversation || conversation.id === undefined) continue
+        await putSearchDoc({
+            message,
+            conversation: {
+                id: conversation.id,
+                title: conversation.title,
+                createdAt: conversation.createdAt,
+                updatedAt: conversation.updatedAt,
+            },
+            createdAt: message.createdAt,
+            updatedAt: conversation.updatedAt,
+        }, false)
+    }
+    await db.searchMeta.put({ key: 'indexVersion', value: SEARCH_INDEX_VERSION })
     resultCache.clear()
+}
+
+async function ensureIndex(): Promise<void> {
+    // 如果版本号不一致，说明索引结构或内容规则变了，需要重建。
+    const meta = await db.searchMeta.get('indexVersion')
+    if (meta?.value === SEARCH_INDEX_VERSION) return
+    if (!rebuildPromise) {
+        rebuildPromise = rebuildIndex().finally(() => {
+            rebuildPromise = null
+        })
+    }
+    await rebuildPromise
 }
 
 function postResponse(response: WorkerResponse): void {

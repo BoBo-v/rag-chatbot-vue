@@ -2,6 +2,7 @@ import { computed, type Ref } from 'vue'
 import { settings } from '../stores/settings'
 import type { Conversation } from '../types/chat'
 
+// 把时间戳转换成侧边栏更友好的分组标题，例如“今天”“昨天”“上周”。
 export function getDateLabel(timestamp: number): string {
     const now = new Date()
     const date = new Date(timestamp)
@@ -17,12 +18,15 @@ export function getDateLabel(timestamp: number): string {
     return `${date.getFullYear()}/${date.getMonth() + 1}`
 }
 
+// 这个 composable 专门服务侧边栏：
+// groupedConversations 负责按日期分组；currentModelName 负责显示当前模型名。
 export function useConversationGroups(conversations: Ref<Conversation[]>) {
     const groupedConversations = computed(() => {
         const groups: { label: string; items: Conversation[] }[] = []
         let currentLabel = ''
         for (const conv of conversations.value) {
             const label = getDateLabel(conv.updatedAt)
+            // conversations 已经按 updatedAt 排好序，所以遍历时只要遇到新 label 就开新组。
             if (label !== currentLabel) {
                 currentLabel = label
                 groups.push({ label, items: [] })

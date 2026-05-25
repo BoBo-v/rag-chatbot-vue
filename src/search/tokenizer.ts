@@ -3,6 +3,8 @@ const STOP_WORDS = new Set([
     '的', '了', '是', '我', '你', '他', '她', '它', '这个', '那个', '可以',
 ])
 
+// 把一段文本切成可搜索的词。
+// 英文按空格和标点切分；中文没有天然空格，所以用二字滑窗做简单分词。
 export function tokenize(text: string): string[] {
     const normalized = text
         .toLowerCase()
@@ -17,6 +19,7 @@ export function tokenize(text: string): string[] {
         if (token.length <= 1 || STOP_WORDS.has(token)) continue
 
         if (/[\u4e00-\u9fff]/u.test(token)) {
+            // 例如“搜索功能”会切成“搜索”“索功”“功能”，这样用户搜其中一段也能命中。
             terms.push(...tokenizeChinese(token))
             continue
         }
@@ -39,6 +42,7 @@ function tokenizeChinese(token: string): string[] {
 }
 
 export function countTerms(terms: string[]): Map<string, { tf: number; positions: number[] }> {
+    // tf 是词频，positions 记录词出现的位置，后续可以用于更精细的排序和摘要。
     const counts = new Map<string, { tf: number; positions: number[] }>()
     terms.forEach((term, position) => {
         const stat = counts.get(term)

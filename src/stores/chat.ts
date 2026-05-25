@@ -2,21 +2,18 @@ import { ref } from 'vue'
 import type { Message, MessageStatus, Role } from '../types/chat'
 import { db } from '../db'
 
-// 模块级单例 —— 所有调用 useChat() 的地方共享同一份消息列表
-// 这样 StyleChat.vue 和 useChatView.ts 操作的永远是同一个 ref
+// 消息列表是模块级单例：所有调用 useChat() 的地方共享同一个 messages。
+// 这样 StyleChat.vue 展示的消息，和 useChatView.ts 修改的消息永远是同一份数据。
 const messages = ref<Message[]>([])
 
 export function useChat() {
-
-    /**
-     * 从 IndexedDB 加载指定会话的所有消息，替换当前内存列表。
-     * 切换会话时调用，确保界面显示的是目标会话的历史记录。
-     */
+    // 从 IndexedDB 加载某个会话的全部消息，并替换当前内存消息列表。
+    // 切换会话时调用它，保证页面展示的是目标会话的历史记录。
     async function loadForConversation(conversationId: number) {
         const dbMessages = await db.messages
             .where('conversationId')
             .equals(conversationId)
-            .sortBy('createdAt')   // 按创建时间升序，保证消息顺序正确
+            .sortBy('createdAt')
 
         messages.value = dbMessages.map(m => ({
             id: m.id,
@@ -30,42 +27,29 @@ export function useChat() {
         }))
     }
 
-    /**
-     * 清空内存中的消息列表。
-     * 新建对话（currentId = null）时调用，让界面呈现空白状态。
-     */
+    // 新建会话或取消选中会话时，用空列表清空聊天区域。
     function clearMessages() {
         messages.value = []
     }
 
-    /**
-     * 向列表末尾追加一条消息（用户消息 / 已构造好的 AI 消息）。
-     */
+    // 向当前消息列表末尾追加一条消息。
     function addMessage(message: Message) {
         messages.value.push(message)
     }
 
-    /**
-     * 创建 AI 占位消息并立即推入列表。
-     * 在真正开始流式请求前调用，让界面先显示 loading 动画，
-     * 后续通过 appendToMessage / updateMessage 逐步填充内容。
-     * 返回该消息对象，调用方用其 id 追踪这条 AI 消息。
-     */
+    // 创建一个空的 AI 占位消息，先显示 loading，后续流式输出再不断追加内容。
     function createAssistantMessage(): Message {
         const msg: Message = {
             id: crypto.randomUUID(),
             role: 'assistant',
             content: '',
-            status: 'loading'   // 初始为 loading，收到第一个 chunk 后变为 streaming
+            status: 'loading',
         }
         messages.value.push(msg)
         return msg
     }
 
-    /**
-     * 向指定消息追加一段文本（流式输出时逐字符调用）。
-     * 同时将状态改为 streaming，触发界面的光标闪烁效果。
-     */
+    // 流式输出时每收到一段文本，就追加到指定 AI 消息后面。
     function appendToMessage(id: string, chunk: string) {
         const msg = messages.value.find(m => m.id === id)
         if (msg) {
@@ -74,13 +58,7 @@ export function useChat() {
         }
     }
 
-    /**
-     * 批量更新指定消息的字段（id 不可修改）。
-     * 典型用法：
-     *   updateMessage(id, { status: 'done' })
-     *   updateMessage(id, { status: 'aborted', canContinue: true })
-     *   updateMessage(id, { formattedContent: html })
-     */
+    // 批量更新一条消息的字段，比如把 loading 改为 done/error/aborted。
     function updateMessage(id: string, changes: Omit<Partial<Message>, 'id'>) {
         const msg = messages.value.find(m => m.id === id)
         if (msg) {

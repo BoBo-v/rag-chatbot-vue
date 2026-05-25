@@ -1,11 +1,13 @@
 import { renderMarkdown } from './markdown'
 
+// 代码格式化配置：不同语言需要不同 prettier parser 和 plugin。
 type FormatterConfig = {
     parser: string
     plugins: object[]
 }
 
 async function loadFormatterConfig(lang: string): Promise<FormatterConfig | null> {
+    // 动态 import 可以避免首屏一次性加载全部 prettier 插件。
     switch (lang.toLowerCase()) {
         case 'js':
         case 'javascript': {
@@ -56,6 +58,8 @@ async function formatCode(str: string, lang: string): Promise<string> {
 }
 
 async function formatCodeBlocks(text: string): Promise<string> {
+    // 先找出所有 ```lang ... ``` 代码块，再逐个格式化。
+    // 这里只处理常见 fenced code block，不尝试实现完整 Markdown 解析器。
     const fence = /```(\w+)\n([\s\S]*?)```/g
     const jobs: Array<{ full: string; lang: string; code: string }> = []
 
@@ -73,6 +77,7 @@ async function formatCodeBlocks(text: string): Promise<string> {
 }
 
 export async function renderMarkdownAsync(text: string): Promise<string> {
+    // AI 回复完成后再做异步格式化，避免流式输出过程中反复加载 prettier。
     const formatted = await formatCodeBlocks(text)
     return renderMarkdown(formatted)
 }

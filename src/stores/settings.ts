@@ -1,5 +1,8 @@
 import { reactive, watch } from 'vue'
 
+// 全局设置模块：所有页面和服务层都从这里读取当前模型、主题、API Key 等配置。
+// 这里使用 Vue 的 reactive，让 UI 修改设置后，其他地方能立即感知变化。
+
 export type ProviderType = 'ollama' | 'openai' | 'claude'
 export type ThemeType   = 'dark' | 'light' | 'system'
 
@@ -26,6 +29,7 @@ export interface AppSettings {
 
 const STORAGE_KEY = 'ai-chat-settings'
 
+// 默认设置。用户第一次打开应用，或者 localStorage 读取失败时会使用这些值。
 const defaults: AppSettings = {
     provider: 'ollama',
     theme: 'dark',
@@ -49,6 +53,8 @@ const defaults: AppSettings = {
 
 function load(): AppSettings {
     try {
+        // localStorage 是浏览器本地持久化存储，刷新页面后仍然存在。
+        // 注意：API Key 存在这里只是适合个人本地工具，公开部署应改为后端代理。
         const raw = localStorage.getItem(STORAGE_KEY)
         if (raw) {
             const saved = JSON.parse(raw)
@@ -68,6 +74,8 @@ function load(): AppSettings {
 
 export const settings = reactive<AppSettings>(load())
 
+// deep watch 会监听嵌套字段，比如 settings.openai.apiKey。
+// 任何设置变动都会自动保存，用户不需要手动管理 localStorage。
 watch(settings, (val) => {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(val))

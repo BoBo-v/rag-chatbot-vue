@@ -2,6 +2,8 @@ import type { Message } from '../../types/chat'
 import { buildMessages } from '../context'
 import { settings } from '../../stores/settings'
 
+// OpenAI 兼容接口适配器。
+// DeepSeek、通义、Kimi 等只要兼容 /v1/chat/completions，也可以通过 baseUrl 走这里。
 export async function openaiStream(
     messages: Message[],
     userText: string,
@@ -11,6 +13,7 @@ export async function openaiStream(
 ): Promise<void> {
     const cfg = settings.openai
     const baseUrl = cfg.baseUrl.replace(/\/$/, '')
+    // 先构造统一上下文，再转换成 OpenAI 的 messages 格式。
     const chatMessages = buildMessages(
         messages,
         userText,
@@ -20,6 +23,7 @@ export async function openaiStream(
 
     const openaiMessages = chatMessages.map(m => {
         if (m.images?.length) {
+            // OpenAI 视觉模型使用 content 数组，图片用 data URL 传入。
             const content: Record<string, unknown>[] = []
             for (const img of m.images) {
                 content.push({
@@ -55,6 +59,7 @@ export async function openaiStream(
     }
 
     let doneCalled = false
+    // OpenAI 流式响应是 Server-Sent Events，每个 data 行是一段 JSON。
     await parseSSE(res.body!, signal, (_event, data) => {
         if (data === '[DONE]') {
             if (!doneCalled) { doneCalled = true; onDone() }
@@ -98,6 +103,7 @@ export async function parseSSE(
     signal: AbortSignal | undefined,
     onLine: (event: string, data: string) => void
 ): Promise<void> {
+    // SSE 是按文本行传输的，网络 chunk 可能把一行拆成两段，所以需要 buffer 暂存不完整行。
     const reader = body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''

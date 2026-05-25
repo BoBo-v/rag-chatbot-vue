@@ -1,5 +1,7 @@
 import type { ChatError } from '../types/chat'
 
+// 把底层异常转换成用户更容易理解的错误提示。
+// 服务层只抛 Error/DOMException，UI 层通过这个函数判断是网络、鉴权、超时还是服务端问题。
 export function classifyError(err: unknown): ChatError {
     if (err instanceof DOMException) {
         if (err.name === 'TimeoutError') {

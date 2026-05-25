@@ -7,6 +7,7 @@ import prettier from 'eslint-config-prettier'
 export default [
   { ignores: ['dist/', 'node_modules/'] },
 
+  // 基础 JS、TypeScript、Vue 推荐规则。
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...pluginVue.configs['flat/recommended'],
@@ -26,6 +27,7 @@ export default [
 
   {
     rules: {
+      // 单页面/练习项目中常见 App、Chat 这类短组件名，所以关闭多词组件名限制。
       'vue/multi-word-component-names': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrors: 'none' }],

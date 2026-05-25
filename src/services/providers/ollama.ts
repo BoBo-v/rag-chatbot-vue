@@ -2,6 +2,7 @@ import type { Message } from '../../types/chat'
 import { buildMessages } from '../context'
 import { settings } from '../../stores/settings'
 
+// Ollama 本地模型适配器。默认请求 http://localhost:11434/api/chat。
 export async function ollamaStream(
     messages: Message[],
     userText: string,
@@ -10,6 +11,7 @@ export async function ollamaStream(
     signal?: AbortSignal
 ): Promise<void> {
     const cfg = settings.ollama
+    // Ollama 支持 messages 格式；图片模型需要把 base64 图片放在 images 字段里。
     const chatMessages = buildMessages(
         messages,
         userText,
@@ -62,6 +64,7 @@ export async function ollamaStream(
             for (const line of lines) {
                 if (!line.trim()) continue
                 try {
+                    // Ollama 每一行都是一个 JSON 对象，message.content 是本次增量文本。
                     const obj = JSON.parse(line)
                     const chunk: string = obj.message?.content ?? ''
                     if (chunk) onChunk(chunk)
@@ -97,6 +100,7 @@ export async function ollamaStream(
 }
 
 export async function fetchOllamaModels(): Promise<string[]> {
+    // 设置面板点击“刷新模型列表”时调用 /api/tags。
     try {
         const res = await fetch(`${settings.ollama.url}/api/tags`)
         if (!res.ok) return []

@@ -1,4 +1,5 @@
-import { db, type DBSearchDoc } from '../db'
+import { db, type DBMessage, type DBSearchDoc } from '../db'
+import type { Conversation } from '../types/chat'
 import { countTerms, tokenize } from './tokenizer'
 import { createSnippet, scoreDoc } from './ranker'
 import { LruCache } from './cache'
@@ -11,8 +12,9 @@ import type {
     WorkerResponse,
 } from './types'
 
-const SEARCH_INDEX_VERSION = '1'
+const SEARCH_INDEX_VERSION = '2'
 const resultCache = new LruCache<string, SearchResult[]>(100)
+let rebuildPromise: Promise<void> | null = null
 
 self.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
     void handleRequest(event.data)
@@ -41,6 +43,9 @@ async function handleRequest(request: WorkerRequest): Promise<void> {
             case 'CLEAR_RECENT_SEARCHES':
                 await db.recentSearches.clear()
                 break
+            case 'ENSURE_INDEX':
+                await ensureIndex()
+                break
             case 'REBUILD_INDEX':
                 await rebuildIndex()
                 break
@@ -57,11 +62,27 @@ async function handleRequest(request: WorkerRequest): Promise<void> {
 }
 
 async function indexMessage(input: SearchIndexInput): Promise<void> {
+    await ensureIndex()
+    await putSearchDoc(input)
+}
+
+type SearchableMessage = Pick<DBMessage, 'id' | 'role' | 'content' | 'files' | 'images'>
+
+interface PutSearchDocInput {
+    message: SearchableMessage
+    conversation: Conversation
+    createdAt?: number
+    updatedAt?: number
+    tags?: string[]
+}
+
+async function putSearchDoc(input: PutSearchDocInput, markIndexReady = true): Promise<void> {
     const { message, conversation } = input
     const createdAt = input.createdAt ?? Date.now()
     const updatedAt = input.updatedAt ?? conversation.updatedAt ?? createdAt
     const tags = input.tags ?? []
-    const terms = tokenize(`${conversation.title} ${message.content}`)
+    const content = getSearchableMessageContent(message)
+    const terms = tokenize(`${conversation.title} ${content}`)
     const termCounts = countTerms(terms)
 
     await db.transaction(
@@ -84,7 +105,7 @@ async function indexMessage(input: SearchIndexInput): Promise<void> {
                 conversationId: conversation.id,
                 role: message.role,
                 title: conversation.title,
-                content: message.content,
+                content,
                 createdAt,
                 updatedAt,
                 length: Math.max(terms.length, 1),
@@ -107,11 +128,23 @@ async function indexMessage(input: SearchIndexInput): Promise<void> {
                 await db.searchTags.bulkPut(tags.map(tag => ({ tag, docId })))
             }
 
-            await db.searchMeta.put({ key: 'indexVersion', value: SEARCH_INDEX_VERSION })
+            if (markIndexReady) {
+                await db.searchMeta.put({ key: 'indexVersion', value: SEARCH_INDEX_VERSION })
+            }
         },
     )
 
     resultCache.clear()
+}
+
+function getSearchableMessageContent(message: Pick<DBMessage, 'content' | 'files' | 'images'>): string {
+    const fileText = message.files
+        ?.map(file => `${file.name} ${file.content}`)
+        .join(' ') ?? ''
+    const imageText = message.images
+        ?.map(image => image.name)
+        .join(' ') ?? ''
+    return [message.content, fileText, imageText].filter(Boolean).join(' ')
 }
 
 async function removeDoc(docId: number): Promise<void> {
@@ -142,6 +175,7 @@ async function deleteConversationIndex(conversationId: number): Promise<void> {
 }
 
 async function search(input: SearchQuery): Promise<SearchResult[]> {
+    await ensureIndex()
     const queryTerms = tokenize(input.query)
     const limit = input.limit ?? 20
     const filtersHash = JSON.stringify(input.filters ?? {})
@@ -166,7 +200,7 @@ async function search(input: SearchQuery): Promise<SearchResult[]> {
     })
 
     const docs = await db.searchDocs.bulkGet([...candidateScores.keys()])
-    const results: SearchResult[] = []
+    const resultsByConversation = new Map<number, SearchResult>()
 
     for (const doc of docs) {
         if (!doc || doc.docId === undefined) continue
@@ -175,16 +209,21 @@ async function search(input: SearchQuery): Promise<SearchResult[]> {
         const matchedTerms = candidateScores.get(doc.docId)
         if (!matchedTerms) continue
 
-        results.push({
+        const result = {
             conversationId: doc.conversationId,
             messageId: doc.messageId,
             title: doc.title,
             snippet: createSnippet(doc.content, queryTerms),
             score: scoreDoc(doc, queryTerms, matchedTerms),
             updatedAt: doc.updatedAt,
-        })
+        }
+        const existing = resultsByConversation.get(doc.conversationId)
+        if (!existing || result.score > existing.score || (result.score === existing.score && result.updatedAt > existing.updatedAt)) {
+            resultsByConversation.set(doc.conversationId, result)
+        }
     }
 
+    const results = [...resultsByConversation.values()]
     results.sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt)
     const topResults = results.slice(0, limit)
     resultCache.set(cacheKey, topResults)
@@ -246,6 +285,14 @@ async function getRecentSearches(limit = 10): Promise<RecentSearch[]> {
 }
 
 async function rebuildIndex(): Promise<void> {
+    const conversations = await db.conversations.toArray()
+    const conversationsById = new Map(
+        conversations
+            .filter(conversation => conversation.id !== undefined)
+            .map(conversation => [conversation.id!, conversation]),
+    )
+    const messages = await db.messages.toArray()
+
     await db.transaction(
         'rw',
         [
@@ -260,10 +307,38 @@ async function rebuildIndex(): Promise<void> {
             await db.searchTerms.clear()
             await db.searchTermStats.clear()
             await db.searchTags.clear()
-            await db.searchMeta.put({ key: 'indexVersion', value: SEARCH_INDEX_VERSION })
+            await db.searchMeta.delete('indexVersion')
         },
     )
+
+    for (const message of messages) {
+        const conversation = conversationsById.get(message.conversationId)
+        if (!conversation || conversation.id === undefined) continue
+        await putSearchDoc({
+            message,
+            conversation: {
+                id: conversation.id,
+                title: conversation.title,
+                createdAt: conversation.createdAt,
+                updatedAt: conversation.updatedAt,
+            },
+            createdAt: message.createdAt,
+            updatedAt: conversation.updatedAt,
+        }, false)
+    }
+    await db.searchMeta.put({ key: 'indexVersion', value: SEARCH_INDEX_VERSION })
     resultCache.clear()
+}
+
+async function ensureIndex(): Promise<void> {
+    const meta = await db.searchMeta.get('indexVersion')
+    if (meta?.value === SEARCH_INDEX_VERSION) return
+    if (!rebuildPromise) {
+        rebuildPromise = rebuildIndex().finally(() => {
+            rebuildPromise = null
+        })
+    }
+    await rebuildPromise
 }
 
 function postResponse(response: WorkerResponse): void {

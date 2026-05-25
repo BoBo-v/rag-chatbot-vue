@@ -44,6 +44,7 @@ export type WorkerRequest =
     | { type: 'SUGGEST'; requestId: string; payload: { prefix: string; limit?: number } }
     | { type: 'GET_RECENT_SEARCHES'; requestId: string; payload?: { limit?: number } }
     | { type: 'CLEAR_RECENT_SEARCHES'; requestId: string }
+    | { type: 'ENSURE_INDEX'; requestId: string }
     | { type: 'REBUILD_INDEX'; requestId: string }
 
 export type WorkerResponse =

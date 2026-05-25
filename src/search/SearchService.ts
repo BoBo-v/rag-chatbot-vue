@@ -37,6 +37,10 @@ class SearchService {
         return this.client.request<void>({ type: 'CLEAR_RECENT_SEARCHES' })
     }
 
+    ensureIndex(): Promise<void> {
+        return this.client.request<void>({ type: 'ENSURE_INDEX' })
+    }
+
     rebuildIndex(): Promise<void> {
         return this.client.request<void>({ type: 'REBUILD_INDEX' })
     }

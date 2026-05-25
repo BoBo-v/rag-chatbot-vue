@@ -532,6 +532,9 @@ export function useChatView() {
     onMounted(async () => {
         containerRef.value?.addEventListener('scroll', handleScroll)
         await loadAll()
+        void searchService.ensureIndex().catch(err => {
+            console.warn('[search] 初始化索引失败', err)
+        })
         if (conversations.value.length > 0 && currentId.value === null) {
             selectConversation(conversations.value[0].id!)
         }

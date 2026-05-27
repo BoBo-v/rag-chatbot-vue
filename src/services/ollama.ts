@@ -83,7 +83,6 @@ export async function generateStream(
         }),
         signal
     })
-    console.log('res',res)
     const reader = res.body?.getReader()
     const decoder = new TextDecoder('utf-8')
 
@@ -113,12 +112,10 @@ export async function generateStream(
 
             for (const line of lines) {
                 if (!line.trim()) continue
-                //console.log('line', line,JSON.parse(line))
                 const jsons = JSON.parse(line)
                 try {
                     onChunk(jsons.response || '')
-                } catch (e) {
-                    console.error('解析失败', line)
+                } catch {
                 }
 
                 if (jsons.done && !isDone) {
@@ -129,11 +126,7 @@ export async function generateStream(
             }
         }
     } catch (err: any) {
-        if (err.name === 'AbortError') {
-            console.log('请求被中断')
-        } else {
-            console.error(err)
-        }
+        if (err.name !== 'AbortError') throw err
     }finally {
         reader?.releaseLock()// 释放锁
         if (!isDone) {

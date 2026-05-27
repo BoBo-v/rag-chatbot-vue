@@ -1,10 +1,10 @@
-import type { Message } from '../types/chat'
+import type { ImageAttachment, Message } from '../types/chat'
 
 // 发送给模型 provider 前的统一消息格式。provider 适配器会再转换成 OpenAI/Claude/Ollama 各自要求的结构。
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant'
     content: string
-    images?: { base64: string; mediaType: string }[]
+    images?: { base64: string; mediaType: ImageAttachment['mediaType'] }[]
     files?: { name: string; content: string }[]
 }
 

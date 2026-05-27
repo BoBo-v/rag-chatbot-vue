@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import type { MessageStatus } from '../types/chat'
 
 // 这个文件集中定义 IndexedDB 的表结构。
 // Dexie 是 IndexedDB 的封装库，可以把浏览器本地数据库当成类型化的表来操作。
@@ -32,7 +33,7 @@ export interface DBMessage {
     content: string
     images?: DBImage[]
     files?: DBFile[]
-    status: string
+    status: MessageStatus
     canContinue?: boolean
     errorMessage?: string
     createdAt: number

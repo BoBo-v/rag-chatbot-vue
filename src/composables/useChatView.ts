@@ -133,9 +133,20 @@ export function useChatView() {
         if (!conversation) return
 
         void searchService.indexMessage({
-            message: msg,
+            message: {
+                id: msg.id,
+                role: msg.role,
+                content: msg.content,
+                images: msg.images?.map(img => ({ ...img })),
+                files: msg.files?.map(file => ({ ...file })),
+                status: msg.status,
+                canContinue: msg.canContinue,
+                errorMessage: msg.errorMessage,
+            },
             conversation: {
-                ...conversation,
+                id: conversation.id,
+                title: conversation.title,
+                createdAt: conversation.createdAt,
                 updatedAt,
             },
             createdAt,
@@ -224,8 +235,12 @@ export function useChatView() {
                 if (pendingDoneId) {
                     const id = pendingDoneId
                     pendingDoneId = null
-                    updateMessage(id, { status: 'done' })
-                    formatFinishedMessage(id)
+                    if (streamCtrl?.isAborted) {
+                        updateMessage(id, { status: 'aborted', canContinue: true })
+                    } else {
+                        updateMessage(id, { status: 'done' })
+                        formatFinishedMessage(id)
+                    }
                     pendingDoneResolve?.()
                     pendingDoneResolve = null
                 }
@@ -269,7 +284,6 @@ export function useChatView() {
         // Stop generation from the UI. The provider request and stream reader are both cancelled.
         if (!streamCtrl) return
         streamCtrl.abort()
-        isStreaming.value = false
     }
 
     // 发送消息：写入用户消息 → 创建 AI 占位 → 启动流式生成
@@ -288,6 +302,8 @@ export function useChatView() {
             }
             const reader = new FileReader()
             reader.onload = () => {
+                const exists = pendingImages.value.some(img => img.name === file.name)
+                if (exists) return
                 const dataUrl = reader.result as string
                 const base64 = dataUrl.split(',')[1]
                 pendingImages.value.push({
@@ -328,6 +344,9 @@ export function useChatView() {
                 toast.show(`文件过大(>5MB): ${file.name}`, 'warning')
                 continue
             }
+            if (pendingFiles.value.some(item => item.name === file.name && item.size === file.size)) {
+                continue
+            }
             const reader = new FileReader()
             reader.onload = () => {
                 pendingFiles.value.push({
@@ -351,15 +370,7 @@ export function useChatView() {
         // 3. Save the user message.
         // 4. Create an assistant placeholder.
         // 5. Start the streaming model request.
-        console.log('[handleSend]', {
-            isStreaming: isStreaming.value,
-            text: inputValue.value.trim().slice(0, 20),
-            images: pendingImages.value.length,
-            files: pendingFiles.value.length,
-            provider: settings.provider,
-        })
         if (isStreaming.value) {
-            console.warn('[handleSend] blocked: isStreaming is true')
             return
         }
         const userText = inputValue.value.trim()
@@ -513,7 +524,11 @@ export function useChatView() {
                 streamCtrl.controller.signal
             )
         } catch (err: unknown) {
-            if (streamCtrl?.isAborted) return
+            if (streamCtrl?.isAborted) {
+                needsStatusFallback = false
+                updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
+                return
+            }
             const chatErr = classifyError(err)
             needsStatusFallback = false
             updateMessage(options.aiMessageId, {
@@ -532,21 +547,31 @@ export function useChatView() {
                 if (pendingDoneId) {
                     const id = pendingDoneId
                     pendingDoneId = null
-                    if (queue.length > 0) {
+                    if (streamCtrl?.isAborted) {
+                        queue = []
+                    } else if (queue.length > 0) {
                         const remaining = queue.splice(0).join('')
                         appendToMessage(id, remaining)
                     }
                     isFlushing = false
-                    updateMessage(id, { status: 'done' })
-                    formatFinishedMessage(id)
+                    if (streamCtrl?.isAborted) {
+                        updateMessage(id, { status: 'aborted', canContinue: true })
+                    } else {
+                        updateMessage(id, { status: 'done' })
+                        formatFinishedMessage(id)
+                    }
                 }
             }
 
             isStreaming.value = false
             scheduleScroll()
 
-            if (needsStatusFallback && !streamCtrl?.isAborted) {
-                updateMessage(options.aiMessageId, { status: 'done' })
+            if (needsStatusFallback) {
+                if (streamCtrl?.isAborted) {
+                    updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
+                } else {
+                    updateMessage(options.aiMessageId, { status: 'done' })
+                }
             }
 
             await persistMessage(options.aiMessageId, options.convId)

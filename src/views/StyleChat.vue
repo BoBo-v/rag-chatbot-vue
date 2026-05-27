@@ -297,7 +297,7 @@ v-if="speechSupported"
         <div class="input-hint">
           <template v-if="isStreaming">AI 正在回复中...</template>
           <template v-else>
-            <span class="hint-key">Enter</span> 发送 · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 支持粘贴/拖拽图片 · 上传文件
+            <span class="hint-key">Enter</span> 发送 · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 支持粘贴/拖拽图片和文件
           </template>
         </div>
       </div>
@@ -457,12 +457,15 @@ function handlePaste(e: ClipboardEvent) {
 }
 
 function handleDrop(e: DragEvent) {
-  // 支持把图片拖到输入框区域上传。
+  // 支持把图片和文本/代码文件拖到输入框区域上传。
   dragOver.value = false
   const files = e.dataTransfer?.files
   if (!files) return
-  const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'))
+  const droppedFiles = Array.from(files)
+  const imageFiles = droppedFiles.filter(f => f.type.startsWith('image/'))
+  const textFiles = droppedFiles.filter(f => !f.type.startsWith('image/'))
   if (imageFiles.length) addImages(imageFiles)
+  if (textFiles.length) addFiles(textFiles)
 }
 
 // ── Textarea 自动高度 ─────────────────────────────

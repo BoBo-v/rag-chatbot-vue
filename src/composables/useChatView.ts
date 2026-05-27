@@ -8,6 +8,8 @@ import { useToast } from './useToast'
 import { settings } from '../stores/settings'
 import { searchService } from '../search/SearchService'
 import { useAttachments } from './useAttachments'
+import { useChatScroll } from './useChatScroll'
+import { useTypewriterStream } from './useTypewriterStream'
 import type {Message, StreamController} from "../types/chat.ts";
 
 /**
@@ -52,6 +54,23 @@ export function useChatView() {
         removeFile,
         clearAttachments,
     } = useAttachments(toast)
+    const {
+        unreadCount,
+        containerRef,
+        scheduleScroll,
+        scrollToBottom,
+        resetAfterConversationChange,
+        handleIncomingChunk,
+        attachScrollListener,
+        detachScrollListener,
+    } = useChatScroll()
+    const typewriter = useTypewriterStream({
+        appendToMessage,
+        updateMessage,
+        formatFinishedMessage,
+        scheduleScroll,
+        isAborted: () => streamCtrl?.isAborted ?? false,
+    })
 
     // These refs are the state used directly by StyleChat.vue.
     // In script code we read/write .value; Vue templates unwrap refs automatically.
@@ -59,13 +78,9 @@ export function useChatView() {
     // ── 响应式状态（模板绑定） ────────────────────────────────
     const inputValue   = ref<string>('')
     const isStreaming  = ref<boolean>(false)
-    const unreadCount  = ref<number>(0)
-    const containerRef = ref<HTMLDivElement | null>(null)
     const sidebarOpen  = ref<boolean>(false)
 
     // ── 非响应式标志位 ───────────────────────────────────────
-    let userAtBottom = true                          // 用户是否在消息底部，控制自动滚动
-    let isScrolling  = false                         // rAF 节流，防止同一帧多次赋值 scrollTop
     let streamCtrl:  StreamController | null = null  // 当前流式请求控制器
     // createConversation 会设置 currentId，触发 watcher 加载消息——
     // 但 handleSend 中刚写入内存的消息会被 loadForConversation 覆盖清空，
@@ -86,10 +101,7 @@ export function useChatView() {
             clearMessages()
         }
         await nextTick()
-        const el = containerRef.value
-        if (el) el.scrollTop = el.scrollHeight
-        unreadCount.value = 0
-        userAtBottom = true
+        resetAfterConversationChange()
     })
 
     function handleSelectConversation(id: number) {
@@ -164,57 +176,8 @@ export function useChatView() {
         })
     }
 
-    // ── 滚动控制 ─────────────────────────────────────────────
-
-    function isAtBottom(): boolean {
-        const el = containerRef.value
-        if (!el) return false
-        return el.scrollHeight - el.scrollTop - el.clientHeight < 20
-    }
-
-    // rAF + nextTick 调度滚动，仅在用户已在底部时执行
-    function scheduleScroll(): void {
-        // Auto-scroll only if the user is already at the bottom.
-        // If they are reading older messages, keep their scroll position stable.
-        if (!userAtBottom || isScrolling) return
-        isScrolling = true
-        requestAnimationFrame(async () => {
-            await nextTick()
-            const el = containerRef.value
-            if (el) el.scrollTop = el.scrollHeight
-            isScrolling = false
-        })
-    }
-
-    // 强制滚到底部（点击"有新消息"徽章时调用）
-    async function scrollToBottom(): Promise<void> {
-        await nextTick()
-        const el = containerRef.value
-        if (!el) return
-        el.scrollTop = el.scrollHeight
-        unreadCount.value = 0
-        userAtBottom = true
-    }
-
-    function handleScroll(): void {
-        const atBottom = isAtBottom()
-        userAtBottom = atBottom
-        if (atBottom) unreadCount.value = 0
-    }
-
-    // ── 流式输出（打字机） ───────────────────────────────────
-    //
-    // 设计：网络回调 onChunk 把文本片段推入 queue，
-    //       flushQueue 通过 rAF 逐字符消费，将网络速率与渲染帧率解耦。
-    //
-    // 重要：queue / isFlushing / needsStatusFallback 是模块级变量，
-    //       runStream 每次调用前重置它们。不要在 runStream 内用 const/let 遮蔽。
-
-    let queue: string[] = []
-    let isFlushing = false
+    // ── 流式输出状态 ─────────────────────────────────────────
     let needsStatusFallback = true
-    let pendingDoneId: string | null = null
-    let pendingDoneResolve: (() => void) | null = null
 
     // 生成结束后将原始 Markdown 渲染为 HTML（懒加载 markdown 工具）
     async function formatFinishedMessage(msgId: string) {
@@ -222,51 +185,6 @@ export function useChatView() {
         if (!msg) return
         const { renderMarkdownAsync } = await import('../utils/markdownAsync')
         msg.formattedContent = await renderMarkdownAsync(msg.content)
-    }
-
-    /**
-     * 打字机核心：逐帧从 queue 取 chunk，再逐字符通过 rAF 写入消息。
-     *
-     *   onChunk → queue.push → flushQueue（启动循环）
-     *                            └→ step（取一个 chunk）
-     *                                 └→ typeChar（逐字符写入，每字符一帧）
-     */
-    function flushQueue(messageId: string) {
-        // Server chunks first enter queue, then requestAnimationFrame drains them gradually.
-        // This creates a smoother typing effect than appending every network chunk immediately.
-        if (isFlushing) return
-        isFlushing = true
-
-        function step() {
-            if (queue.length === 0) {
-                isFlushing = false
-                if (pendingDoneId) {
-                    const id = pendingDoneId
-                    pendingDoneId = null
-                    if (streamCtrl?.isAborted) {
-                        updateMessage(id, { status: 'aborted', canContinue: true })
-                    } else {
-                        updateMessage(id, { status: 'done' })
-                        formatFinishedMessage(id)
-                    }
-                    pendingDoneResolve?.()
-                    pendingDoneResolve = null
-                }
-                return
-            }
-
-            if (streamCtrl?.isAborted) return
-
-            let text = ''
-            const batchSize = Math.min(queue.length, 3)
-            for (let i = 0; i < batchSize; i++) {
-                text += queue.shift()!
-            }
-            appendToMessage(messageId, text)
-            scheduleScroll()
-            requestAnimationFrame(step)
-        }
-        requestAnimationFrame(step)
     }
 
     // 封装 AbortController，abort() 同时中断网络请求 + ReadableStream + 标记 isAborted
@@ -391,6 +309,7 @@ export function useChatView() {
         const msg = messages.value.find(m => m.id === messageId)
         if (!msg || currentId.value === null) return
         if (msg.status !== 'aborted') return
+        typewriter.restoreAbortedOutput(messageId)
         updateMessage(msg.id, { status: 'loading', canContinue: false })
         await runStream({ aiMessageId: messageId, prompt: '', convId: currentId.value })
     }
@@ -416,11 +335,8 @@ export function useChatView() {
     async function runStream(options: RunStreamOptions): Promise<void> {
         // Every generation path ends here: normal send, retry, and continue.
         // Reset transient stream state before starting a new provider request.
-        queue = []
-        isFlushing = false
+        typewriter.reset()
         needsStatusFallback = true
-        pendingDoneId = null
-        pendingDoneResolve = null
         isStreaming.value = true
         await nextTick()
         scheduleScroll()
@@ -433,24 +349,12 @@ export function useChatView() {
                 options.prompt,
                 (chunk) => {
                     if (streamCtrl?.isAborted) return
-                    queue.push(chunk)
-                    flushQueue(options.aiMessageId)
-                    if (!userAtBottom) {
-                        unreadCount.value++
-                    } else {
-                        scheduleScroll()
-                    }
+                    typewriter.push(options.aiMessageId, chunk)
+                    handleIncomingChunk()
                 },
                 () => {
                     needsStatusFallback = false
-                    if (streamCtrl?.isAborted) {
-                        updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
-                    } else if (queue.length > 0 || isFlushing) {
-                        pendingDoneId = options.aiMessageId
-                    } else {
-                        updateMessage(options.aiMessageId, { status: 'done' })
-                        formatFinishedMessage(options.aiMessageId)
-                    }
+                    typewriter.markDone(options.aiMessageId)
                 },
                 streamCtrl.controller.signal
             )
@@ -470,29 +374,7 @@ export function useChatView() {
         } finally {
             // This block runs for success, error, and abort.
             // It persists the assistant message, updates the conversation timestamp, and refreshes search.
-            if (pendingDoneId) {
-                await Promise.race([
-                    new Promise<void>(resolve => { pendingDoneResolve = resolve }),
-                    new Promise<void>(resolve => setTimeout(resolve, 30000)),
-                ])
-                if (pendingDoneId) {
-                    const id = pendingDoneId
-                    pendingDoneId = null
-                    if (streamCtrl?.isAborted) {
-                        queue = []
-                    } else if (queue.length > 0) {
-                        const remaining = queue.splice(0).join('')
-                        appendToMessage(id, remaining)
-                    }
-                    isFlushing = false
-                    if (streamCtrl?.isAborted) {
-                        updateMessage(id, { status: 'aborted', canContinue: true })
-                    } else {
-                        updateMessage(id, { status: 'done' })
-                        formatFinishedMessage(id)
-                    }
-                }
-            }
+            await typewriter.waitForPendingDone()
 
             isStreaming.value = false
             scheduleScroll()
@@ -520,7 +402,7 @@ export function useChatView() {
 
     onMounted(async () => {
         // Page startup: attach scroll listener, load conversations, warm up search index, then open latest conversation.
-        containerRef.value?.addEventListener('scroll', handleScroll)
+        attachScrollListener()
         await loadAll()
         void searchService.ensureIndex().catch(err => {
             console.warn('[search] 初始化索引失败', err)
@@ -531,7 +413,7 @@ export function useChatView() {
     })
 
     onUnmounted(() => {
-        containerRef.value?.removeEventListener('scroll', handleScroll)
+        detachScrollListener()
     })
 
     // ── 对外暴露 ─────────────────────────────────────────────

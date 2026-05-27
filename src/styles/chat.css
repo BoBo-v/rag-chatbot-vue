@@ -1649,6 +1649,12 @@
 }
 .settings-input::placeholder { color: var(--text-muted); }
 
+select.settings-input,
+.settings-select {
+    color-scheme: inherit;
+    background-color: var(--settings-input-bg);
+}
+
 .settings-select {
     cursor: pointer;
     appearance: none;
@@ -1658,6 +1664,12 @@
     padding-right: 36px;
 }
 .settings-select option {
+    background: var(--settings-select-bg);
+    color: var(--text-primary);
+}
+
+select.settings-input option,
+datalist option {
     background: var(--settings-select-bg);
     color: var(--text-primary);
 }

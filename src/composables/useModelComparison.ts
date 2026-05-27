@@ -6,7 +6,6 @@ import type { ComparisonRun, ComparisonSession, ModelRuntimeConfig } from '../ty
 
 const WORKFLOW_VERSION = 1
 const PROMPT_VERSION = 1
-
 interface RunController {
     runId: string
     controller: AbortController
@@ -30,6 +29,10 @@ export function useModelComparison() {
     const successfulRuns = computed(() =>
         runs.value.filter(run => run.status === 'done' && run.content.trim())
     )
+    const summaryRun = computed(() => session.value?.summaryRun ?? null)
+    const isSummaryRunning = computed(() =>
+        summaryRun.value?.status === 'loading' || summaryRun.value?.status === 'streaming'
+    )
 
     function createSession(options: StartComparisonOptions): ComparisonSession {
         const now = Date.now()
@@ -52,11 +55,21 @@ export function useModelComparison() {
         }
     }
 
+    function findRun(runId: string): ComparisonRun | undefined {
+        const currentSession = session.value
+        if (!currentSession) return undefined
+
+        if (currentSession.summaryRun?.id === runId) {
+            return currentSession.summaryRun
+        }
+        return currentSession.runs.find(item => item.id === runId)
+    }
+
     function updateRun(runId: string, changes: Partial<ComparisonRun>): void {
         const currentSession = session.value
         if (!currentSession) return
 
-        const run = currentSession.runs.find(item => item.id === runId)
+        const run = findRun(runId)
         if (!run) return
 
         Object.assign(run, changes)
@@ -67,7 +80,7 @@ export function useModelComparison() {
         const currentSession = session.value
         if (!currentSession) return
 
-        const run = currentSession.runs.find(item => item.id === runId)
+        const run = findRun(runId)
         if (!run) return
 
         run.content += chunk
@@ -79,7 +92,7 @@ export function useModelComparison() {
 
     function finishRun(runId: string, status: ComparisonRun['status'], errorMessage?: string): void {
         const finishedAt = Date.now()
-        const run = runs.value.find(item => item.id === runId)
+        const run = findRun(runId)
         updateRun(runId, {
             status,
             errorMessage,
@@ -89,7 +102,43 @@ export function useModelComparison() {
         controllers.delete(runId)
     }
 
-    async function runModel(run: ComparisonRun, messages: Message[] = []): Promise<void> {
+    function buildSummaryPrompt(
+        prompt: string,
+        sourceRuns: ComparisonRun[],
+        summaryInstruction?: string
+    ): string {
+        const answers = sourceRuns.map((run, index) => {
+            const modelName = `${run.config.provider} / ${run.config.model}`
+            return `## 回答 ${index + 1}: ${modelName}\n\n${run.content.trim()}`
+        }).join('\n\n---\n\n')
+        const instruction = summaryInstruction?.trim()
+        const instructionBlock = instruction
+            ? ['用户的汇总要求：', instruction, '']
+            : []
+
+        return [
+            '你将看到同一个问题下多个模型的回答。',
+            '请综合它们的信息，输出一个最终答案。',
+            '',
+            '要求：',
+            '1. 不要盲目投票，优先选择事实更完整、逻辑更严谨的内容。',
+            '2. 如果多个回答冲突，请指出冲突点。',
+            '3. 如果信息不足，请明确说明不确定之处。',
+            '4. 不要声称某个模型一定正确。',
+            '5. 最后给出可直接使用的最终回答。',
+            '',
+            `原始问题：\n${prompt}`,
+            '',
+            ...instructionBlock,
+            `模型回答：\n${answers}`,
+        ].join('\n')
+    }
+
+    async function runModel(
+        run: ComparisonRun,
+        userText: string,
+        messages: Message[] = []
+    ): Promise<void> {
         const controller = new AbortController()
         controllers.set(run.id, { runId: run.id, controller })
 
@@ -105,7 +154,7 @@ export function useModelComparison() {
         try {
             await generateStreamWithContext({
                 messages,
-                userText: session.value?.prompt ?? '',
+                userText,
                 runtime: { ...run.config },
                 onChunk: chunk => {
                     if (controller.signal.aborted) return
@@ -130,11 +179,13 @@ export function useModelComparison() {
     async function startComparison(options: StartComparisonOptions): Promise<void> {
         stopAll()
         session.value = createSession(options)
-        await Promise.all(session.value.runs.map(run => runModel(run, options.messages ?? [])))
+        await Promise.all(session.value.runs.map(run =>
+            runModel(run, session.value?.prompt ?? '', options.messages ?? [])
+        ))
     }
 
     function stopRun(runId: string): void {
-        const run = runs.value.find(item => item.id === runId)
+        const run = findRun(runId)
         if (!run || run.status === 'done' || run.status === 'error' || run.status === 'aborted') return
 
         const runController = controllers.get(runId)
@@ -152,20 +203,53 @@ export function useModelComparison() {
     }
 
     async function retryRun(runId: string, messages: Message[] = []): Promise<void> {
-        const run = runs.value.find(item => item.id === runId)
+        const run = findRun(runId)
         if (!run || run.status === 'loading' || run.status === 'streaming') return
 
-        await runModel(run, messages)
+        await runModel(run, session.value?.prompt ?? '', messages)
+    }
+
+    async function summarizeWith(
+        runtime: ModelRuntimeConfig,
+        summaryInstruction?: string
+    ): Promise<void> {
+        const currentSession = session.value
+        const sourceRuns = successfulRuns.value
+        if (!currentSession || sourceRuns.length === 0 || isSummaryRunning.value) return
+
+        const summaryId = crypto.randomUUID()
+        const summary: ComparisonRun = {
+            id: summaryId,
+            sessionId: currentSession.id,
+            config: { ...runtime },
+            content: '',
+            status: 'idle',
+            sourceRunIds: sourceRuns.map(run => run.id),
+        }
+        currentSession.summaryRun = summary
+        currentSession.updatedAt = Date.now()
+
+        await runModel(summary, buildSummaryPrompt(currentSession.prompt, sourceRuns, summaryInstruction), [])
+    }
+
+    function stopSummary(): void {
+        const currentSummaryRun = summaryRun.value
+        if (!currentSummaryRun) return
+        stopRun(currentSummaryRun.id)
     }
 
     return {
         session,
         runs,
+        summaryRun,
         successfulRuns,
         isRunning,
+        isSummaryRunning,
         startComparison,
         stopRun,
+        stopSummary,
         stopAll,
         retryRun,
+        summarizeWith,
     }
 }

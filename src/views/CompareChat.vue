@@ -8,82 +8,104 @@
           <p>{{ isRunning ? '模型正在并发生成' : '内存版，不保存对比记录' }}</p>
         </div>
       </div>
-      <button
-        type="button"
-        class="compare-secondary"
-        :disabled="!isRunning"
-        @click="stopAll"
-      >
-        停止全部
-      </button>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="compare-secondary"
+          :disabled="!isRunning"
+          @click="stopAll"
+        >
+          停止全部
+        </button>
+      </div>
     </header>
 
-    <main class="compare-main">
-      <section class="compare-setup">
-        <div class="prompt-panel">
-          <label class="field-label" for="comparison-prompt">问题</label>
-          <textarea
-            id="comparison-prompt"
-            v-model="prompt"
-            class="prompt-input"
-            :disabled="isRunning"
-            placeholder="输入要让多个模型同时回答的问题"
-          ></textarea>
-        </div>
-
-        <div class="runtime-grid">
-          <div v-for="(runtime, index) in runtimeDrafts" :key="index" class="runtime-editor">
-            <div class="runtime-editor-header">
-              <span>模型 {{ index + 1 }}</span>
-              <button type="button" class="small-btn" :disabled="isRunning" @click="resetRuntime(index)">
-                同步当前设置
-              </button>
-            </div>
-
-            <label class="field-label">Provider</label>
-            <select v-model="runtime.provider" class="field-input" :disabled="isRunning" @change="normalizeRuntime(runtime)">
-              <option value="ollama">Ollama</option>
-              <option value="openai">OpenAI 兼容</option>
-              <option value="claude">Claude</option>
-            </select>
-
-            <label class="field-label">Model</label>
-            <input v-model="runtime.model" class="field-input" :disabled="isRunning" spellcheck="false" />
-
-            <label class="field-label">Base URL</label>
-            <input
-              v-model="runtime.baseUrl"
-              class="field-input"
-              :disabled="isRunning || runtime.provider === 'claude'"
-              spellcheck="false"
-              placeholder="Claude 不使用此字段"
-            />
-
-            <label class="field-label">API Key</label>
-            <input
-              v-model="runtime.apiKey"
-              class="field-input"
-              :disabled="isRunning || runtime.provider === 'ollama'"
-              type="password"
-              spellcheck="false"
-              placeholder="本地 Ollama 可留空"
-            />
+    <main class="compare-main" :class="{ 'has-summary': Boolean(summaryRun) }">
+      <section class="compare-setup" :class="{ collapsed: isConfigCollapsed }">
+        <div v-if="isConfigCollapsed" class="setup-summary">
+          <div class="setup-summary-main">
+            <span class="summary-label">问题</span>
+            <span class="summary-prompt">{{ prompt }}</span>
           </div>
+          <div class="setup-models">
+            <span v-for="runtime in runtimeDrafts" :key="runtime.label + runtime.model" class="model-chip">
+              {{ runtime.provider }} / {{ runtime.model }}
+            </span>
+          </div>
+          <button type="button" class="compare-secondary" :disabled="isRunning" @click="configOpen = true">
+            展开配置
+          </button>
         </div>
 
-        <div class="compare-actions">
-          <button
-            type="button"
-            class="compare-primary"
-            :disabled="!canStart"
-            @click="start"
-          >
-            开始对比
-          </button>
-          <button type="button" class="compare-secondary" :disabled="isRunning" @click="resetAllRuntimes">
-            重置模型
-          </button>
-        </div>
+        <template v-else>
+          <div class="prompt-panel">
+            <label class="field-label" for="comparison-prompt">问题</label>
+            <textarea
+              id="comparison-prompt"
+              v-model="prompt"
+              class="prompt-input"
+              :disabled="isRunning"
+              placeholder="输入要让多个模型同时回答的问题"
+            ></textarea>
+          </div>
+
+          <div class="runtime-grid">
+            <div v-for="(runtime, index) in runtimeDrafts" :key="index" class="runtime-editor">
+              <div class="runtime-editor-header">
+                <span>模型 {{ index + 1 }}</span>
+                <button type="button" class="small-btn" :disabled="isRunning" @click="resetRuntime(index)">
+                  同步当前设置
+                </button>
+              </div>
+
+              <label class="field-label">Provider</label>
+              <select v-model="runtime.provider" class="field-input" :disabled="isRunning" @change="normalizeRuntime(runtime)">
+                <option value="ollama">Ollama</option>
+                <option value="openai">OpenAI 兼容</option>
+                <option value="claude">Claude</option>
+              </select>
+
+              <label class="field-label">Model</label>
+              <input v-model="runtime.model" class="field-input" :disabled="isRunning" spellcheck="false" />
+
+              <label class="field-label">Base URL</label>
+              <input
+                v-model="runtime.baseUrl"
+                class="field-input"
+                :disabled="isRunning || runtime.provider === 'claude'"
+                spellcheck="false"
+                placeholder="Claude 不使用此字段"
+              />
+
+              <label class="field-label">API Key</label>
+              <input
+                v-model="runtime.apiKey"
+                class="field-input"
+                :disabled="isRunning || runtime.provider === 'ollama'"
+                type="password"
+                spellcheck="false"
+                placeholder="本地 Ollama 可留空"
+              />
+            </div>
+          </div>
+
+          <div class="compare-actions">
+            <button
+              type="button"
+              class="compare-primary"
+              :disabled="!canStart"
+              @click="start"
+            >
+              开始对比
+            </button>
+            <button type="button" class="compare-secondary" :disabled="isRunning" @click="resetAllRuntimes">
+              重置模型
+            </button>
+            <button v-if="runs.length > 0" type="button" class="compare-secondary" :disabled="isRunning" @click="configOpen = false">
+              收起配置
+            </button>
+          </div>
+        </template>
       </section>
 
       <section class="run-grid" :class="{ empty: runs.length === 0 }">
@@ -96,6 +118,54 @@
           :run="run"
           @stop="stopRun"
           @retry="retryRun"
+        />
+      </section>
+
+      <section class="summary-panel" :class="{ empty: !summaryRun }">
+        <div class="summary-toolbar">
+          <div class="summary-copy">
+            <h2>汇总答案</h2>
+            <p>{{ summaryHint }}</p>
+          </div>
+          <textarea
+            v-model="summaryInstruction"
+            class="summary-instruction"
+            :disabled="isSummaryRunning"
+            placeholder="可选：输入你的汇总要求，例如更偏向步骤、结论先行、只保留代码差异等"
+          ></textarea>
+          <div class="summary-actions">
+            <select
+              v-model="summaryRuntime.provider"
+              class="field-input summary-select"
+              :disabled="isSummaryRunning"
+              @change="normalizeRuntime(summaryRuntime)"
+            >
+              <option value="ollama">Ollama</option>
+              <option value="openai">OpenAI 兼容</option>
+              <option value="claude">Claude</option>
+            </select>
+            <input
+              v-model="summaryRuntime.model"
+              class="field-input summary-model"
+              :disabled="isSummaryRunning"
+              spellcheck="false"
+            />
+            <button type="button" class="compare-secondary" :disabled="isSummaryRunning" @click="resetSummaryRuntime">
+              同步当前设置
+            </button>
+            <button type="button" class="compare-primary" :disabled="!canSummarize" @click="summarize">
+              生成汇总
+            </button>
+            <button type="button" class="compare-secondary" :disabled="!isSummaryRunning" @click="stopSummary">
+              停止汇总
+            </button>
+          </div>
+        </div>
+        <ComparisonRunCard
+          v-if="summaryRun"
+          :run="summaryRun"
+          :show-retry="false"
+          @stop="stopSummary"
         />
       </section>
     </main>
@@ -111,20 +181,44 @@ import { settings } from '../stores/settings'
 import type { ModelRuntimeConfig } from '../types/model'
 
 const prompt = ref('')
+const configOpen = ref(true)
+const summaryInstruction = ref('')
 const comparison = useModelComparison()
-const { runs, isRunning, startComparison, stopRun, stopAll } = comparison
+const {
+  runs,
+  summaryRun,
+  successfulRuns,
+  isRunning,
+  isSummaryRunning,
+  startComparison,
+  stopRun,
+  stopSummary,
+  stopAll,
+  summarizeWith,
+} = comparison
 
 const runtimeDrafts = reactive<ModelRuntimeConfig[]>([
   createRuntimeFromSettings(settings),
   createRuntimeFromSettings(settings),
 ])
+const summaryRuntime = reactive<ModelRuntimeConfig>(createRuntimeFromSettings(settings))
 
+const isConfigCollapsed = computed(() => !configOpen.value && runs.value.length > 0)
 const canStart = computed(() =>
   !isRunning.value &&
   prompt.value.trim().length > 0 &&
   runtimeDrafts.length >= 2 &&
   runtimeDrafts.every(runtime => runtime.model.trim())
 )
+const canSummarize = computed(() =>
+  !isSummaryRunning.value &&
+  successfulRuns.value.length > 0 &&
+  summaryRuntime.model.trim().length > 0
+)
+const summaryHint = computed(() => {
+  if (successfulRuns.value.length === 0) return '等待至少一个模型完成'
+  return `将使用 ${successfulRuns.value.length} 个成功结果发送给 ${summaryRuntime.provider} / ${summaryRuntime.model}`
+})
 
 function cloneRuntime(runtime: ModelRuntimeConfig): ModelRuntimeConfig {
   return {
@@ -166,17 +260,28 @@ function resetAllRuntimes(): void {
   resetRuntime(1)
 }
 
+function resetSummaryRuntime(): void {
+  Object.assign(summaryRuntime, createRuntimeFromSettings(settings))
+}
+
 async function start(): Promise<void> {
   if (!canStart.value) return
   const runtimes = runtimeDrafts.map(runtime => {
     normalizeRuntime(runtime)
     return cloneRuntime(runtime)
   })
+  configOpen.value = false
   await startComparison({ prompt: prompt.value.trim(), runtimes })
 }
 
 async function retryRun(runId: string): Promise<void> {
   await comparison.retryRun(runId)
+}
+
+async function summarize(): Promise<void> {
+  if (!canSummarize.value) return
+  normalizeRuntime(summaryRuntime)
+  await summarizeWith(cloneRuntime(summaryRuntime), summaryInstruction.value)
 }
 </script>
 
@@ -192,7 +297,7 @@ async function retryRun(runId: string): Promise<void> {
 }
 
 .compare-header {
-  height: 64px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -233,22 +338,83 @@ async function retryRun(runId: string): Promise<void> {
   flex-shrink: 0;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .compare-main {
   flex: 1;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
 }
 
 .compare-setup {
-  padding: 18px 24px;
+  padding: 14px 24px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-sidebar);
 }
 
+.compare-setup.collapsed {
+  padding: 8px 24px;
+}
+
+.setup-summary {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.setup-summary-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.summary-label {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary-prompt {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-models {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.model-chip {
+  max-width: 220px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 3px 8px;
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .prompt-panel {
   max-width: 1180px;
-  margin: 0 auto 14px;
+  margin: 0 auto 12px;
 }
 
 .field-label {
@@ -294,7 +460,7 @@ select.field-input option {
 }
 
 .prompt-input {
-  min-height: 92px;
+  min-height: 76px;
   resize: vertical;
   padding: 12px;
   line-height: 1.55;
@@ -323,7 +489,7 @@ select.field-input option {
 .runtime-editor {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
   background: var(--bg-surface-2);
 }
 
@@ -332,7 +498,7 @@ select.field-input option {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
@@ -340,7 +506,7 @@ select.field-input option {
 
 .compare-actions {
   max-width: 1180px;
-  margin: 14px auto 0;
+  margin: 12px auto 0;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -356,8 +522,8 @@ select.field-input option {
 }
 
 .compare-primary {
-  height: 38px;
-  padding: 0 18px;
+  height: 34px;
+  padding: 0 16px;
   border-color: var(--accent-border);
   color: #fff;
   background: linear-gradient(135deg, var(--accent-deep), var(--accent-deeper));
@@ -365,14 +531,14 @@ select.field-input option {
 
 .compare-secondary,
 .small-btn {
-  height: 34px;
+  height: 32px;
   padding: 0 12px;
   color: var(--text-secondary);
   background: var(--bg-surface-2);
 }
 
 .small-btn {
-  height: 28px;
+  height: 26px;
   font-size: 12px;
 }
 
@@ -387,10 +553,92 @@ textarea:disabled {
 .run-grid {
   min-height: 0;
   overflow: auto;
-  padding: 18px 24px 24px;
+  padding: 14px 24px 18px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
   gap: 14px;
+}
+
+.summary-panel {
+  max-height: 34vh;
+  min-height: 74px;
+  overflow: auto;
+  padding: 10px 24px 14px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-sidebar);
+}
+
+.summary-panel.empty {
+  max-height: 148px;
+}
+
+.summary-toolbar {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(240px, 1.3fr) minmax(300px, 1.7fr);
+  align-items: start;
+  gap: 16px;
+  max-width: 1180px;
+  margin: 0 auto 10px;
+}
+
+.summary-copy {
+  min-width: 0;
+}
+
+.summary-toolbar h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.summary-toolbar p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.summary-instruction {
+  width: 100%;
+  min-height: 34px;
+  max-height: 72px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px 10px;
+  resize: vertical;
+  background: var(--settings-input-bg);
+  color: var(--text-primary);
+  outline: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.summary-instruction:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.summary-select,
+.summary-model {
+  width: 150px;
+  margin-bottom: 0;
+}
+
+.summary-panel :deep(.comparison-run-card) {
+  max-width: 1180px;
+  min-height: 220px;
+  margin: 0 auto;
 }
 
 .run-grid.empty {
@@ -407,12 +655,20 @@ textarea:disabled {
 @media (max-width: 860px) {
   .compare-header {
     height: auto;
-    min-height: 58px;
+    min-height: 52px;
     padding: 10px 14px;
   }
 
   .compare-setup {
-    padding: 14px;
+    padding: 12px 14px;
+  }
+
+  .setup-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-models {
+    justify-content: flex-start;
   }
 
   .runtime-grid,
@@ -421,11 +677,25 @@ textarea:disabled {
   }
 
   .run-grid {
-    padding: 14px;
+    padding: 12px 14px;
   }
 
   .compare-actions {
     justify-content: stretch;
+  }
+
+  .summary-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .summary-select,
+  .summary-model {
+    width: 100%;
   }
 
   .compare-primary,

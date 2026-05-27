@@ -20,6 +20,7 @@
 
     <footer class="run-actions">
       <button
+        v-if="showStop"
         type="button"
         class="run-action"
         :disabled="!canStop"
@@ -28,6 +29,7 @@
         停止
       </button>
       <button
+        v-if="showRetry"
         type="button"
         class="run-action primary"
         :disabled="!canRetry"
@@ -45,6 +47,8 @@ import type { ComparisonRun } from '../types/model'
 
 const props = defineProps<{
   run: ComparisonRun
+  showStop?: boolean
+  showRetry?: boolean
 }>()
 
 defineEmits<{
@@ -87,6 +91,8 @@ const latencyLabel = computed(() => {
 
 const canStop = computed(() => props.run.status === 'loading' || props.run.status === 'streaming')
 const canRetry = computed(() => props.run.status === 'done' || props.run.status === 'error' || props.run.status === 'aborted')
+const showStop = computed(() => props.showStop ?? true)
+const showRetry = computed(() => props.showRetry ?? true)
 </script>
 
 <style scoped>

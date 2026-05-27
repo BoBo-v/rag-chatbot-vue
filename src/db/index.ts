@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type { MessageStatus } from '../types/chat'
+import type { ComparisonRunStatus, ModelRuntimeConfig } from '../types/model'
 
 // 这个文件集中定义 IndexedDB 的表结构。
 // Dexie 是 IndexedDB 的封装库，可以把浏览器本地数据库当成类型化的表来操作。
@@ -90,6 +91,36 @@ export interface DBSearchMeta {
     value: string
 }
 
+// 多模型对比记录独立于普通聊天会话，避免影响聊天历史、搜索和继续生成逻辑。
+export interface DBComparisonSession {
+    id: string
+    conversationId?: number
+    prompt: string
+    images?: DBImage[]
+    files?: DBFile[]
+    summaryRunId?: string
+    summaryInstruction?: string
+    workflowVersion: number
+    promptVersion: number
+    createdAt: number
+    updatedAt: number
+}
+
+export interface DBComparisonRun {
+    id: string
+    sessionId: string
+    kind: 'answer' | 'summary'
+    order: number
+    config: ModelRuntimeConfig
+    content: string
+    status: ComparisonRunStatus
+    errorMessage?: string
+    startedAt?: number
+    finishedAt?: number
+    latencyMs?: number
+    sourceRunIds?: string[]
+}
+
 class ChatDB extends Dexie {
     conversations!: Table<DBConversation, number>
     messages!: Table<DBMessage, string>
@@ -99,6 +130,8 @@ class ChatDB extends Dexie {
     searchTags!: Table<DBSearchTag, [string, number]>
     recentSearches!: Table<DBRecentSearch, number>
     searchMeta!: Table<DBSearchMeta, string>
+    comparisonSessions!: Table<DBComparisonSession, string>
+    comparisonRuns!: Table<DBComparisonRun, string>
 
     constructor() {
         super('ai-chat-db')
@@ -121,6 +154,18 @@ class ChatDB extends Dexie {
             searchTags: '[tag+docId], tag, docId',
             recentSearches: '++id, query, usedAt',
             searchMeta: 'key'
+        })
+        this.version(4).stores({
+            conversations: '++id, updatedAt',
+            messages: 'id, conversationId',
+            searchDocs: '++docId, &messageId, conversationId, updatedAt, createdAt, role',
+            searchTerms: '[term+docId], term, docId',
+            searchTermStats: 'term',
+            searchTags: '[tag+docId], tag, docId',
+            recentSearches: '++id, query, usedAt',
+            searchMeta: 'key',
+            comparisonSessions: 'id, conversationId, updatedAt, createdAt',
+            comparisonRuns: 'id, sessionId, status, startedAt, finishedAt'
         })
     }
 }

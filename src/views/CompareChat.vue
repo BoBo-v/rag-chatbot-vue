@@ -5,10 +5,21 @@
         <span class="logo-dot"></span>
         <div>
           <h1>多模型对比</h1>
-          <p>{{ isRunning ? '模型正在并发生成' : '内存版，不保存对比记录' }}</p>
+          <p>{{ isRunning ? '模型正在并发生成' : '已完成记录会保存到本地' }}</p>
         </div>
       </div>
       <div class="header-actions">
+        <button type="button" class="compare-secondary" @click="toggleHistory">
+          历史记录
+        </button>
+        <button
+          type="button"
+          class="compare-secondary"
+          :disabled="isRunning"
+          @click="newComparison"
+        >
+          新对比
+        </button>
         <button
           type="button"
           class="compare-secondary"
@@ -21,6 +32,36 @@
     </header>
 
     <main class="compare-main" :class="{ 'has-summary': Boolean(summaryRun) }">
+      <section v-if="historyOpen" class="history-panel">
+        <div class="history-toolbar">
+          <div>
+            <h2>历史对比</h2>
+            <p>{{ history.length ? `共 ${history.length} 条本地记录` : '暂无已保存记录' }}</p>
+          </div>
+          <button type="button" class="compare-secondary" @click="refreshHistory">
+            刷新
+          </button>
+        </div>
+        <div v-if="history.length" class="history-list">
+          <article
+            v-for="item in history"
+            :key="item.id"
+            class="history-item"
+            :class="{ active: comparison.session.value?.id === item.id }"
+          >
+            <button type="button" class="history-open" @click="openHistory(item.id)">
+              <span class="history-prompt">{{ item.prompt }}</span>
+              <span class="history-meta">
+                {{ formatDate(item.updatedAt) }} · {{ item.runCount }} 个结果
+              </span>
+            </button>
+            <button type="button" class="small-btn danger" @click="deleteHistory(item.id)">
+              删除
+            </button>
+          </article>
+        </div>
+      </section>
+
       <section class="compare-setup" :class="{ collapsed: isConfigCollapsed }">
         <div v-if="isConfigCollapsed" class="setup-summary">
           <div class="setup-summary-main">
@@ -116,6 +157,7 @@
           v-for="run in runs"
           :key="run.id"
           :run="run"
+          :show-retry="!isHistorySession"
           @stop="stopRun"
           @retry="retryRun"
         />
@@ -173,7 +215,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import ComparisonRunCard from '../components/ComparisonRunCard.vue'
 import { useModelComparison } from '../composables/useModelComparison'
 import { createRuntimeFromSettings } from '../services/runtime'
@@ -183,8 +225,11 @@ import type { ModelRuntimeConfig } from '../types/model'
 const prompt = ref('')
 const configOpen = ref(true)
 const summaryInstruction = ref('')
+const historyOpen = ref(false)
+const isHistorySession = ref(false)
 const comparison = useModelComparison()
 const {
+  history,
   runs,
   summaryRun,
   successfulRuns,
@@ -195,6 +240,10 @@ const {
   stopSummary,
   stopAll,
   summarizeWith,
+  refreshHistory,
+  loadSession,
+  clearSession,
+  removeSession,
 } = comparison
 
 const runtimeDrafts = reactive<ModelRuntimeConfig[]>([
@@ -218,6 +267,23 @@ const canSummarize = computed(() =>
 const summaryHint = computed(() => {
   if (successfulRuns.value.length === 0) return '等待至少一个模型完成'
   return `将使用 ${successfulRuns.value.length} 个成功结果发送给 ${summaryRuntime.provider} / ${summaryRuntime.model}`
+})
+
+watch(() => comparison.session.value, currentSession => {
+  if (!currentSession) {
+    prompt.value = ''
+    summaryInstruction.value = ''
+    configOpen.value = true
+    isHistorySession.value = false
+    return
+  }
+  prompt.value = currentSession.prompt
+  summaryInstruction.value = currentSession.summaryInstruction ?? ''
+  configOpen.value = currentSession.runs.length === 0
+})
+
+onMounted(() => {
+  void refreshHistory()
 })
 
 function cloneRuntime(runtime: ModelRuntimeConfig): ModelRuntimeConfig {
@@ -266,12 +332,47 @@ function resetSummaryRuntime(): void {
 
 async function start(): Promise<void> {
   if (!canStart.value) return
+  isHistorySession.value = false
   const runtimes = runtimeDrafts.map(runtime => {
     normalizeRuntime(runtime)
     return cloneRuntime(runtime)
   })
   configOpen.value = false
   await startComparison({ prompt: prompt.value.trim(), runtimes })
+}
+
+function toggleHistory(): void {
+  historyOpen.value = !historyOpen.value
+  if (historyOpen.value) {
+    void refreshHistory()
+  }
+}
+
+function newComparison(): void {
+  clearSession()
+  prompt.value = ''
+  summaryInstruction.value = ''
+  configOpen.value = true
+  isHistorySession.value = false
+}
+
+async function openHistory(sessionId: string): Promise<void> {
+  await loadSession(sessionId)
+  isHistorySession.value = true
+  historyOpen.value = false
+}
+
+async function deleteHistory(sessionId: string): Promise<void> {
+  await removeSession(sessionId)
+}
+
+function formatDate(timestamp: number): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(timestamp)
 }
 
 async function retryRun(runId: string): Promise<void> {
@@ -348,6 +449,96 @@ async function summarize(): Promise<void> {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
+}
+
+.history-panel {
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-sidebar);
+}
+
+.history-toolbar {
+  max-width: 1180px;
+  margin: 0 auto 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-toolbar h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.history-toolbar p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.history-list {
+  max-width: 1180px;
+  max-height: 220px;
+  margin: 0 auto;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--bg-surface-2);
+}
+
+.history-item.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.history-open {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.history-prompt,
+.history-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-prompt {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.history-meta {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.small-btn.danger {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.10);
 }
 
 .compare-setup {
@@ -660,6 +851,10 @@ textarea:disabled {
   }
 
   .compare-setup {
+    padding: 12px 14px;
+  }
+
+  .history-panel {
     padding: 12px 14px;
   }
 

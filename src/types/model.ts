@@ -42,6 +42,7 @@ export interface ComparisonSession {
     files?: FileAttachment[]
     runs: ComparisonRun[]
     summaryRun?: ComparisonRun
+    summaryInstruction?: string
     workflowVersion: number
     promptVersion: number
     createdAt: number

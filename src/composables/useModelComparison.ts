@@ -1,5 +1,12 @@
 import { computed, ref } from 'vue'
 import { generateStreamWithContext } from '../services/stream'
+import {
+    deleteComparisonSession,
+    listComparisonSessions,
+    loadComparisonSession,
+    saveComparisonSession,
+    type ComparisonSessionListItem,
+} from '../services/comparisonPersistence'
 import { classifyError } from '../utils/error'
 import type { Message } from '../types/chat'
 import type { ComparisonRun, ComparisonSession, ModelRuntimeConfig } from '../types/model'
@@ -20,7 +27,9 @@ interface StartComparisonOptions {
 
 export function useModelComparison() {
     const session = ref<ComparisonSession | null>(null)
+    const history = ref<ComparisonSessionListItem[]>([])
     const controllers = new Map<string, RunController>()
+    let persistQueue = Promise.resolve()
 
     const runs = computed(() => session.value?.runs ?? [])
     const isRunning = computed(() =>
@@ -74,6 +83,17 @@ export function useModelComparison() {
 
         Object.assign(run, changes)
         currentSession.updatedAt = Date.now()
+    }
+
+    async function persistCurrentSession(summaryInstruction?: string): Promise<void> {
+        persistQueue = persistQueue
+            .catch(() => undefined)
+            .then(async () => {
+                if (!session.value) return
+                await saveComparisonSession(session.value, summaryInstruction)
+                await refreshHistory()
+            })
+        await persistQueue
     }
 
     function appendRunContent(runId: string, chunk: string): void {
@@ -137,7 +157,8 @@ export function useModelComparison() {
     async function runModel(
         run: ComparisonRun,
         userText: string,
-        messages: Message[] = []
+        messages: Message[] = [],
+        summaryInstruction?: string
     ): Promise<void> {
         const controller = new AbortController()
         controllers.set(run.id, { runId: run.id, controller })
@@ -173,12 +194,14 @@ export function useModelComparison() {
             finishRun(run.id, 'error', chatError.message)
         } finally {
             controllers.delete(run.id)
+            await persistCurrentSession(summaryInstruction)
         }
     }
 
     async function startComparison(options: StartComparisonOptions): Promise<void> {
         stopAll()
         session.value = createSession(options)
+        await persistCurrentSession()
         await Promise.all(session.value.runs.map(run =>
             runModel(run, session.value?.prompt ?? '', options.messages ?? [])
         ))
@@ -228,8 +251,14 @@ export function useModelComparison() {
         }
         currentSession.summaryRun = summary
         currentSession.updatedAt = Date.now()
+        await persistCurrentSession(summaryInstruction)
 
-        await runModel(summary, buildSummaryPrompt(currentSession.prompt, sourceRuns, summaryInstruction), [])
+        await runModel(
+            summary,
+            buildSummaryPrompt(currentSession.prompt, sourceRuns, summaryInstruction),
+            [],
+            summaryInstruction
+        )
     }
 
     function stopSummary(): void {
@@ -238,8 +267,44 @@ export function useModelComparison() {
         stopRun(currentSummaryRun.id)
     }
 
+    async function refreshHistory(): Promise<void> {
+        history.value = await listComparisonSessions()
+    }
+
+    async function loadSession(sessionId: string): Promise<void> {
+        stopAll()
+        const restoredSession = await loadComparisonSession(sessionId)
+        if (!restoredSession) return
+        session.value = restoredSession
+        await refreshHistory()
+    }
+
+    async function loadLatestCompletedSession(): Promise<void> {
+        await refreshHistory()
+        const latest = history.value[0]
+        if (!latest) return
+        await loadSession(latest.id)
+    }
+
+    function clearSession(): void {
+        stopAll()
+        session.value = null
+    }
+
+    async function removeSession(sessionId: string): Promise<void> {
+        if (session.value?.id === sessionId) {
+            stopAll()
+        }
+        await deleteComparisonSession(sessionId)
+        if (session.value?.id === sessionId) {
+            session.value = null
+        }
+        await refreshHistory()
+    }
+
     return {
         session,
+        history,
         runs,
         summaryRun,
         successfulRuns,
@@ -251,5 +316,10 @@ export function useModelComparison() {
         stopAll,
         retryRun,
         summarizeWith,
+        refreshHistory,
+        loadSession,
+        loadLatestCompletedSession,
+        clearSession,
+        removeSession,
     }
 }

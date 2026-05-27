@@ -1,10 +1,21 @@
 import type { Message } from '../types/chat'
+import type { ModelRuntimeConfig } from '../types/model'
 import { settings } from '../stores/settings'
+import { createRuntimeFromSettings } from './runtime'
 import { ollamaStream, fetchOllamaModels } from './providers/ollama'
 import { openaiStream, fetchOpenAIModels } from './providers/openai'
 import { claudeStream, getClaudeModels } from './providers/claude'
 
 const CONNECT_TIMEOUT_MS = 30_000
+
+export interface GenerateStreamWithContextOptions {
+    messages: Message[]
+    userText: string
+    runtime: ModelRuntimeConfig
+    onChunk: (chunk: string) => void
+    onDone: () => void
+    signal?: AbortSignal
+}
 
 // 统一的流式生成入口。
 // UI 不需要知道当前用的是 Ollama、OpenAI 还是 Claude，只调用这个函数即可。
@@ -12,13 +23,8 @@ const CONNECT_TIMEOUT_MS = 30_000
  * 统一流式生成入口 — 根据 settings.provider 分发到对应适配器
  * 连接阶段 30 秒超时；收到第一个 chunk 后取消超时计时器，流式阶段不限时
  */
-export async function generateStreamWithContext(
-    messages: Message[],
-    userText: string,
-    onChunk: (chunk: string) => void,
-    onDone: () => void,
-    signal?: AbortSignal
-): Promise<void> {
+export async function generateStreamWithContext(options: GenerateStreamWithContextOptions): Promise<void> {
+    const { messages, userText, runtime, onChunk, onDone, signal } = options
     const timeoutCtrl = new AbortController()
     const timer = setTimeout(() => timeoutCtrl.abort(), CONNECT_TIMEOUT_MS)
 
@@ -40,16 +46,16 @@ export async function generateStreamWithContext(
 
     try {
         // 根据设置面板中选择的 provider 分发到对应适配器。
-        switch (settings.provider) {
+        switch (runtime.provider) {
             case 'openai':
-                await openaiStream(messages, userText, wrappedOnChunk, onDone, mergedSignal)
+                await openaiStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
                 break
             case 'claude':
-                await claudeStream(messages, userText, wrappedOnChunk, onDone, mergedSignal)
+                await claudeStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
                 break
             case 'ollama':
             default:
-                await ollamaStream(messages, userText, wrappedOnChunk, onDone, mergedSignal)
+                await ollamaStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
                 break
         }
     } catch (err) {
@@ -67,14 +73,15 @@ export async function generateStreamWithContext(
  * 获取当前 provider 的可用模型列表
  */
 export async function fetchModels(): Promise<string[]> {
+    const runtime = createRuntimeFromSettings(settings)
     // 设置面板刷新模型列表时会调用这里。
-    switch (settings.provider) {
+    switch (runtime.provider) {
         case 'openai':
-            return fetchOpenAIModels()
+            return fetchOpenAIModels(runtime)
         case 'claude':
             return getClaudeModels()
         case 'ollama':
         default:
-            return fetchOllamaModels()
+            return fetchOllamaModels(runtime)
     }
 }

@@ -1,26 +1,26 @@
 import type { Message } from '../../types/chat'
+import type { ModelRuntimeConfig } from '../../types/model'
 import { buildMessages } from '../context'
-import { settings } from '../../stores/settings'
 import { parseSSE } from './openai'
 
 // Claude API 适配器。Claude 的消息格式和 OpenAI 不完全一样，所以单独转换。
 export async function claudeStream(
     messages: Message[],
     userText: string,
+    runtime: ModelRuntimeConfig,
     onChunk: (chunk: string) => void,
     onDone: () => void,
     signal?: AbortSignal
 ): Promise<void> {
-    const cfg = settings.claude
     // buildMessages 返回统一上下文，其中 system 消息要单独放到 Claude 的 system 字段。
     const allMsgs = buildMessages(
         messages,
         userText,
-        settings.systemPrompt,
-        settings.maxContextTokens
+        runtime.systemPrompt,
+        runtime.maxContextTokens
     )
 
-    const system = allMsgs.find(m => m.role === 'system')?.content ?? settings.systemPrompt
+    const system = allMsgs.find(m => m.role === 'system')?.content ?? runtime.systemPrompt
     const chatMessages = allMsgs
         .filter(m => m.role !== 'system')
         .map(m => {
@@ -49,12 +49,12 @@ export async function claudeStream(
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'x-api-key': cfg.apiKey,
+            'x-api-key': runtime.apiKey ?? '',
             'anthropic-version': '2023-06-01',
             'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-            model: cfg.model,
+            model: runtime.model,
             system,
             messages: chatMessages,
             stream: true,

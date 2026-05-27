@@ -1,22 +1,23 @@
 import type { Message } from '../../types/chat'
+import type { ModelRuntimeConfig } from '../../types/model'
 import { buildMessages } from '../context'
-import { settings } from '../../stores/settings'
 
 // Ollama 本地模型适配器。默认请求 http://localhost:11434/api/chat。
 export async function ollamaStream(
     messages: Message[],
     userText: string,
+    runtime: ModelRuntimeConfig,
     onChunk: (chunk: string) => void,
     onDone: () => void,
     signal?: AbortSignal
 ): Promise<void> {
-    const cfg = settings.ollama
+    const baseUrl = (runtime.baseUrl ?? 'http://localhost:11434').replace(/\/$/, '')
     // Ollama 支持 messages 格式；图片模型需要把 base64 图片放在 images 字段里。
     const chatMessages = buildMessages(
         messages,
         userText,
-        settings.systemPrompt,
-        settings.maxContextTokens
+        runtime.systemPrompt,
+        runtime.maxContextTokens
     )
 
     const ollamaMessages = chatMessages.map(m => {
@@ -27,11 +28,11 @@ export async function ollamaStream(
         return msg
     })
 
-    const res = await fetch(`${cfg.url}/api/chat`, {
+    const res = await fetch(`${baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: cfg.model,
+            model: runtime.model,
             messages: ollamaMessages,
             stream: true,
         }),
@@ -99,10 +100,11 @@ export async function ollamaStream(
     }
 }
 
-export async function fetchOllamaModels(): Promise<string[]> {
+export async function fetchOllamaModels(runtime: ModelRuntimeConfig): Promise<string[]> {
     // 设置面板点击“刷新模型列表”时调用 /api/tags。
     try {
-        const res = await fetch(`${settings.ollama.url}/api/tags`)
+        const baseUrl = (runtime.baseUrl ?? 'http://localhost:11434').replace(/\/$/, '')
+        const res = await fetch(`${baseUrl}/api/tags`)
         if (!res.ok) return []
         const data = await res.json()
         return (data.models ?? []).map((m: { name: string }) => m.name)

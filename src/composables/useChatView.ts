@@ -2,6 +2,7 @@ import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useChat } from '../stores/chat'
 import { useConversations } from '../stores/conversations'
 import { generateStreamWithContext } from '../services/stream'
+import { createRuntimeFromSettings } from '../services/runtime'
 import { db } from '../db'
 import { classifyError } from '../utils/error'
 import { useToast } from './useToast'
@@ -348,23 +349,25 @@ export function useChatView() {
         await nextTick()
         scheduleScroll()
         streamCtrl = createStreamController(options.aiMessageId)
+        const runtime = createRuntimeFromSettings(settings)
 
         try {
             // generateStreamWithContext chooses the active provider and calls onChunk for every text delta.
-            await generateStreamWithContext(
-                options.contextMessages ?? messages.value,
-                options.prompt,
-                (chunk) => {
+            await generateStreamWithContext({
+                messages: options.contextMessages ?? messages.value,
+                userText: options.prompt,
+                runtime,
+                onChunk: (chunk) => {
                     if (streamCtrl?.isAborted) return
                     typewriter.push(options.aiMessageId, chunk)
                     handleIncomingChunk()
                 },
-                () => {
+                onDone: () => {
                     needsStatusFallback = false
                     typewriter.markDone(options.aiMessageId)
                 },
-                streamCtrl.controller.signal
-            )
+                signal: streamCtrl.controller.signal,
+            })
         } catch (err: unknown) {
             if (streamCtrl?.isAborted) {
                 needsStatusFallback = false

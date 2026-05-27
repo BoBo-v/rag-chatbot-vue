@@ -1,24 +1,24 @@
 import type { Message } from '../../types/chat'
+import type { ModelRuntimeConfig } from '../../types/model'
 import { buildMessages } from '../context'
-import { settings } from '../../stores/settings'
 
 // OpenAI 兼容接口适配器。
 // DeepSeek、通义、Kimi 等只要兼容 /v1/chat/completions，也可以通过 baseUrl 走这里。
 export async function openaiStream(
     messages: Message[],
     userText: string,
+    runtime: ModelRuntimeConfig,
     onChunk: (chunk: string) => void,
     onDone: () => void,
     signal?: AbortSignal
 ): Promise<void> {
-    const cfg = settings.openai
-    const baseUrl = cfg.baseUrl.replace(/\/$/, '')
+    const baseUrl = (runtime.baseUrl ?? 'https://api.openai.com').replace(/\/$/, '')
     // 先构造统一上下文，再转换成 OpenAI 的 messages 格式。
     const chatMessages = buildMessages(
         messages,
         userText,
-        settings.systemPrompt,
-        settings.maxContextTokens
+        runtime.systemPrompt,
+        runtime.maxContextTokens
     )
 
     const openaiMessages = chatMessages.map(m => {
@@ -43,10 +43,10 @@ export async function openaiStream(
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${cfg.apiKey}`,
+            'Authorization': `Bearer ${runtime.apiKey ?? ''}`,
         },
         body: JSON.stringify({
-            model: cfg.model,
+            model: runtime.model,
             messages: openaiMessages,
             stream: true,
         }),
@@ -79,13 +79,12 @@ export async function openaiStream(
     if (!doneCalled) onDone()
 }
 
-export async function fetchOpenAIModels(): Promise<string[]> {
-    const cfg = settings.openai
-    if (!cfg.apiKey) return []
+export async function fetchOpenAIModels(runtime: ModelRuntimeConfig): Promise<string[]> {
+    if (!runtime.apiKey) return []
     try {
-        const baseUrl = cfg.baseUrl.replace(/\/$/, '')
+        const baseUrl = (runtime.baseUrl ?? 'https://api.openai.com').replace(/\/$/, '')
         const res = await fetch(`${baseUrl}/v1/models`, {
-            headers: { Authorization: `Bearer ${cfg.apiKey}` },
+            headers: { Authorization: `Bearer ${runtime.apiKey}` },
         })
         if (!res.ok) return []
         const data = await res.json()

@@ -209,6 +209,7 @@ export function useChatView() {
     function handleStop() {
         // Stop generation from the UI. The provider request and stream reader are both cancelled.
         if (!streamCtrl) return
+        typewriter.abort(streamCtrl.messageId)
         streamCtrl.abort()
     }
 
@@ -310,8 +311,13 @@ export function useChatView() {
         if (!msg || currentId.value === null) return
         if (msg.status !== 'aborted') return
         typewriter.restoreAbortedOutput(messageId)
+        const contextMessages: Message[] = messages.value.map(item =>
+            item.id === msg.id
+                ? { ...item, status: 'aborted', canContinue: true }
+                : item
+        )
         updateMessage(msg.id, { status: 'loading', canContinue: false })
-        await runStream({ aiMessageId: messageId, prompt: '', convId: currentId.value })
+        await runStream({ aiMessageId: messageId, prompt: '', convId: currentId.value, contextMessages })
     }
 
     // ── 流式请求核心 ─────────────────────────────────────────
@@ -320,6 +326,7 @@ export function useChatView() {
         aiMessageId: string
         prompt: string   // 空字符串 = 续写
         convId: number
+        contextMessages?: Message[]
     }
 
     /**
@@ -345,7 +352,7 @@ export function useChatView() {
         try {
             // generateStreamWithContext chooses the active provider and calls onChunk for every text delta.
             await generateStreamWithContext(
-                messages.value,
+                options.contextMessages ?? messages.value,
                 options.prompt,
                 (chunk) => {
                     if (streamCtrl?.isAborted) return
@@ -395,6 +402,7 @@ export function useChatView() {
             if (aiMessage) {
                 queueSearchIndex(aiMessage, options.convId, updatedAt, updatedAt)
             }
+            streamCtrl = null
         }
     }
 

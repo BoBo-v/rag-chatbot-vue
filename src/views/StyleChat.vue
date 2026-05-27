@@ -57,7 +57,17 @@
             <div class="search-result-title">{{ result.title }}</div>
             <div class="search-result-snippet">{{ result.snippet || '无内容预览' }}</div>
           </div>
-          <div v-if="searchError" class="conv-empty search-empty">{{ searchError }}</div>
+          <div v-if="searchError" class="conv-empty search-empty">
+            <div>{{ searchError }}</div>
+            <button
+                type="button"
+                class="search-retry-btn"
+                :disabled="isSearchLoading"
+                @click="retrySearch"
+            >
+              重试
+            </button>
+          </div>
           <div v-else-if="!isSearchLoading && searchResults.length === 0" class="conv-empty search-empty">
             没有匹配的对话
           </div>
@@ -124,16 +134,20 @@
               class="msg-row"
               :class="msg.role"
           >
-            <div v-if="msg.role === 'assistant'" :style="msg.status === 'aborted' || msg.status === 'error' ? 'margin-bottom:40px' : ''" class="msg-avatar ai-avatar">A</div>
+            <div
+                v-if="msg.role === 'assistant'"
+                class="msg-avatar ai-avatar"
+                :class="{ 'has-followup': msg.status === 'aborted' || msg.status === 'error' }"
+            >A</div>
             <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">U</div>
             <div class="msg-col">
               <div
 class="msg-bubble"
-                   :style="msg.status === 'aborted' || msg.status === 'error' ? 'border:1px solid #f87171' : ''"
                    :class="[msg.role, {
                      'is-loading':   msg.status === 'loading',
                      'is-streaming': msg.status === 'streaming',
                      'is-error':     msg.status === 'error',
+                     'is-aborted':   msg.status === 'aborted',
                    }]"
               >
                 <div v-if="msg.files?.length" class="msg-files">
@@ -173,7 +187,7 @@ v-for="(img, idx) in msg.images" :key="idx"
                   <div class="abort-dot"></div>
                   已停止
                 </div>
-                <button class="btn-continue" @click="handleContinue(msg.id)">
+                <button class="btn-continue" :disabled="isStreaming" @click="handleContinue(msg.id)">
                   ↻ 继续生成
                 </button>
               </div>
@@ -182,7 +196,7 @@ v-for="(img, idx) in msg.images" :key="idx"
                   <div class="error-dot"></div>
                   发送失败
                 </div>
-                <button class="btn-retry" @click="handleRetry(msg.id)">
+                <button class="btn-retry" :disabled="isStreaming" @click="handleRetry(msg.id)">
                   ↻ 重试
                 </button>
               </div>
@@ -381,6 +395,7 @@ const {
   searchResults,
   isSearchMode,
   handleSearchResultClick,
+  retrySearch,
 } = useConversationSearch({
   onSelect: handleSelectConversation,
   canSelect: () => !isStreaming.value,

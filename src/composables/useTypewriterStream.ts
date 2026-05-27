@@ -84,6 +84,19 @@ export function useTypewriterStream(options: TypewriterStreamOptions) {
         return true
     }
 
+    function abort(messageId: string): void {
+        preserveAbortedQueue(messageId)
+        isFlushing = false
+
+        if (pendingDoneId === messageId) {
+            pendingDoneId = null
+            pendingDoneResolve?.()
+            pendingDoneResolve = null
+        }
+
+        updateAborted(messageId)
+    }
+
     function push(messageId: string, chunk: string): void {
         queue.push(chunk)
         flush(messageId)
@@ -177,5 +190,6 @@ export function useTypewriterStream(options: TypewriterStreamOptions) {
         markDone,
         waitForPendingDone,
         restoreAbortedOutput,
+        abort,
     }
 }

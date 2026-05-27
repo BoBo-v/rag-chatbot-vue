@@ -55,6 +55,31 @@ export function useConversationSearch(options: UseConversationSearchOptions) {
         options.onSelect(conversationId)
     }
 
+    async function retrySearch(): Promise<void> {
+        const query = conversationSearchDraft.value.trim()
+        if (!query) return
+
+        const requestSeq = ++searchRequestSeq
+        isSearchLoading.value = true
+        searchError.value = ''
+
+        try {
+            await searchService.rebuildIndex()
+            if (requestSeq !== searchRequestSeq) return
+            const results = await searchService.search({ query, limit: 20 })
+            if (requestSeq !== searchRequestSeq) return
+            searchResults.value = results
+        } catch (err: unknown) {
+            if (requestSeq !== searchRequestSeq) return
+            searchResults.value = []
+            searchError.value = err instanceof Error ? err.message : '搜索失败'
+        } finally {
+            if (requestSeq === searchRequestSeq) {
+                isSearchLoading.value = false
+            }
+        }
+    }
+
     return {
         conversationSearchDraft,
         isSearchLoading,
@@ -62,5 +87,6 @@ export function useConversationSearch(options: UseConversationSearchOptions) {
         searchResults,
         isSearchMode,
         handleSearchResultClick,
+        retrySearch,
     }
 }

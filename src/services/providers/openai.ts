@@ -2,8 +2,37 @@ import type { Message } from '../../types/chat'
 import type { ModelRuntimeConfig } from '../../types/model'
 import { buildMessages } from '../context'
 
+const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com'
+const DEV_OPENAI_PROXY_PREFIX = '/__ai_proxy/openai'
+
+// 兼容用户填写 https://xxx 和 https://xxx/v1 两种写法，避免最终请求变成 /v1/v1。
+function normalizeOpenAIBaseUrl(baseUrl?: string): string {
+    let base = (baseUrl?.trim() || DEFAULT_OPENAI_BASE_URL).replace(/\/+$/, '')
+
+    while (base.endsWith('/v1')) {
+        base = base.slice(0, -3).replace(/\/+$/, '')
+    }
+
+    return base || DEFAULT_OPENAI_BASE_URL
+}
+
+// 开发环境用 Vite 同源代理绕过浏览器 CORS；生产环境仍直接访问配置的厂商地址。
+function openAIEndpoint(baseUrl: string | undefined, path: string): string {
+    const base = normalizeOpenAIBaseUrl(baseUrl)
+
+    if (import.meta.env.DEV && /^https?:\/\//i.test(base)) {
+        return `${DEV_OPENAI_PROXY_PREFIX}${path}?baseUrl=${encodeURIComponent(base)}`
+    }
+
+    return `${base}${path}`
+}
+
+// 错误日志里展示真实厂商地址，不展示本地代理地址，方便排查鉴权和模型权限问题。
+function openAIDisplayEndpoint(baseUrl: string | undefined, path: string): string {
+    return `${normalizeOpenAIBaseUrl(baseUrl)}${path}`
+}
+
 // OpenAI 兼容接口适配器。
-// DeepSeek、通义、Kimi 等只要兼容 /v1/chat/completions，也可以通过 baseUrl 走这里。
 export async function openaiStream(
     messages: Message[],
     userText: string,
@@ -12,7 +41,6 @@ export async function openaiStream(
     onDone: () => void,
     signal?: AbortSignal
 ): Promise<void> {
-    const baseUrl = (runtime.baseUrl ?? 'https://api.openai.com').replace(/\/$/, '')
     // 先构造统一上下文，再转换成 OpenAI 的 messages 格式。
     const chatMessages = buildMessages(
         messages,
@@ -39,7 +67,7 @@ export async function openaiStream(
         return { role: m.role, content: m.content }
     })
 
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+    const res = await fetch(openAIEndpoint(runtime.baseUrl, '/v1/chat/completions'), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -55,7 +83,7 @@ export async function openaiStream(
 
     if (!res.ok) {
         const errText = await res.text()
-        throw new Error(`OpenAI error ${res.status}: ${errText}`)
+        throw new Error(`OpenAI error ${res.status} from ${openAIDisplayEndpoint(runtime.baseUrl, '/v1/chat/completions')}: ${errText}`)
     }
 
     let doneCalled = false
@@ -82,11 +110,16 @@ export async function openaiStream(
 export async function fetchOpenAIModels(runtime: ModelRuntimeConfig): Promise<string[]> {
     if (!runtime.apiKey) return []
     try {
-        const baseUrl = (runtime.baseUrl ?? 'https://api.openai.com').replace(/\/$/, '')
-        const res = await fetch(`${baseUrl}/v1/models`, {
+        const res = await fetch(openAIEndpoint(runtime.baseUrl, '/v1/models'), {
             headers: { Authorization: `Bearer ${runtime.apiKey}` },
         })
-        if (!res.ok) return []
+        if (!res.ok) {
+            console.warn(
+                `OpenAI models error ${res.status} from ${openAIDisplayEndpoint(runtime.baseUrl, '/v1/models')}:`,
+                await res.text()
+            )
+            return []
+        }
         const data = await res.json()
         return (data.data ?? [])
             .map((m: { id: string }) => m.id)

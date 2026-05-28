@@ -5,7 +5,7 @@
         <span class="logo-dot"></span>
         <div>
           <h1>多模型对比</h1>
-          <p>{{ isRunning ? '模型正在并发生成' : '已完成记录会保存到本地' }}</p>
+          <p>{{ headerHint }}</p>
         </div>
       </div>
       <div class="header-actions">
@@ -23,6 +23,22 @@
         <button
           type="button"
           class="compare-secondary"
+          :disabled="!currentSession"
+          @click="exportMarkdown"
+        >
+          导出 MD
+        </button>
+        <button
+          type="button"
+          class="compare-secondary"
+          :disabled="!currentSession"
+          @click="exportJson"
+        >
+          导出 JSON
+        </button>
+        <button
+          type="button"
+          class="compare-secondary"
           :disabled="!isRunning"
           @click="stopAll"
         >
@@ -32,6 +48,13 @@
     </header>
 
     <main class="compare-main" :class="{ 'has-summary': Boolean(summaryRun) }">
+      <section v-if="isHistorySession" class="history-mode-banner">
+        <div>
+          <strong>历史查看模式</strong>
+          <span>已恢复的记录不包含 API Key，适合查看和导出；需要重新请求请新建对比。</span>
+        </div>
+      </section>
+
       <section v-if="historyOpen" class="history-panel">
         <div class="history-toolbar">
           <div>
@@ -172,14 +195,14 @@
           <textarea
             v-model="summaryInstruction"
             class="summary-instruction"
-            :disabled="isSummaryRunning"
+            :disabled="isSummaryRunning || isHistorySession"
             placeholder="可选：输入你的汇总要求，例如更偏向步骤、结论先行、只保留代码差异等"
           ></textarea>
           <div class="summary-actions">
             <select
               v-model="summaryRuntime.provider"
               class="field-input summary-select"
-              :disabled="isSummaryRunning"
+              :disabled="isSummaryRunning || isHistorySession"
               @change="normalizeRuntime(summaryRuntime)"
             >
               <option value="ollama">Ollama</option>
@@ -189,10 +212,10 @@
             <input
               v-model="summaryRuntime.model"
               class="field-input summary-model"
-              :disabled="isSummaryRunning"
+              :disabled="isSummaryRunning || isHistorySession"
               spellcheck="false"
             />
-            <button type="button" class="compare-secondary" :disabled="isSummaryRunning" @click="resetSummaryRuntime">
+            <button type="button" class="compare-secondary" :disabled="isSummaryRunning || isHistorySession" @click="resetSummaryRuntime">
               同步当前设置
             </button>
             <button type="button" class="compare-primary" :disabled="!canSummarize" @click="summarize">
@@ -218,6 +241,11 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import ComparisonRunCard from '../components/ComparisonRunCard.vue'
 import { useModelComparison } from '../composables/useModelComparison'
+import {
+  buildComparisonExportFilename,
+  exportComparisonAsJson,
+  exportComparisonAsMarkdown,
+} from '../services/comparisonExport'
 import { createRuntimeFromSettings } from '../services/runtime'
 import { settings } from '../stores/settings'
 import type { ModelRuntimeConfig } from '../types/model'
@@ -252,7 +280,13 @@ const runtimeDrafts = reactive<ModelRuntimeConfig[]>([
 ])
 const summaryRuntime = reactive<ModelRuntimeConfig>(createRuntimeFromSettings(settings))
 
+const currentSession = computed(() => comparison.session.value)
 const isConfigCollapsed = computed(() => !configOpen.value && runs.value.length > 0)
+const headerHint = computed(() => {
+  if (isRunning.value) return '模型正在并发生成'
+  if (isHistorySession.value) return '正在查看已保存的本地记录'
+  return '已完成记录会保存到本地'
+})
 const canStart = computed(() =>
   !isRunning.value &&
   prompt.value.trim().length > 0 &&
@@ -260,6 +294,7 @@ const canStart = computed(() =>
   runtimeDrafts.every(runtime => runtime.model.trim())
 )
 const canSummarize = computed(() =>
+  !isHistorySession.value &&
   !isSummaryRunning.value &&
   successfulRuns.value.length > 0 &&
   summaryRuntime.model.trim().length > 0
@@ -363,7 +398,11 @@ async function openHistory(sessionId: string): Promise<void> {
 }
 
 async function deleteHistory(sessionId: string): Promise<void> {
+  const deletingCurrentSession = currentSession.value?.id === sessionId
   await removeSession(sessionId)
+  if (deletingCurrentSession) {
+    isHistorySession.value = false
+  }
 }
 
 function formatDate(timestamp: number): string {
@@ -373,6 +412,38 @@ function formatDate(timestamp: number): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(timestamp)
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function exportMarkdown(): void {
+  const session = currentSession.value
+  if (!session) return
+  downloadTextFile(
+    buildComparisonExportFilename(session, 'md'),
+    exportComparisonAsMarkdown(session),
+    'text/markdown;charset=utf-8'
+  )
+}
+
+function exportJson(): void {
+  const session = currentSession.value
+  if (!session) return
+  downloadTextFile(
+    buildComparisonExportFilename(session, 'json'),
+    exportComparisonAsJson(session),
+    'application/json;charset=utf-8'
+  )
 }
 
 async function retryRun(runId: string): Promise<void> {
@@ -441,6 +512,8 @@ async function summarize(): Promise<void> {
 
 .header-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -449,6 +522,29 @@ async function summarize(): Promise<void> {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
+}
+
+.history-mode-banner {
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--accent-bg);
+}
+
+.history-mode-banner div {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.history-mode-banner strong {
+  color: var(--accent-text);
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .history-panel {
@@ -852,6 +948,16 @@ textarea:disabled {
 
   .compare-setup {
     padding: 12px 14px;
+  }
+
+  .history-mode-banner {
+    padding: 10px 14px;
+  }
+
+  .history-mode-banner div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .history-panel {

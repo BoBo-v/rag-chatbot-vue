@@ -8,7 +8,7 @@ import {
     type ComparisonSessionListItem,
 } from '../services/comparisonPersistence'
 import { classifyError } from '../utils/error'
-import type { Message } from '../types/chat'
+import type { FileAttachment, ImageAttachment, Message } from '../types/chat'
 import type { ComparisonRun, ComparisonSession, ModelRuntimeConfig } from '../types/model'
 
 const WORKFLOW_VERSION = 1
@@ -23,6 +23,8 @@ interface StartComparisonOptions {
     runtimes: ModelRuntimeConfig[]
     messages?: Message[]
     conversationId?: number
+    images?: ImageAttachment[]
+    files?: FileAttachment[]
 }
 
 export function useModelComparison() {
@@ -50,6 +52,8 @@ export function useModelComparison() {
             id: sessionId,
             conversationId: options.conversationId,
             prompt: options.prompt,
+            images: options.images?.map(image => ({ ...image })),
+            files: options.files?.map(file => ({ ...file })),
             runs: options.runtimes.map(runtime => ({
                 id: crypto.randomUUID(),
                 sessionId,
@@ -202,8 +206,21 @@ export function useModelComparison() {
         stopAll()
         session.value = createSession(options)
         await persistCurrentSession()
+        const promptMessages = options.images?.length || options.files?.length
+            ? [
+                ...(options.messages ?? []),
+                {
+                    id: crypto.randomUUID(),
+                    role: 'user' as const,
+                    content: options.prompt,
+                    images: options.images?.map(image => ({ ...image })),
+                    files: options.files?.map(file => ({ ...file })),
+                    status: 'done' as const,
+                },
+            ]
+            : options.messages ?? []
         await Promise.all(session.value.runs.map(run =>
-            runModel(run, session.value?.prompt ?? '', options.messages ?? [])
+            runModel(run, session.value?.prompt ?? '', promptMessages)
         ))
     }
 

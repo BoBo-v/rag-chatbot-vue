@@ -94,7 +94,13 @@
         </div>
       </section>
 
-      <section class="compare-setup" :class="{ collapsed: isConfigCollapsed }">
+      <section
+        class="compare-setup"
+        :class="{ collapsed: isConfigCollapsed, dragging: dragOver }"
+        @dragover.prevent="handleDragOver"
+        @dragleave.prevent="handleDragLeave"
+        @drop.prevent="handleDrop"
+      >
         <div v-if="isConfigCollapsed" class="setup-summary">
           <div class="setup-summary-main">
             <span class="summary-label">问题</span>
@@ -111,6 +117,22 @@
         </div>
 
         <template v-else>
+          <input
+            ref="imageInputRef"
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            hidden
+            @change="handleImageSelect"
+          />
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept=".txt,.md,.csv,.json,.xml,.yaml,.yml,.toml,.js,.ts,.jsx,.tsx,.vue,.svelte,.py,.go,.rs,.java,.kt,.c,.cpp,.h,.hpp,.cs,.rb,.php,.swift,.sh,.bash,.zsh,.bat,.ps1,.html,.css,.scss,.less,.sass,.sql,.graphql,.proto,.env,.ini,.conf,.cfg,.log"
+            multiple
+            hidden
+            @change="handleFileSelect"
+          />
           <div class="prompt-panel">
             <label class="field-label" for="comparison-prompt">问题</label>
             <textarea
@@ -119,7 +141,28 @@
               class="prompt-input"
               :disabled="isRunning"
               placeholder="输入要让多个模型同时回答的问题"
+              @paste="handlePaste"
             ></textarea>
+          </div>
+
+          <div v-if="pendingImages.length || pendingFiles.length" class="attachment-preview">
+            <div v-if="pendingImages.length" class="image-preview-row">
+              <div v-for="(img, index) in pendingImages" :key="img.name + index" class="image-preview-item">
+                <img :src="`data:${img.mediaType};base64,${img.base64}`" :alt="img.name" />
+                <button type="button" class="attachment-remove" :disabled="isRunning" @click="removeImage(index)">
+                  ×
+                </button>
+              </div>
+            </div>
+            <div v-if="pendingFiles.length" class="file-preview-row">
+              <div v-for="(file, index) in pendingFiles" :key="file.name + file.size" class="file-preview-item">
+                <span class="file-name">{{ file.name }}</span>
+                <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                <button type="button" class="attachment-remove" :disabled="isRunning" @click="removeFile(index)">
+                  ×
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="runtime-grid">
@@ -170,6 +213,12 @@
               @click="start"
             >
               开始对比
+            </button>
+            <button type="button" class="compare-secondary" :disabled="isRunning" @click="imageInputRef?.click()">
+              添加图片
+            </button>
+            <button type="button" class="compare-secondary" :disabled="isRunning" @click="fileInputRef?.click()">
+              添加文件
             </button>
             <button type="button" class="compare-secondary" :disabled="isRunning" @click="resetAllRuntimes">
               重置模型
@@ -249,13 +298,16 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import ComparisonRunCard from '../components/ComparisonRunCard.vue'
+import { useAttachments } from '../composables/useAttachments'
 import { useModelComparison } from '../composables/useModelComparison'
+import { useToast } from '../composables/useToast'
 import {
   buildComparisonExportFilename,
   exportComparisonAsJson,
   exportComparisonAsMarkdown,
 } from '../services/comparisonExport'
 import { formatLatency, getSessionStats } from '../services/comparisonStats'
+import { getVisionUnsupportedRuntimeLabels } from '../services/modelCapabilities'
 import { createRuntimeFromSettings } from '../services/runtime'
 import { settings } from '../stores/settings'
 import type { ModelRuntimeConfig } from '../types/model'
@@ -265,6 +317,19 @@ const configOpen = ref(true)
 const summaryInstruction = ref('')
 const historyOpen = ref(false)
 const isHistorySession = ref(false)
+const dragOver = ref(false)
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const toast = useToast()
+const {
+  pendingImages,
+  pendingFiles,
+  addImages,
+  addFiles,
+  removeImage,
+  removeFile,
+  clearAttachments,
+} = useAttachments(toast)
 const comparison = useModelComparison()
 const {
   history,
@@ -300,7 +365,7 @@ const headerHint = computed(() => {
 })
 const canStart = computed(() =>
   !isRunning.value &&
-  prompt.value.trim().length > 0 &&
+  (prompt.value.trim().length > 0 || pendingImages.value.length > 0 || pendingFiles.value.length > 0) &&
   runtimeDrafts.length >= 2 &&
   runtimeDrafts.every(runtime => runtime.model.trim())
 )
@@ -383,8 +448,24 @@ async function start(): Promise<void> {
     normalizeRuntime(runtime)
     return cloneRuntime(runtime)
   })
+  if (pendingImages.value.length > 0) {
+    const unsupported = getVisionUnsupportedRuntimeLabels(runtimes)
+    if (unsupported.length > 0) {
+      toast.show(`图片对比需要视觉模型，请调整: ${unsupported.join('、')}`, 'warning', 7000)
+      return
+    }
+  }
   configOpen.value = false
-  await startComparison({ prompt: prompt.value.trim(), runtimes })
+  const promptText = prompt.value.trim()
+    || (pendingImages.value.length > 0 ? '请分析这些图片' : '')
+    || (pendingFiles.value.length > 0 ? '请分析这些文件' : '')
+  await startComparison({
+    prompt: promptText,
+    runtimes,
+    images: pendingImages.value.map(image => ({ ...image })),
+    files: pendingFiles.value.map(file => ({ ...file })),
+  })
+  clearAttachments()
 }
 
 function toggleHistory(): void {
@@ -398,6 +479,7 @@ function newComparison(): void {
   clearSession()
   prompt.value = ''
   summaryInstruction.value = ''
+  clearAttachments()
   configOpen.value = true
   isHistorySession.value = false
 }
@@ -423,6 +505,70 @@ function formatDate(timestamp: number): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(timestamp)
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function handleImageSelect(event: Event): void {
+  const input = event.target as HTMLInputElement
+  if (input.files?.length) {
+    addImages(Array.from(input.files))
+    input.value = ''
+  }
+}
+
+function handleFileSelect(event: Event): void {
+  const input = event.target as HTMLInputElement
+  if (input.files?.length) {
+    addFiles(Array.from(input.files))
+    input.value = ''
+  }
+}
+
+function handlePaste(event: ClipboardEvent): void {
+  if (isRunning.value) return
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  const imageFiles: File[] = []
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) imageFiles.push(file)
+    }
+  }
+  if (imageFiles.length > 0) {
+    event.preventDefault()
+    addImages(imageFiles)
+  }
+}
+
+function handleDragOver(): void {
+  if (!isRunning.value) {
+    dragOver.value = true
+  }
+}
+
+function handleDragLeave(): void {
+  dragOver.value = false
+}
+
+function handleDrop(event: DragEvent): void {
+  dragOver.value = false
+  if (isRunning.value) return
+
+  const files = event.dataTransfer?.files
+  if (!files) return
+
+  const droppedFiles = Array.from(files)
+  const imageFiles = droppedFiles.filter(file => file.type.startsWith('image/'))
+  const textFiles = droppedFiles.filter(file => !file.type.startsWith('image/'))
+  if (imageFiles.length > 0) addImages(imageFiles)
+  if (textFiles.length > 0) addFiles(textFiles)
 }
 
 function downloadTextFile(filename: string, content: string, mimeType: string): void {
@@ -674,6 +820,12 @@ async function summarize(): Promise<void> {
   background: var(--bg-sidebar);
 }
 
+.compare-setup.dragging {
+  outline: 2px solid var(--accent-border);
+  outline-offset: -4px;
+  background: var(--accent-bg);
+}
+
 .compare-setup.collapsed {
   padding: 8px 24px;
 }
@@ -733,6 +885,82 @@ async function summarize(): Promise<void> {
 .prompt-panel {
   max-width: 1180px;
   margin: 0 auto 12px;
+}
+
+.attachment-preview {
+  max-width: 1180px;
+  margin: 0 auto 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.image-preview-row,
+.file-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.image-preview-item {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-surface-2);
+}
+
+.image-preview-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.file-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  min-height: 34px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.file-name {
+  min-width: 0;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.attachment-remove {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  padding: 0;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.image-preview-item .attachment-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
 }
 
 .field-label {

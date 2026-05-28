@@ -183,21 +183,27 @@ const showRetry = computed(() => props.showRetry ?? true)
 
 .status-streaming .status-pill,
 .status-loading .status-pill {
-  color: #86efac;
   border-color: rgba(45, 157, 120, 0.28);
   background: rgba(45, 157, 120, 0.12);
+  color: #1f8a67;
+}
+
+.status-done .status-pill {
+  border-color: #bdaaf2;
+  background: #ede6ff;
+  color: #6f3fd9;
 }
 
 .status-error .status-pill {
-  color: #ef6b7b;
   border-color: #f1bdc6;
   background: #fff5f7;
+  color: #dc4d62;
 }
 
 .status-aborted .status-pill {
-  color: #b68525;
   border-color: rgba(182, 133, 37, 0.30);
   background: rgba(182, 133, 37, 0.10);
+  color: #a1711b;
 }
 
 .run-meta {

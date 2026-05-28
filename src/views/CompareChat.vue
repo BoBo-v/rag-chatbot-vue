@@ -72,12 +72,12 @@
       </section>
 
       <section v-if="currentSession" class="stats-strip">
-        <span>模型 {{ sessionStats.total }}</span>
-        <span>成功 {{ sessionStats.done }}</span>
-        <span>失败 {{ sessionStats.error }}</span>
-        <span>停止 {{ sessionStats.aborted }}</span>
-        <span v-if="sessionStats.running">生成中 {{ sessionStats.running }}</span>
-        <span>平均耗时 {{ formatLatency(sessionStats.averageLatencyMs) }}</span>
+        <span class="stat-chip stat-total">模型 {{ sessionStats.total }}</span>
+        <span class="stat-chip stat-success">成功 {{ sessionStats.done }}</span>
+        <span class="stat-chip stat-error">失败 {{ sessionStats.error }}</span>
+        <span class="stat-chip stat-aborted">停止 {{ sessionStats.aborted }}</span>
+        <span v-if="sessionStats.running" class="stat-chip stat-running">生成中 {{ sessionStats.running }}</span>
+        <span class="stat-chip stat-latency">平均耗时 {{ formatLatency(sessionStats.averageLatencyMs) }}</span>
       </section>
 
       <section
@@ -108,7 +108,7 @@
           <article v-for="run in runs" :key="run.id" class="runtime-snapshot-card">
             <header>
               <strong>{{ run.config.provider }} / {{ run.config.model || run.config.label }}</strong>
-              <span>{{ statusLabel(run.status) }}</span>
+              <span :class="`snapshot-status status-${run.status}`">{{ statusLabel(run.status) }}</span>
             </header>
             <dl>
               <div>
@@ -926,7 +926,7 @@ async function summarize(): Promise<void> {
   gap: 8px;
 }
 
-.stats-strip span {
+.stat-chip {
   border: 1px solid var(--compare-line);
   border-radius: 999px;
   padding: 4px 10px;
@@ -934,6 +934,38 @@ async function summarize(): Promise<void> {
   color: var(--compare-muted);
   font-size: 12px;
   line-height: 1.4;
+  font-weight: 650;
+}
+
+.stat-total,
+.stat-latency {
+  border-color: #d8d4eb;
+  background: #f6f4ff;
+  color: #625c7b;
+}
+
+.stat-success {
+  border-color: rgba(45, 157, 120, 0.28);
+  background: rgba(45, 157, 120, 0.12);
+  color: #1f8a67;
+}
+
+.stat-error {
+  border-color: #f1bdc6;
+  background: #fff5f7;
+  color: #dc4d62;
+}
+
+.stat-aborted {
+  border-color: rgba(182, 133, 37, 0.30);
+  background: rgba(182, 133, 37, 0.10);
+  color: #a1711b;
+}
+
+.stat-running {
+  border-color: rgba(111, 63, 217, 0.24);
+  background: var(--compare-primary-soft);
+  color: var(--compare-primary-strong);
 }
 
 .small-btn.danger {
@@ -1040,7 +1072,7 @@ async function summarize(): Promise<void> {
   white-space: nowrap;
 }
 
-.runtime-snapshot-card header span {
+.snapshot-status {
   flex-shrink: 0;
   border: 1px solid #bdaaf2;
   border-radius: 999px;
@@ -1048,6 +1080,32 @@ async function summarize(): Promise<void> {
   background: var(--compare-primary-soft);
   color: var(--compare-primary-strong);
   font-size: 12px;
+  font-weight: 700;
+}
+
+.snapshot-status.status-loading,
+.snapshot-status.status-streaming {
+  border-color: rgba(45, 157, 120, 0.28);
+  background: rgba(45, 157, 120, 0.12);
+  color: #1f8a67;
+}
+
+.snapshot-status.status-done {
+  border-color: #bdaaf2;
+  background: var(--compare-primary-soft);
+  color: var(--compare-primary-strong);
+}
+
+.snapshot-status.status-error {
+  border-color: #f1bdc6;
+  background: #fff5f7;
+  color: #dc4d62;
+}
+
+.snapshot-status.status-aborted {
+  border-color: rgba(182, 133, 37, 0.30);
+  background: rgba(182, 133, 37, 0.10);
+  color: #a1711b;
 }
 
 .runtime-snapshot-card dl {

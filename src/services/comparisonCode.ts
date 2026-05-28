@@ -5,6 +5,17 @@ export interface CodeBlockInfo {
     content: string
 }
 
+export interface RunCodeBlockInfo extends CodeBlockInfo {
+    runId: string
+    modelName: string
+    blockIndex: number
+}
+
+export interface CodeComparisonCandidate {
+    language: string
+    blocks: RunCodeBlockInfo[]
+}
+
 export interface CodeBlockStats {
     count: number
     primaryLanguage?: string
@@ -48,4 +59,28 @@ export function getCodeBlockStats(run: ComparisonRun): CodeBlockStats {
         primaryLanguage,
         languages,
     }
+}
+
+export function getCodeComparisonCandidates(runs: ComparisonRun[]): CodeComparisonCandidate[] {
+    const blocksByLanguage = new Map<string, RunCodeBlockInfo[]>()
+
+    for (const run of runs) {
+        const blocks = extractCodeBlocks(run.content)
+        blocks.forEach((block, index) => {
+            const enrichedBlock: RunCodeBlockInfo = {
+                ...block,
+                runId: run.id,
+                modelName: `${run.config.provider} / ${run.config.model || run.config.label}`,
+                blockIndex: index,
+            }
+            const languageBlocks = blocksByLanguage.get(block.language) ?? []
+            languageBlocks.push(enrichedBlock)
+            blocksByLanguage.set(block.language, languageBlocks)
+        })
+    }
+
+    return [...blocksByLanguage.entries()]
+        .map(([language, blocks]) => ({ language, blocks }))
+        .filter(candidate => new Set(candidate.blocks.map(block => block.runId)).size >= 2)
+        .sort((a, b) => b.blocks.length - a.blocks.length || a.language.localeCompare(b.language))
 }

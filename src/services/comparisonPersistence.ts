@@ -1,6 +1,7 @@
 import { db, type DBComparisonRun, type DBComparisonSession } from '../db'
 import { getSessionStats, type ComparisonSessionStats } from './comparisonStats'
 import type { ComparisonRun, ComparisonSession, ModelRuntimeConfig } from '../types/model'
+import type { FileAttachment, ImageAttachment } from '../types/chat'
 
 export interface ComparisonSessionListItem {
     id: string
@@ -14,9 +15,30 @@ export interface ComparisonSessionListItem {
 
 function sanitizeRuntimeConfig(config: ModelRuntimeConfig): ModelRuntimeConfig {
     return {
-        ...config,
+        provider: config.provider,
+        label: config.label,
+        model: config.model,
+        baseUrl: config.baseUrl,
         apiKey: undefined,
+        systemPrompt: config.systemPrompt,
+        maxContextTokens: config.maxContextTokens,
     }
+}
+
+function cloneImages(images?: ImageAttachment[]): ImageAttachment[] | undefined {
+    return images?.map(image => ({
+        base64: image.base64,
+        mediaType: image.mediaType,
+        name: image.name,
+    }))
+}
+
+function cloneFiles(files?: FileAttachment[]): FileAttachment[] | undefined {
+    return files?.map(file => ({
+        name: file.name,
+        content: file.content,
+        size: file.size,
+    }))
 }
 
 function toSessionRow(
@@ -27,8 +49,8 @@ function toSessionRow(
         id: session.id,
         conversationId: session.conversationId,
         prompt: session.prompt,
-        images: session.images,
-        files: session.files,
+        images: cloneImages(session.images),
+        files: cloneFiles(session.files),
         summaryRunId: session.summaryRun?.id,
         summaryInstruction: summaryInstruction ?? session.summaryInstruction,
         workflowVersion: session.workflowVersion,
@@ -51,7 +73,7 @@ function toRunRow(run: ComparisonRun, kind: DBComparisonRun['kind'], order: numb
         startedAt: run.startedAt,
         finishedAt: run.finishedAt,
         latencyMs: run.latencyMs,
-        sourceRunIds: run.sourceRunIds,
+        sourceRunIds: run.sourceRunIds ? [...run.sourceRunIds] : undefined,
     }
 }
 

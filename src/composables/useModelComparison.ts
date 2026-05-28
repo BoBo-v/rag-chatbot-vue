@@ -94,8 +94,12 @@ export function useModelComparison() {
             .catch(() => undefined)
             .then(async () => {
                 if (!session.value) return
-                await saveComparisonSession(session.value, summaryInstruction)
-                await refreshHistory()
+                try {
+                    await saveComparisonSession(session.value, summaryInstruction)
+                    await refreshHistory()
+                } catch (err) {
+                    console.warn('[comparison] 保存对比记录失败', err)
+                }
             })
         await persistQueue
     }

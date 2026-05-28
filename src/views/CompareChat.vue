@@ -269,6 +269,54 @@
         />
       </section>
 
+      <section v-if="codeComparisonCandidates.length > 0" class="code-compare-panel">
+        <div class="code-compare-toolbar">
+          <div>
+            <h2>代码对比</h2>
+            <p>同语言代码块可做只读对照</p>
+          </div>
+          <select v-model="selectedCodeLanguage" class="field-input code-language-select">
+            <option
+              v-for="candidate in codeComparisonCandidates"
+              :key="candidate.language"
+              :value="candidate.language"
+            >
+              {{ candidate.language }} · {{ candidate.blocks.length }} 段
+            </option>
+          </select>
+        </div>
+        <div class="code-compare-selectors">
+          <select v-model.number="leftCodeIndex" class="field-input">
+            <option
+              v-for="(block, index) in selectedCodeBlocks"
+              :key="`left-${block.runId}-${block.blockIndex}`"
+              :value="index"
+            >
+              {{ block.modelName }} · #{{ block.blockIndex + 1 }}
+            </option>
+          </select>
+          <select v-model.number="rightCodeIndex" class="field-input">
+            <option
+              v-for="(block, index) in selectedCodeBlocks"
+              :key="`right-${block.runId}-${block.blockIndex}`"
+              :value="index"
+            >
+              {{ block.modelName }} · #{{ block.blockIndex + 1 }}
+            </option>
+          </select>
+        </div>
+        <div class="code-compare-grid">
+          <article v-if="leftCodeBlock" class="code-compare-column">
+            <header>{{ leftCodeBlock.modelName }} · #{{ leftCodeBlock.blockIndex + 1 }}</header>
+            <pre><code>{{ leftCodeBlock.content }}</code></pre>
+          </article>
+          <article v-if="rightCodeBlock" class="code-compare-column">
+            <header>{{ rightCodeBlock.modelName }} · #{{ rightCodeBlock.blockIndex + 1 }}</header>
+            <pre><code>{{ rightCodeBlock.content }}</code></pre>
+          </article>
+        </div>
+      </section>
+
       <section class="summary-panel" :class="{ empty: !summaryRun }">
         <div class="summary-toolbar">
           <div class="summary-copy">
@@ -326,6 +374,7 @@ import ComparisonRunCard from '../components/ComparisonRunCard.vue'
 import { useAttachments } from '../composables/useAttachments'
 import { useModelComparison } from '../composables/useModelComparison'
 import { useToast } from '../composables/useToast'
+import { getCodeComparisonCandidates } from '../services/comparisonCode'
 import {
   buildComparisonExportFilename,
   exportComparisonAsJson,
@@ -346,6 +395,9 @@ const historyOpen = ref(false)
 const historySearch = ref('')
 const historyFilter = ref<HistoryFilter>('all')
 const isHistorySession = ref(false)
+const selectedCodeLanguage = ref('')
+const leftCodeIndex = ref(0)
+const rightCodeIndex = ref(1)
 const dragOver = ref(false)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -386,6 +438,14 @@ const summaryRuntime = reactive<ModelRuntimeConfig>(createRuntimeFromSettings(se
 
 const currentSession = computed(() => comparison.session.value)
 const sessionStats = computed(() => getSessionStats(runs.value))
+const codeComparisonCandidates = computed(() => getCodeComparisonCandidates(runs.value))
+const selectedCodeCandidate = computed(() =>
+  codeComparisonCandidates.value.find(candidate => candidate.language === selectedCodeLanguage.value)
+  ?? codeComparisonCandidates.value[0]
+)
+const selectedCodeBlocks = computed(() => selectedCodeCandidate.value?.blocks ?? [])
+const leftCodeBlock = computed(() => selectedCodeBlocks.value[leftCodeIndex.value])
+const rightCodeBlock = computed(() => selectedCodeBlocks.value[rightCodeIndex.value])
 const historyFilters: { label: string; value: HistoryFilter }[] = [
   { label: '全部', value: 'all' },
   { label: '成功', value: 'success' },
@@ -456,6 +516,20 @@ watch(() => comparison.session.value, currentSession => {
   prompt.value = currentSession.prompt
   summaryInstruction.value = currentSession.summaryInstruction ?? ''
   configOpen.value = currentSession.runs.length === 0
+})
+
+watch(codeComparisonCandidates, candidates => {
+  const currentLanguageExists = candidates.some(candidate => candidate.language === selectedCodeLanguage.value)
+  if (!currentLanguageExists) {
+    selectedCodeLanguage.value = candidates[0]?.language ?? ''
+  }
+  leftCodeIndex.value = 0
+  rightCodeIndex.value = candidates[0]?.blocks.length && candidates[0].blocks.length > 1 ? 1 : 0
+})
+
+watch(selectedCodeLanguage, () => {
+  leftCodeIndex.value = 0
+  rightCodeIndex.value = selectedCodeBlocks.value.length > 1 ? 1 : 0
 })
 
 onMounted(() => {
@@ -1323,6 +1397,97 @@ textarea:disabled {
   font-size: 14px;
 }
 
+.code-compare-panel {
+  max-height: 38vh;
+  overflow: auto;
+  padding: 12px 24px 14px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-sidebar);
+}
+
+.code-compare-toolbar,
+.code-compare-selectors,
+.code-compare-grid {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.code-compare-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.code-compare-toolbar h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.code-compare-toolbar p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.code-language-select {
+  width: 180px;
+  margin-bottom: 0;
+}
+
+.code-compare-selectors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.code-compare-selectors .field-input {
+  margin-bottom: 0;
+}
+
+.code-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.code-compare-column {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.code-compare-column header {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-faint);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.code-compare-column pre {
+  max-height: 260px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  background: var(--bg-code);
+  color: var(--text-code);
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.code-compare-column code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  white-space: pre;
+}
+
 @media (max-width: 860px) {
   .compare-header {
     height: auto;
@@ -1378,8 +1543,26 @@ textarea:disabled {
     padding: 12px 14px;
   }
 
+  .code-compare-panel {
+    padding: 12px 14px;
+  }
+
   .compare-actions {
     justify-content: stretch;
+  }
+
+  .code-compare-toolbar,
+  .code-compare-selectors,
+  .code-compare-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .code-compare-toolbar {
+    display: grid;
+  }
+
+  .code-language-select {
+    width: 100%;
   }
 
   .summary-toolbar {

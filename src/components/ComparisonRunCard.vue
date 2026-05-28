@@ -103,19 +103,60 @@ const showRetry = computed(() => props.showRetry ?? true)
 
 <style scoped>
 .comparison-run-card {
+  --run-line: var(--border);
+  --run-line-strong: var(--border-subtle);
+  --run-panel: var(--bg-elevated);
+  --run-soft: var(--bg-surface-2);
+  --run-text: var(--text-primary);
+  --run-muted: var(--text-secondary);
+  --run-primary: var(--accent-text);
+  --run-primary-soft: var(--accent-bg);
+  --run-scroll-track: var(--bg-surface-2);
+  --run-scroll-thumb: var(--scrollbar-thumb);
+  --run-success-text: #34d399;
+  --run-success-bg: rgba(45, 157, 120, 0.16);
+  --run-success-border: rgba(52, 211, 153, 0.28);
+  --run-error-text: #fb7185;
+  --run-error-bg: rgba(244, 63, 94, 0.14);
+  --run-error-border: rgba(251, 113, 133, 0.32);
+  --run-warning-text: #fbbf24;
+  --run-warning-bg: rgba(245, 158, 11, 0.14);
+  --run-warning-border: rgba(251, 191, 36, 0.30);
   display: flex;
   flex-direction: column;
   min-height: 360px;
-  border: 1px solid #d8d4eb;
+  border: 1px solid var(--run-line);
   border-radius: 8px;
-  background: #fbfaff;
+  background: var(--run-panel);
   overflow: hidden;
+}
+
+:global([data-theme="light"]) .comparison-run-card {
+  --run-line: #d8d4eb;
+  --run-line-strong: #c5bfe0;
+  --run-panel: #fbfaff;
+  --run-soft: #f6f4ff;
+  --run-text: #17162a;
+  --run-muted: #76718f;
+  --run-primary: #6f3fd9;
+  --run-primary-soft: #ede6ff;
+  --run-scroll-track: #f4f1ff;
+  --run-scroll-thumb: #b9addf;
+  --run-success-text: #1f8a67;
+  --run-success-bg: rgba(45, 157, 120, 0.12);
+  --run-success-border: rgba(45, 157, 120, 0.28);
+  --run-error-text: #dc4d62;
+  --run-error-bg: #fff5f7;
+  --run-error-border: #f1bdc6;
+  --run-warning-text: #a1711b;
+  --run-warning-bg: rgba(182, 133, 37, 0.10);
+  --run-warning-border: rgba(182, 133, 37, 0.30);
 }
 
 .comparison-run-card,
 .comparison-run-card * {
   scrollbar-width: thin;
-  scrollbar-color: #b9addf #f4f1ff;
+  scrollbar-color: var(--run-scroll-thumb) var(--run-scroll-track);
 }
 
 .comparison-run-card::-webkit-scrollbar,
@@ -126,20 +167,20 @@ const showRetry = computed(() => props.showRetry ?? true)
 
 .comparison-run-card::-webkit-scrollbar-track,
 .comparison-run-card *::-webkit-scrollbar-track {
-  background: #f4f1ff;
+  background: var(--run-scroll-track);
   border-radius: 999px;
 }
 
 .comparison-run-card::-webkit-scrollbar-thumb,
 .comparison-run-card *::-webkit-scrollbar-thumb {
-  border: 2px solid #f4f1ff;
+  border: 2px solid var(--run-scroll-track);
   border-radius: 999px;
-  background: #b9addf;
+  background: var(--run-scroll-thumb);
 }
 
 .comparison-run-card::-webkit-scrollbar-thumb:hover,
 .comparison-run-card *::-webkit-scrollbar-thumb:hover {
-  background: #9f8ed4;
+  background: var(--run-primary);
 }
 
 .run-card-header {
@@ -148,7 +189,7 @@ const showRetry = computed(() => props.showRetry ?? true)
   justify-content: space-between;
   gap: 12px;
   padding: 14px 14px 10px;
-  border-bottom: 1px solid #d8d4eb;
+  border-bottom: 1px solid var(--run-line);
 }
 
 .run-title {
@@ -156,7 +197,7 @@ const showRetry = computed(() => props.showRetry ?? true)
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  color: #17162a;
+  color: var(--run-text);
 }
 
 .run-title strong {
@@ -168,13 +209,13 @@ const showRetry = computed(() => props.showRetry ?? true)
 .provider-badge,
 .status-pill {
   width: fit-content;
-  border: 1px solid #d8d4eb;
+  border: 1px solid var(--run-line);
   border-radius: 999px;
   padding: 2px 7px;
   font-size: 11px;
   line-height: 1.4;
-  color: #76718f;
-  background: #f6f4ff;
+  color: var(--run-muted);
+  background: var(--run-soft);
 }
 
 .status-pill {
@@ -183,27 +224,27 @@ const showRetry = computed(() => props.showRetry ?? true)
 
 .status-streaming .status-pill,
 .status-loading .status-pill {
-  border-color: rgba(45, 157, 120, 0.28);
-  background: rgba(45, 157, 120, 0.12);
-  color: #1f8a67;
+  border-color: var(--run-success-border);
+  background: var(--run-success-bg);
+  color: var(--run-success-text);
 }
 
 .status-done .status-pill {
-  border-color: #bdaaf2;
-  background: #ede6ff;
-  color: #6f3fd9;
+  border-color: var(--accent-border);
+  background: var(--run-primary-soft);
+  color: var(--run-primary);
 }
 
 .status-error .status-pill {
-  border-color: #f1bdc6;
-  background: #fff5f7;
-  color: #dc4d62;
+  border-color: var(--run-error-border);
+  background: var(--run-error-bg);
+  color: var(--run-error-text);
 }
 
 .status-aborted .status-pill {
-  border-color: rgba(182, 133, 37, 0.30);
-  background: rgba(182, 133, 37, 0.10);
-  color: #a1711b;
+  border-color: var(--run-warning-border);
+  background: var(--run-warning-bg);
+  color: var(--run-warning-text);
 }
 
 .run-meta {
@@ -212,13 +253,13 @@ const showRetry = computed(() => props.showRetry ?? true)
   gap: 8px;
   min-height: 28px;
   padding: 8px 14px;
-  color: #76718f;
+  color: var(--run-muted);
   font-size: 12px;
-  border-bottom: 1px solid #d8d4eb;
+  border-bottom: 1px solid var(--run-line);
 }
 
 .run-error {
-  color: #ef6b7b;
+  color: var(--run-error-text);
   overflow-wrap: anywhere;
 }
 
@@ -232,14 +273,14 @@ const showRetry = computed(() => props.showRetry ?? true)
 .run-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  color: #17162a;
+  color: var(--run-text);
   font-size: 14px;
   line-height: 1.65;
   text-align: left;
 }
 
 .run-empty {
-  color: #76718f;
+  color: var(--run-muted);
   font-size: 13px;
 }
 
@@ -248,23 +289,23 @@ const showRetry = computed(() => props.showRetry ?? true)
   justify-content: flex-end;
   gap: 8px;
   padding: 10px 14px 14px;
-  border-top: 1px solid #d8d4eb;
+  border-top: 1px solid var(--run-line);
 }
 
 .run-action {
   height: 32px;
-  border: 1px solid #c5bfe0;
+  border: 1px solid var(--run-line-strong);
   border-radius: 8px;
   padding: 0 12px;
-  background: #f8f6ff;
-  color: #3b3752;
+  background: var(--run-soft);
+  color: var(--run-muted);
   cursor: pointer;
 }
 
 .run-action.primary {
-  border-color: #bdaaf2;
-  color: #6f3fd9;
-  background: #ede6ff;
+  border-color: var(--accent-border);
+  color: var(--run-primary);
+  background: var(--run-primary-soft);
 }
 
 .run-action:disabled {

@@ -6,6 +6,14 @@
         <p>{{ historySummaryText }}</p>
       </div>
       <div class="history-actions">
+        <button
+          type="button"
+          class="history-primary"
+          :disabled="createDisabled"
+          @click="$emit('newComparison')"
+        >
+          新对比
+        </button>
         <button v-if="showBack" type="button" class="history-secondary" @click="$emit('back')">
           返回对比
         </button>
@@ -73,10 +81,12 @@ const props = defineProps<{
   history: ComparisonSessionListItem[]
   activeSessionId?: string
   showBack?: boolean
+  createDisabled?: boolean
 }>()
 
 defineEmits<{
   back: []
+  newComparison: []
   refresh: []
   open: [sessionId: string]
   delete: [sessionId: string]
@@ -135,27 +145,54 @@ function formatDate(timestamp: number): string {
 
 <style scoped>
 .compare-history-view {
-  --history-line: #d8d4eb;
-  --history-line-strong: #c5bfe0;
-  --history-text: #17162a;
-  --history-muted: #76718f;
-  --history-soft: #f3f0fb;
-  --history-primary: #6f3fd9;
-  --history-primary-soft: #ede6ff;
+  --history-line: var(--border);
+  --history-line-strong: var(--border-subtle);
+  --history-text: var(--text-primary);
+  --history-muted: var(--text-secondary);
+  --history-soft: var(--bg-surface-2);
+  --history-panel: var(--bg-elevated);
+  --history-input: var(--bg-input);
+  --history-primary: var(--accent-text);
+  --history-primary-deep: var(--accent-deep);
+  --history-primary-soft: var(--accent-bg);
+  --history-scroll-track: var(--bg-surface-2);
+  --history-scroll-thumb: var(--scrollbar-thumb);
+  --history-danger-text: #fb7185;
+  --history-danger-bg: rgba(244, 63, 94, 0.14);
+  --history-danger-border: rgba(251, 113, 133, 0.32);
   min-height: 0;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   overflow: auto;
   border: 1px solid var(--history-line);
   border-radius: 8px;
-  background: rgba(248, 247, 255, 0.86);
+  background: var(--history-panel);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.18);
+}
+
+:global([data-theme="light"]) .compare-history-view {
+  --history-line: #d8d4eb;
+  --history-line-strong: #c5bfe0;
+  --history-text: #17162a;
+  --history-muted: #76718f;
+  --history-soft: #f3f0fb;
+  --history-panel: rgba(248, 247, 255, 0.86);
+  --history-input: #f5f3ff;
+  --history-primary: #6f3fd9;
+  --history-primary-deep: #8357e8;
+  --history-primary-soft: #ede6ff;
+  --history-scroll-track: #f4f1ff;
+  --history-scroll-thumb: #b9addf;
+  --history-danger-text: #ef6b7b;
+  --history-danger-bg: #fff5f7;
+  --history-danger-border: #f1bdc6;
   box-shadow: 0 18px 46px rgba(84, 69, 141, 0.14);
 }
 
 .compare-history-view,
 .compare-history-view * {
   scrollbar-width: thin;
-  scrollbar-color: #b9addf #f4f1ff;
+  scrollbar-color: var(--history-scroll-thumb) var(--history-scroll-track);
 }
 
 .compare-history-view::-webkit-scrollbar,
@@ -166,20 +203,20 @@ function formatDate(timestamp: number): string {
 
 .compare-history-view::-webkit-scrollbar-track,
 .compare-history-view *::-webkit-scrollbar-track {
-  background: #f4f1ff;
+  background: var(--history-scroll-track);
   border-radius: 999px;
 }
 
 .compare-history-view::-webkit-scrollbar-thumb,
 .compare-history-view *::-webkit-scrollbar-thumb {
-  border: 2px solid #f4f1ff;
+  border: 2px solid var(--history-scroll-track);
   border-radius: 999px;
-  background: #b9addf;
+  background: var(--history-scroll-thumb);
 }
 
 .compare-history-view::-webkit-scrollbar-thumb:hover,
 .compare-history-view *::-webkit-scrollbar-thumb:hover {
-  background: #9f8ed4;
+  background: var(--history-primary);
 }
 
 .history-header,
@@ -217,17 +254,31 @@ function formatDate(timestamp: number): string {
   gap: 8px;
 }
 
+.history-primary,
 .history-secondary,
 .history-danger {
   height: 32px;
   border: 1px solid var(--history-line-strong);
   border-radius: 8px;
   padding: 0 12px;
-  background: #f8f6ff;
-  color: #3b3752;
+  background: var(--history-soft);
+  color: var(--history-muted);
   cursor: pointer;
   font: inherit;
   font-size: 13px;
+}
+
+.history-primary {
+  min-width: 104px;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--history-primary-deep), var(--accent));
+  color: #fff;
+  font-weight: 750;
+  box-shadow: 0 12px 22px rgba(111, 63, 217, 0.24);
+}
+
+.history-primary:hover {
+  color: #fff;
 }
 
 .history-secondary:hover,
@@ -236,10 +287,17 @@ function formatDate(timestamp: number): string {
   color: var(--history-primary);
 }
 
+.history-primary:disabled,
+.history-secondary:disabled,
+.history-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .history-danger {
-  color: #ef6b7b;
-  border-color: #f1bdc6;
-  background: #fff5f7;
+  color: var(--history-danger-text);
+  border-color: var(--history-danger-border);
+  background: var(--history-danger-bg);
 }
 
 .history-filters {
@@ -257,7 +315,7 @@ function formatDate(timestamp: number): string {
   border: 1px solid var(--history-line-strong);
   border-radius: 8px;
   padding: 0 10px;
-  background: #f5f3ff;
+  background: var(--history-input);
   color: var(--history-text);
   outline: none;
   font: inherit;
@@ -265,7 +323,7 @@ function formatDate(timestamp: number): string {
 }
 
 .history-search:focus {
-  border-color: #a897df;
+  border-color: var(--accent-border);
   box-shadow: 0 0 0 3px var(--history-primary-soft);
 }
 
@@ -281,7 +339,7 @@ function formatDate(timestamp: number): string {
   border: 1px solid var(--history-line);
   border-radius: 8px;
   padding: 0 10px;
-  background: #f6f4ff;
+  background: var(--history-soft);
   color: var(--history-muted);
   cursor: pointer;
   font: inherit;
@@ -289,7 +347,7 @@ function formatDate(timestamp: number): string {
 }
 
 .history-filter-tab.active {
-  border-color: #bdaaf2;
+  border-color: var(--accent-border);
   background: var(--history-primary-soft);
   color: var(--history-primary);
 }
@@ -313,7 +371,7 @@ function formatDate(timestamp: number): string {
 }
 
 .history-item.active {
-  border-color: #bdaaf2;
+  border-color: var(--accent-border);
   background: var(--history-primary-soft);
 }
 

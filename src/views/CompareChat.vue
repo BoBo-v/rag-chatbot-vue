@@ -2,7 +2,7 @@
   <div class="compare-shell">
     <header class="compare-header">
       <div class="compare-title">
-        <span class="logo-dot"></span>
+        <img class="logo-dot" src="/favicon.svg" alt="AI Chat" />
         <div>
           <h1>多模型对比</h1>
           <p>{{ headerHint }}</p>
@@ -57,6 +57,8 @@
         <CompareHistoryView
           :history="history"
           :active-session-id="currentSession?.id"
+          :create-disabled="isRunning"
+          @new-comparison="newComparison"
           @refresh="refreshHistory"
           @open="openHistory"
           @delete="deleteHistory"
@@ -334,55 +336,57 @@
       </section>
 
       </section>
-    </main>
 
-    <section class="summary-panel" :class="{ empty: !summaryRun }">
-      <div class="summary-toolbar">
-        <div class="summary-copy">
-          <h2>汇总答案</h2>
-          <p>{{ summaryHint }}</p>
-        </div>
-        <textarea
-          v-model="summaryInstruction"
-          class="summary-instruction"
-          :disabled="isSummaryRunning || isHistorySession"
-          placeholder="可选：输入你的汇总要求，例如更偏向步骤、结论先行、只保留代码差异等"
-        ></textarea>
-        <div class="summary-actions">
-          <select
-            v-model="summaryRuntime.provider"
-            class="field-input summary-select"
-            :disabled="isSummaryRunning || isHistorySession"
-            @change="normalizeRuntime(summaryRuntime)"
-          >
-            <option value="ollama">Ollama</option>
-            <option value="openai">OpenAI 兼容</option>
-            <option value="claude">Claude</option>
-          </select>
-          <input
-            v-model="summaryRuntime.model"
-            class="field-input summary-model"
-            :disabled="isSummaryRunning || isHistorySession"
-            spellcheck="false"
+      <aside class="comparison-inspector">
+        <section class="summary-panel" :class="{ empty: !summaryRun }">
+          <div class="summary-toolbar">
+            <div class="summary-copy">
+              <h2>汇总答案</h2>
+              <p>{{ summaryHint }}</p>
+            </div>
+            <textarea
+              v-model="summaryInstruction"
+              class="summary-instruction"
+              :disabled="isSummaryRunning || isHistorySession"
+              placeholder="可选：输入你的汇总要求，例如更偏向步骤、结论先行、只保留代码差异等"
+            ></textarea>
+            <div class="summary-actions">
+              <select
+                v-model="summaryRuntime.provider"
+                class="field-input summary-select"
+                :disabled="isSummaryRunning || isHistorySession"
+                @change="normalizeRuntime(summaryRuntime)"
+              >
+                <option value="ollama">Ollama</option>
+                <option value="openai">OpenAI 兼容</option>
+                <option value="claude">Claude</option>
+              </select>
+              <input
+                v-model="summaryRuntime.model"
+                class="field-input summary-model"
+                :disabled="isSummaryRunning || isHistorySession"
+                spellcheck="false"
+              />
+              <button type="button" class="compare-secondary" :disabled="isSummaryRunning || isHistorySession" @click="resetSummaryRuntime">
+                同步当前设置
+              </button>
+              <button type="button" class="compare-primary" :disabled="!canSummarize" @click="summarize">
+                生成汇总
+              </button>
+              <button type="button" class="compare-secondary" :disabled="!isSummaryRunning" @click="stopSummary">
+                停止汇总
+              </button>
+            </div>
+          </div>
+          <ComparisonRunCard
+            v-if="summaryRun"
+            :run="summaryRun"
+            :show-retry="false"
+            @stop="stopSummary"
           />
-          <button type="button" class="compare-secondary" :disabled="isSummaryRunning || isHistorySession" @click="resetSummaryRuntime">
-            同步当前设置
-          </button>
-          <button type="button" class="compare-primary" :disabled="!canSummarize" @click="summarize">
-            生成汇总
-          </button>
-          <button type="button" class="compare-secondary" :disabled="!isSummaryRunning" @click="stopSummary">
-            停止汇总
-          </button>
-        </div>
-      </div>
-      <ComparisonRunCard
-        v-if="summaryRun"
-        :run="summaryRun"
-        :show-retry="false"
-        @stop="stopSummary"
-      />
-    </section>
+        </section>
+      </aside>
+    </main>
   </div>
 </template>
 
@@ -759,27 +763,68 @@ async function summarize(): Promise<void> {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  --compare-bg: #eeecfb;
-  --compare-panel: rgba(248, 247, 255, 0.86);
-  --compare-panel-strong: #ffffff;
-  --compare-soft: #f3f0fb;
-  --compare-line: #d8d4eb;
-  --compare-line-strong: #c5bfe0;
-  --compare-text: #17162a;
-  --compare-muted: #76718f;
-  --compare-primary: #8357e8;
-  --compare-primary-strong: #6f3fd9;
-  --compare-primary-soft: #ede6ff;
-  --compare-shadow: 0 18px 46px rgba(84, 69, 141, 0.14);
+  --compare-bg: var(--bg-canvas);
+  --compare-panel: var(--bg-elevated);
+  --compare-panel-strong: var(--bg-surface);
+  --compare-soft: var(--bg-surface-2);
+  --compare-input: var(--bg-input);
+  --compare-line: var(--border);
+  --compare-line-strong: var(--border-subtle);
+  --compare-text: var(--text-primary);
+  --compare-muted: var(--text-secondary);
+  --compare-faint: var(--text-muted);
+  --compare-primary: var(--accent-deep);
+  --compare-primary-strong: var(--accent-text);
+  --compare-primary-soft: var(--accent-bg);
+  --compare-scroll-track: var(--bg-surface-2);
+  --compare-scroll-thumb: var(--scrollbar-thumb);
+  --compare-success-text: #34d399;
+  --compare-success-bg: rgba(45, 157, 120, 0.16);
+  --compare-success-border: rgba(52, 211, 153, 0.28);
+  --compare-error-text: #fb7185;
+  --compare-error-bg: rgba(244, 63, 94, 0.14);
+  --compare-error-border: rgba(251, 113, 133, 0.32);
+  --compare-warning-text: #fbbf24;
+  --compare-warning-bg: rgba(245, 158, 11, 0.14);
+  --compare-warning-border: rgba(251, 191, 36, 0.30);
+  --compare-shadow: 0 18px 46px rgba(0, 0, 0, 0.18);
   background: var(--compare-bg);
   color: var(--text-primary);
   font-family: 'SF Pro Display', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
+:global([data-theme="light"]) .compare-shell {
+  --compare-bg: #eeecfb;
+  --compare-panel: rgba(248, 247, 255, 0.86);
+  --compare-panel-strong: #ffffff;
+  --compare-soft: #f3f0fb;
+  --compare-input: #f5f3ff;
+  --compare-line: #d8d4eb;
+  --compare-line-strong: #c5bfe0;
+  --compare-text: #17162a;
+  --compare-muted: #76718f;
+  --compare-faint: #918baa;
+  --compare-primary: #8357e8;
+  --compare-primary-strong: #6f3fd9;
+  --compare-primary-soft: #ede6ff;
+  --compare-scroll-track: #f4f1ff;
+  --compare-scroll-thumb: #b9addf;
+  --compare-success-text: #1f8a67;
+  --compare-success-bg: rgba(45, 157, 120, 0.12);
+  --compare-success-border: rgba(45, 157, 120, 0.28);
+  --compare-error-text: #dc4d62;
+  --compare-error-bg: #fff5f7;
+  --compare-error-border: #f1bdc6;
+  --compare-warning-text: #a1711b;
+  --compare-warning-bg: rgba(182, 133, 37, 0.10);
+  --compare-warning-border: rgba(182, 133, 37, 0.30);
+  --compare-shadow: 0 18px 46px rgba(84, 69, 141, 0.14);
+}
+
 .compare-shell,
 .compare-shell * {
   scrollbar-width: thin;
-  scrollbar-color: #b9addf #f4f1ff;
+  scrollbar-color: var(--compare-scroll-thumb) var(--compare-scroll-track);
 }
 
 .compare-shell::-webkit-scrollbar,
@@ -790,20 +835,20 @@ async function summarize(): Promise<void> {
 
 .compare-shell::-webkit-scrollbar-track,
 .compare-shell *::-webkit-scrollbar-track {
-  background: #f4f1ff;
+  background: var(--compare-scroll-track);
   border-radius: 999px;
 }
 
 .compare-shell::-webkit-scrollbar-thumb,
 .compare-shell *::-webkit-scrollbar-thumb {
-  border: 2px solid #f4f1ff;
+  border: 2px solid var(--compare-scroll-track);
   border-radius: 999px;
-  background: #b9addf;
+  background: var(--compare-scroll-thumb);
 }
 
 .compare-shell::-webkit-scrollbar-thumb:hover,
 .compare-shell *::-webkit-scrollbar-thumb:hover {
-  background: #9f8ed4;
+  background: var(--compare-primary-strong);
 }
 
 .compare-shell::-webkit-scrollbar-corner,
@@ -819,7 +864,7 @@ async function summarize(): Promise<void> {
   gap: 16px;
   padding: 0 24px;
   border-bottom: 1px solid var(--compare-line);
-  background: rgba(248, 247, 255, 0.88);
+  background: var(--bg-topbar);
   backdrop-filter: blur(14px);
 }
 
@@ -845,10 +890,13 @@ async function summarize(): Promise<void> {
 }
 
 .logo-dot {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #8a5ff0, #5f7af1);
+  display: block;
+  object-fit: contain;
+  background: var(--compare-panel-strong);
+  padding: 3px;
   box-shadow: 0 10px 22px rgba(111, 63, 217, 0.28);
   flex-shrink: 0;
 }
@@ -864,24 +912,29 @@ async function summarize(): Promise<void> {
 .compare-main {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 292px minmax(0, 1fr) 328px;
   gap: 18px;
   width: min(1440px, calc(100vw - 48px));
   min-height: 0;
-  margin: 22px auto 18px;
+  margin: 22px auto;
 }
 
 .compare-main.history-collapsed {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 328px;
 }
 
 .comparison-sidebar,
-.comparison-workspace {
+.comparison-workspace,
+.comparison-inspector {
   min-height: 0;
   min-width: 0;
 }
 
 .comparison-sidebar {
+  display: grid;
+}
+
+.comparison-inspector {
   display: grid;
 }
 
@@ -905,7 +958,7 @@ async function summarize(): Promise<void> {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #4a465f;
+  color: var(--compare-muted);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -919,7 +972,7 @@ async function summarize(): Promise<void> {
 .stats-strip {
   padding: 10px 18px;
   border-bottom: 1px solid var(--compare-line);
-  background: rgba(255, 255, 255, 0.38);
+  background: var(--compare-soft);
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-start;
@@ -930,7 +983,7 @@ async function summarize(): Promise<void> {
   border: 1px solid var(--compare-line);
   border-radius: 999px;
   padding: 4px 10px;
-  background: #f6f4ff;
+  background: var(--compare-soft);
   color: var(--compare-muted);
   font-size: 12px;
   line-height: 1.4;
@@ -939,39 +992,39 @@ async function summarize(): Promise<void> {
 
 .stat-total,
 .stat-latency {
-  border-color: #d8d4eb;
-  background: #f6f4ff;
-  color: #625c7b;
+  border-color: var(--compare-line);
+  background: var(--compare-soft);
+  color: var(--compare-muted);
 }
 
 .stat-success {
-  border-color: rgba(45, 157, 120, 0.28);
-  background: rgba(45, 157, 120, 0.12);
-  color: #1f8a67;
+  border-color: var(--compare-success-border);
+  background: var(--compare-success-bg);
+  color: var(--compare-success-text);
 }
 
 .stat-error {
-  border-color: #f1bdc6;
-  background: #fff5f7;
-  color: #dc4d62;
+  border-color: var(--compare-error-border);
+  background: var(--compare-error-bg);
+  color: var(--compare-error-text);
 }
 
 .stat-aborted {
-  border-color: rgba(182, 133, 37, 0.30);
-  background: rgba(182, 133, 37, 0.10);
-  color: #a1711b;
+  border-color: var(--compare-warning-border);
+  background: var(--compare-warning-bg);
+  color: var(--compare-warning-text);
 }
 
 .stat-running {
-  border-color: rgba(111, 63, 217, 0.24);
+  border-color: var(--accent-border);
   background: var(--compare-primary-soft);
   color: var(--compare-primary-strong);
 }
 
 .small-btn.danger {
-  color: #fca5a5;
-  border-color: rgba(248, 113, 113, 0.35);
-  background: rgba(248, 113, 113, 0.10);
+  color: var(--compare-error-text);
+  border-color: var(--compare-error-border);
+  background: var(--compare-error-bg);
 }
 
 .compare-setup {
@@ -1074,7 +1127,7 @@ async function summarize(): Promise<void> {
 
 .snapshot-status {
   flex-shrink: 0;
-  border: 1px solid #bdaaf2;
+  border: 1px solid var(--accent-border);
   border-radius: 999px;
   padding: 2px 8px;
   background: var(--compare-primary-soft);
@@ -1085,27 +1138,27 @@ async function summarize(): Promise<void> {
 
 .snapshot-status.status-loading,
 .snapshot-status.status-streaming {
-  border-color: rgba(45, 157, 120, 0.28);
-  background: rgba(45, 157, 120, 0.12);
-  color: #1f8a67;
+  border-color: var(--compare-success-border);
+  background: var(--compare-success-bg);
+  color: var(--compare-success-text);
 }
 
 .snapshot-status.status-done {
-  border-color: #bdaaf2;
+  border-color: var(--accent-border);
   background: var(--compare-primary-soft);
   color: var(--compare-primary-strong);
 }
 
 .snapshot-status.status-error {
-  border-color: #f1bdc6;
-  background: #fff5f7;
-  color: #dc4d62;
+  border-color: var(--compare-error-border);
+  background: var(--compare-error-bg);
+  color: var(--compare-error-text);
 }
 
 .snapshot-status.status-aborted {
-  border-color: rgba(182, 133, 37, 0.30);
-  background: rgba(182, 133, 37, 0.10);
-  color: #a1711b;
+  border-color: var(--compare-warning-border);
+  background: var(--compare-warning-bg);
+  color: var(--compare-warning-text);
 }
 
 .runtime-snapshot-card dl {
@@ -1148,7 +1201,7 @@ async function summarize(): Promise<void> {
   border: 1px solid var(--compare-line);
   border-radius: 999px;
   padding: 4px 10px;
-  background: #f6f4ff;
+  background: var(--compare-soft);
   color: var(--compare-muted);
   font-size: 12px;
   overflow: hidden;
@@ -1200,7 +1253,7 @@ async function summarize(): Promise<void> {
   border-radius: 8px;
   padding: 6px 8px;
   background: var(--compare-soft);
-  color: #4a465f;
+  color: var(--compare-muted);
   font-size: 12px;
 }
 
@@ -1225,7 +1278,7 @@ async function summarize(): Promise<void> {
   border-radius: 50%;
   padding: 0;
   background: var(--compare-panel-strong);
-  color: #4a465f;
+  color: var(--compare-muted);
   cursor: pointer;
 }
 
@@ -1238,7 +1291,7 @@ async function summarize(): Promise<void> {
 .field-label {
   display: block;
   margin: 0 0 6px;
-  color: #4a465f;
+  color: var(--compare-muted);
   font-size: 12px;
   font-weight: 650;
 }
@@ -1249,7 +1302,7 @@ async function summarize(): Promise<void> {
   box-sizing: border-box;
   border: 1px solid var(--compare-line-strong);
   border-radius: 8px;
-  background: #f5f3ff;
+  background: var(--compare-input);
   color: var(--compare-text);
   outline: none;
   font: inherit;
@@ -1263,7 +1316,7 @@ async function summarize(): Promise<void> {
 select.field-input {
   appearance: none;
   cursor: pointer;
-  background-color: #f5f3ff;
+  background-color: var(--compare-input);
   background-image: linear-gradient(45deg, transparent 50%, var(--compare-muted) 50%),
     linear-gradient(135deg, var(--compare-muted) 50%, transparent 50%);
   background-position: calc(100% - 17px) 14px, calc(100% - 11px) 14px;
@@ -1273,7 +1326,7 @@ select.field-input {
 }
 
 select.field-input option {
-  background: #fff;
+  background: var(--compare-panel-strong);
   color: var(--compare-text);
 }
 
@@ -1292,7 +1345,7 @@ select.field-input option {
 
 .prompt-input:focus,
 .field-input:focus {
-  border-color: #a897df;
+  border-color: var(--accent-border);
   box-shadow: 0 0 0 3px var(--compare-primary-soft);
 }
 
@@ -1360,12 +1413,12 @@ select.field-input option {
 .small-btn {
   height: 32px;
   padding: 0 12px;
-  color: #3b3752;
-  background: #f8f6ff;
+  color: var(--compare-muted);
+  background: var(--compare-soft);
 }
 
 .compare-secondary.active {
-  border-color: #bdaaf2;
+  border-color: var(--accent-border);
   background: var(--compare-primary-soft);
   color: var(--compare-primary-strong);
 }
@@ -1394,11 +1447,9 @@ textarea:disabled {
 }
 
 .summary-panel {
-  flex: 0 0 auto;
-  width: min(1440px, calc(100vw - 48px));
-  max-height: 32vh;
+  min-height: 0;
   overflow: auto;
-  margin: 0 auto 22px;
+  margin: 0;
   padding: 14px 18px;
   border: 1px solid var(--compare-line);
   border-radius: 8px;
@@ -1407,14 +1458,15 @@ textarea:disabled {
 }
 
 .summary-panel.empty {
-  max-height: 178px;
+  align-self: start;
+  max-height: none;
 }
 
 .summary-toolbar {
   display: grid;
-  grid-template-columns: 280px minmax(260px, 1fr) auto;
-  align-items: center;
-  gap: 16px;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: 12px;
   margin: 0 0 10px;
 }
 
@@ -1438,14 +1490,14 @@ textarea:disabled {
 
 .summary-instruction {
   width: 100%;
-  min-height: 34px;
-  max-height: 72px;
+  min-height: 96px;
+  max-height: 160px;
   box-sizing: border-box;
   border: 1px solid var(--compare-line-strong);
   border-radius: 8px;
   padding: 8px 10px;
   resize: vertical;
-  background: #f5f3ff;
+  background: var(--compare-input);
   color: var(--compare-text);
   outline: none;
   font: inherit;
@@ -1459,21 +1511,21 @@ textarea:disabled {
 }
 
 .summary-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-content: stretch;
   gap: 8px;
   min-width: 0;
 }
 
 .summary-select,
 .summary-model {
-  width: 150px;
+  width: 100%;
   margin-bottom: 0;
 }
 
 .summary-panel :deep(.comparison-run-card) {
-  min-height: 220px;
+  min-height: 320px;
   margin: 0;
 }
 
@@ -1493,7 +1545,7 @@ textarea:disabled {
   overflow: auto;
   padding: 14px 18px;
   border-top: 1px solid var(--compare-line);
-  background: rgba(255, 255, 255, 0.40);
+  background: var(--compare-soft);
 }
 
 .code-compare-toolbar,
@@ -1669,13 +1721,80 @@ textarea:disabled {
   background: transparent;
 }
 
-@media (max-width: 1120px) {
-  .compare-main,
-  .summary-panel {
+@media (max-width: 1180px) {
+  .compare-shell {
+    overflow: auto;
+  }
+
+  .compare-main {
     width: calc(100vw - 28px);
   }
 
   .compare-main {
+    flex: 0 0 auto;
+    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-rows: minmax(540px, auto) auto;
+    gap: 14px;
+    margin: 16px auto 14px;
+  }
+
+  .compare-main.history-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .comparison-inspector {
+    grid-column: 1 / -1;
+  }
+
+  .comparison-sidebar,
+  .comparison-workspace {
+    min-height: min(640px, calc(100vh - 108px));
+  }
+
+  .header-actions {
+    padding-right: 0;
+  }
+
+  .run-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-toolbar {
+    grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1fr) minmax(220px, 0.8fr);
+    align-items: center;
+  }
+
+  .summary-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-panel :deep(.comparison-run-card) {
+    min-height: 240px;
+  }
+}
+
+@media (max-width: 820px) {
+  .compare-header {
+    height: auto;
+    min-height: 52px;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 10px 14px;
+  }
+
+  .header-actions {
+    width: 100%;
+    padding-right: 0;
+    justify-content: flex-start;
+  }
+
+  .compare-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    margin: 14px auto;
+  }
+
+  .compare-main.history-collapsed {
     grid-template-columns: 1fr;
   }
 
@@ -1683,28 +1802,8 @@ textarea:disabled {
     min-height: 320px;
   }
 
-  .summary-toolbar {
-    grid-template-columns: 1fr;
-  }
-
-  .summary-actions {
-    justify-content: flex-start;
-  }
-}
-
-@media (max-width: 860px) {
-  .compare-header {
-    height: auto;
-    min-height: 52px;
-    padding: 10px 14px;
-  }
-
-  .header-actions {
-    padding-right: 0;
-  }
-
-  .compare-main {
-    margin: 14px auto;
+  .comparison-workspace {
+    min-height: 560px;
   }
 
   .compare-setup {
@@ -1730,11 +1829,20 @@ textarea:disabled {
     grid-template-columns: 1fr;
   }
 
+  .setup-readonly {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-readonly > .compare-secondary {
+    justify-self: flex-start;
+  }
+
   .setup-models {
     justify-content: flex-start;
   }
 
   .runtime-grid,
+  .runtime-snapshot-grid,
   .run-grid {
     grid-template-columns: 1fr;
   }
@@ -1748,6 +1856,7 @@ textarea:disabled {
   }
 
   .compare-actions {
+    flex-wrap: wrap;
     justify-content: stretch;
   }
 
@@ -1767,10 +1876,12 @@ textarea:disabled {
 
   .summary-toolbar {
     grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .summary-actions {
     width: 100%;
+    grid-template-columns: 1fr;
     justify-content: stretch;
   }
 
@@ -1782,6 +1893,76 @@ textarea:disabled {
   .compare-primary,
   .compare-secondary {
     flex: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .compare-main {
+    width: calc(100vw - 16px);
+  }
+
+  .compare-header {
+    padding: 10px 8px;
+  }
+
+  .compare-title p {
+    white-space: normal;
+  }
+
+  .header-actions,
+  .compare-actions,
+  .summary-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .compare-secondary,
+  .compare-primary {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .comparison-sidebar {
+    min-height: 280px;
+  }
+
+  .comparison-workspace,
+  .summary-panel {
+    border-radius: 8px;
+  }
+
+  .setup-summary-main {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .summary-prompt,
+  .model-chip {
+    max-width: 100%;
+  }
+
+  .runtime-snapshot-card dl {
+    grid-template-columns: 1fr;
+  }
+
+  .run-grid {
+    grid-auto-rows: minmax(280px, auto);
+  }
+
+  .summary-panel {
+    max-height: 42vh;
+    margin-bottom: 12px;
+    padding: 12px;
+  }
+
+  .summary-panel.empty {
+    max-height: none;
+  }
+
+  .code-diff-row {
+    grid-template-columns: 40px minmax(240px, 1fr) 40px minmax(240px, 1fr);
+    min-width: 640px;
   }
 }
 </style>

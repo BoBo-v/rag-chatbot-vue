@@ -12,6 +12,7 @@
       <span v-if="latencyLabel">{{ latencyLabel }}</span>
       <span v-if="runStats.characterCount > 0">{{ runStats.characterCount }} 字符</span>
       <span v-if="runStats.wordCount > 0">{{ runStats.wordCount }} 词</span>
+      <span v-if="codeStats.count > 0">{{ codeStats.count }} 段代码 · {{ codeStats.primaryLanguage }}</span>
       <span v-if="run.errorMessage" class="run-error">{{ run.errorMessage }}</span>
     </div>
 
@@ -45,6 +46,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { getCodeBlockStats } from '../services/comparisonCode'
 import { formatLatency, getRunStats } from '../services/comparisonStats'
 import type { ComparisonRun } from '../types/model'
 
@@ -91,6 +93,7 @@ const latencyLabel = computed(() => {
   return formatLatency(props.run.latencyMs)
 })
 const runStats = computed(() => getRunStats(props.run))
+const codeStats = computed(() => getCodeBlockStats(props.run))
 
 const canStop = computed(() => props.run.status === 'loading' || props.run.status === 'streaming')
 const canRetry = computed(() => props.run.status === 'done' || props.run.status === 'error' || props.run.status === 'aborted')

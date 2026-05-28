@@ -6,7 +6,7 @@
         <p>{{ historySummaryText }}</p>
       </div>
       <div class="history-actions">
-        <button type="button" class="history-secondary" @click="$emit('back')">
+        <button v-if="showBack" type="button" class="history-secondary" @click="$emit('back')">
           返回对比
         </button>
         <button type="button" class="history-secondary" @click="$emit('refresh')">
@@ -72,6 +72,7 @@ type HistoryFilter = 'all' | 'success' | 'failed' | 'with-summary'
 const props = defineProps<{
   history: ComparisonSessionListItem[]
   activeSessionId?: string
+  showBack?: boolean
 }>()
 
 defineEmits<{
@@ -134,30 +135,70 @@ function formatDate(timestamp: number): string {
 
 <style scoped>
 .compare-history-view {
+  --history-line: #d8d4eb;
+  --history-line-strong: #c5bfe0;
+  --history-text: #17162a;
+  --history-muted: #76718f;
+  --history-soft: #f3f0fb;
+  --history-primary: #6f3fd9;
+  --history-primary-soft: #ede6ff;
   min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: auto;
-  padding: 20px 24px 28px;
-  background: var(--bg-primary);
+  border: 1px solid var(--history-line);
+  border-radius: 8px;
+  background: rgba(248, 247, 255, 0.86);
+  box-shadow: 0 18px 46px rgba(84, 69, 141, 0.14);
+}
+
+.compare-history-view,
+.compare-history-view * {
+  scrollbar-width: thin;
+  scrollbar-color: #b9addf #f4f1ff;
+}
+
+.compare-history-view::-webkit-scrollbar,
+.compare-history-view *::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.compare-history-view::-webkit-scrollbar-track,
+.compare-history-view *::-webkit-scrollbar-track {
+  background: #f4f1ff;
+  border-radius: 999px;
+}
+
+.compare-history-view::-webkit-scrollbar-thumb,
+.compare-history-view *::-webkit-scrollbar-thumb {
+  border: 2px solid #f4f1ff;
+  border-radius: 999px;
+  background: #b9addf;
+}
+
+.compare-history-view::-webkit-scrollbar-thumb:hover,
+.compare-history-view *::-webkit-scrollbar-thumb:hover {
+  background: #9f8ed4;
 }
 
 .history-header,
 .history-filters,
 .history-list,
 .history-empty {
-  max-width: 1180px;
-  margin-right: auto;
-  margin-left: auto;
+  min-width: 0;
 }
 
 .history-header {
   display: grid;
   gap: 10px;
-  margin-bottom: 16px;
+  padding: 16px;
+  border-bottom: 1px solid var(--history-line);
 }
 
 .history-header h2 {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--history-text);
   font-size: 18px;
   line-height: 1.35;
   letter-spacing: 0;
@@ -165,7 +206,7 @@ function formatDate(timestamp: number): string {
 
 .history-header p {
   margin: 4px 0 0;
-  color: var(--text-muted);
+  color: var(--history-muted);
   font-size: 13px;
 }
 
@@ -179,11 +220,11 @@ function formatDate(timestamp: number): string {
 .history-secondary,
 .history-danger {
   height: 32px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--history-line-strong);
   border-radius: 8px;
   padding: 0 12px;
-  background: var(--button-secondary-bg);
-  color: var(--text-secondary);
+  background: #f8f6ff;
+  color: #3b3752;
   cursor: pointer;
   font: inherit;
   font-size: 13px;
@@ -192,86 +233,88 @@ function formatDate(timestamp: number): string {
 .history-secondary:hover,
 .history-danger:hover {
   border-color: var(--accent-border);
-  color: var(--text-primary);
+  color: var(--history-primary);
 }
 
 .history-danger {
-  color: #fca5a5;
-  border-color: rgba(248, 113, 113, 0.35);
-  background: rgba(248, 113, 113, 0.10);
+  color: #ef6b7b;
+  border-color: #f1bdc6;
+  background: #fff5f7;
 }
 
 .history-filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
+  grid-template-columns: 1fr;
   gap: 10px;
   align-items: center;
-  margin-bottom: 14px;
+  padding: 14px 14px 10px;
 }
 
 .history-search {
   width: 100%;
   height: 36px;
   box-sizing: border-box;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--history-line-strong);
   border-radius: 8px;
   padding: 0 10px;
-  background: var(--settings-input-bg);
-  color: var(--text-primary);
+  background: #f5f3ff;
+  color: var(--history-text);
   outline: none;
   font: inherit;
   font-size: 13px;
 }
 
 .history-search:focus {
-  border-color: var(--accent-border);
-  box-shadow: 0 0 0 3px var(--accent-bg);
+  border-color: #a897df;
+  box-shadow: 0 0 0 3px var(--history-primary-soft);
 }
 
 .history-filter-tabs {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
 }
 
 .history-filter-tab {
   height: 32px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--history-line);
   border-radius: 8px;
   padding: 0 10px;
-  background: var(--bg-surface-2);
-  color: var(--text-secondary);
+  background: #f6f4ff;
+  color: var(--history-muted);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
 }
 
 .history-filter-tab.active {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
-  color: var(--accent-text);
+  border-color: #bdaaf2;
+  background: var(--history-primary-soft);
+  color: var(--history-primary);
 }
 
 .history-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 0 14px 14px;
   display: grid;
+  align-content: start;
   gap: 10px;
 }
 
 .history-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid var(--border-subtle);
+  gap: 10px;
+  border: 1px solid var(--history-line);
   border-radius: 8px;
   padding: 12px;
-  background: var(--bg-surface-2);
+  background: var(--history-soft);
 }
 
 .history-item.active {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
+  border-color: #bdaaf2;
+  background: var(--history-primary-soft);
 }
 
 .history-open {
@@ -293,27 +336,27 @@ function formatDate(timestamp: number): string {
 }
 
 .history-prompt {
-  color: var(--text-primary);
+  color: var(--history-text);
   font-size: 14px;
   line-height: 1.45;
 }
 
 .history-meta {
   margin-top: 4px;
-  color: var(--text-muted);
+  color: var(--history-muted);
   font-size: 12px;
 }
 
 .history-empty {
-  padding: 48px 16px;
-  color: var(--text-faint);
+  padding: 36px 16px;
+  color: var(--history-muted);
   font-size: 14px;
   text-align: center;
 }
 
 @media (max-width: 860px) {
   .compare-history-view {
-    padding: 16px 14px 24px;
+    min-height: 320px;
   }
 
   .history-filters,

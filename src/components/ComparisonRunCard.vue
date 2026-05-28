@@ -106,10 +106,40 @@ const showRetry = computed(() => props.showRetry ?? true)
   display: flex;
   flex-direction: column;
   min-height: 360px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid #d8d4eb;
   border-radius: 8px;
-  background: var(--bg-elevated);
+  background: #fbfaff;
   overflow: hidden;
+}
+
+.comparison-run-card,
+.comparison-run-card * {
+  scrollbar-width: thin;
+  scrollbar-color: #b9addf #f4f1ff;
+}
+
+.comparison-run-card::-webkit-scrollbar,
+.comparison-run-card *::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.comparison-run-card::-webkit-scrollbar-track,
+.comparison-run-card *::-webkit-scrollbar-track {
+  background: #f4f1ff;
+  border-radius: 999px;
+}
+
+.comparison-run-card::-webkit-scrollbar-thumb,
+.comparison-run-card *::-webkit-scrollbar-thumb {
+  border: 2px solid #f4f1ff;
+  border-radius: 999px;
+  background: #b9addf;
+}
+
+.comparison-run-card::-webkit-scrollbar-thumb:hover,
+.comparison-run-card *::-webkit-scrollbar-thumb:hover {
+  background: #9f8ed4;
 }
 
 .run-card-header {
@@ -118,7 +148,7 @@ const showRetry = computed(() => props.showRetry ?? true)
   justify-content: space-between;
   gap: 12px;
   padding: 14px 14px 10px;
-  border-bottom: 1px solid var(--border-faint);
+  border-bottom: 1px solid #d8d4eb;
 }
 
 .run-title {
@@ -126,7 +156,7 @@ const showRetry = computed(() => props.showRetry ?? true)
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  color: var(--text-primary);
+  color: #17162a;
 }
 
 .run-title strong {
@@ -138,13 +168,13 @@ const showRetry = computed(() => props.showRetry ?? true)
 .provider-badge,
 .status-pill {
   width: fit-content;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border: 1px solid #d8d4eb;
+  border-radius: 999px;
   padding: 2px 7px;
   font-size: 11px;
   line-height: 1.4;
-  color: var(--text-secondary);
-  background: var(--bg-surface-3);
+  color: #76718f;
+  background: #f6f4ff;
 }
 
 .status-pill {
@@ -154,20 +184,20 @@ const showRetry = computed(() => props.showRetry ?? true)
 .status-streaming .status-pill,
 .status-loading .status-pill {
   color: #86efac;
-  border-color: rgba(134, 239, 172, 0.32);
-  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(45, 157, 120, 0.28);
+  background: rgba(45, 157, 120, 0.12);
 }
 
 .status-error .status-pill {
-  color: #fca5a5;
-  border-color: rgba(248, 113, 113, 0.35);
-  background: rgba(248, 113, 113, 0.12);
+  color: #ef6b7b;
+  border-color: #f1bdc6;
+  background: #fff5f7;
 }
 
 .status-aborted .status-pill {
-  color: #facc15;
-  border-color: rgba(250, 204, 21, 0.35);
-  background: rgba(250, 204, 21, 0.10);
+  color: #b68525;
+  border-color: rgba(182, 133, 37, 0.30);
+  background: rgba(182, 133, 37, 0.10);
 }
 
 .run-meta {
@@ -176,13 +206,13 @@ const showRetry = computed(() => props.showRetry ?? true)
   gap: 8px;
   min-height: 28px;
   padding: 8px 14px;
-  color: var(--text-muted);
+  color: #76718f;
   font-size: 12px;
-  border-bottom: 1px solid var(--border-faint);
+  border-bottom: 1px solid #d8d4eb;
 }
 
 .run-error {
-  color: #fca5a5;
+  color: #ef6b7b;
   overflow-wrap: anywhere;
 }
 
@@ -196,14 +226,14 @@ const showRetry = computed(() => props.showRetry ?? true)
 .run-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  color: var(--text-primary);
+  color: #17162a;
   font-size: 14px;
   line-height: 1.65;
   text-align: left;
 }
 
 .run-empty {
-  color: var(--text-faint);
+  color: #76718f;
   font-size: 13px;
 }
 
@@ -212,23 +242,23 @@ const showRetry = computed(() => props.showRetry ?? true)
   justify-content: flex-end;
   gap: 8px;
   padding: 10px 14px 14px;
-  border-top: 1px solid var(--border-faint);
+  border-top: 1px solid #d8d4eb;
 }
 
 .run-action {
   height: 32px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border: 1px solid #c5bfe0;
+  border-radius: 8px;
   padding: 0 12px;
-  background: var(--bg-surface-3);
-  color: var(--text-secondary);
+  background: #f8f6ff;
+  color: #3b3752;
   cursor: pointer;
 }
 
 .run-action.primary {
-  border-color: var(--accent-border);
-  color: var(--accent-text);
-  background: var(--accent-bg);
+  border-color: #bdaaf2;
+  color: #6f3fd9;
+  background: #ede6ff;
 }
 
 .run-action:disabled {

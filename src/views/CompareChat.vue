@@ -12,8 +12,8 @@
         <button
           type="button"
           class="compare-secondary"
-          :class="{ active: activeCompareView === 'history' }"
-          @click="showHistory"
+          :class="{ active: historySidebarOpen }"
+          @click="toggleHistorySidebar"
         >
           对比历史
         </button>
@@ -52,24 +52,18 @@
       </div>
     </header>
 
-    <main
-      class="compare-main"
-      :class="{
-        'has-summary': Boolean(summaryRun),
-        'history-view-active': activeCompareView === 'history',
-      }"
-    >
-      <CompareHistoryView
-        v-if="activeCompareView === 'history'"
-        :history="history"
-        :active-session-id="currentSession?.id"
-        @back="activeCompareView = 'run'"
-        @refresh="refreshHistory"
-        @open="openHistory"
-        @delete="deleteHistory"
-      />
+    <main class="compare-main" :class="{ 'history-collapsed': !historySidebarOpen }">
+      <aside v-if="historySidebarOpen" class="comparison-sidebar">
+        <CompareHistoryView
+          :history="history"
+          :active-session-id="currentSession?.id"
+          @refresh="refreshHistory"
+          @open="openHistory"
+          @delete="deleteHistory"
+        />
+      </aside>
 
-      <template v-else>
+      <section class="comparison-workspace">
       <section v-if="isHistorySession" class="history-mode-banner">
         <div>
           <strong>历史查看模式</strong>
@@ -88,27 +82,72 @@
 
       <section
         class="compare-setup"
-        :class="{ collapsed: isConfigCollapsed, dragging: dragOver }"
+        :class="{ readonly: hasRuns, collapsed: isConfigCollapsed, dragging: dragOver }"
         @dragover.prevent="handleDragOver"
         @dragleave.prevent="handleDragLeave"
         @drop.prevent="handleDrop"
       >
-        <div v-if="isConfigCollapsed" class="setup-summary">
-          <div class="setup-summary-main">
-            <span class="summary-label">问题</span>
-            <span class="summary-prompt">{{ prompt }}</span>
+        <div v-if="hasRuns" class="setup-readonly">
+          <div class="setup-readonly-main">
+            <div class="setup-summary-main">
+              <span class="summary-label">问题</span>
+              <span class="summary-prompt">{{ prompt }}</span>
+            </div>
+            <div class="setup-models">
+              <span v-for="run in runs" :key="run.id" class="model-chip">
+                {{ run.config.provider }} / {{ run.config.model || run.config.label }}
+              </span>
+            </div>
           </div>
-          <div class="setup-models">
-            <span v-for="runtime in runtimeDrafts" :key="runtime.label + runtime.model" class="model-chip">
-              {{ runtime.provider }} / {{ runtime.model }}
-            </span>
-          </div>
-          <button type="button" class="compare-secondary" :disabled="isRunning" @click="configOpen = true">
-            展开配置
+          <button type="button" class="compare-secondary" @click="configOpen = !configOpen">
+            {{ configOpen ? '隐藏参数' : '查看参数' }}
           </button>
         </div>
 
-        <template v-else>
+        <div v-if="hasRuns && configOpen" class="runtime-snapshot-grid">
+          <article v-for="run in runs" :key="run.id" class="runtime-snapshot-card">
+            <header>
+              <strong>{{ run.config.provider }} / {{ run.config.model || run.config.label }}</strong>
+              <span>{{ statusLabel(run.status) }}</span>
+            </header>
+            <dl>
+              <div>
+                <dt>Provider</dt>
+                <dd>{{ run.config.provider }}</dd>
+              </div>
+              <div>
+                <dt>Model</dt>
+                <dd>{{ run.config.model || '-' }}</dd>
+              </div>
+              <div>
+                <dt>Base URL</dt>
+                <dd>{{ run.config.baseUrl || '-' }}</dd>
+              </div>
+              <div>
+                <dt>耗时</dt>
+                <dd>{{ formatLatency(run.latencyMs) }}</dd>
+              </div>
+            </dl>
+          </article>
+        </div>
+
+        <template v-else-if="!hasRuns">
+          <div v-if="isConfigCollapsed" class="setup-summary">
+            <div class="setup-summary-main">
+              <span class="summary-label">问题</span>
+              <span class="summary-prompt">{{ prompt }}</span>
+            </div>
+            <div class="setup-models">
+              <span v-for="runtime in runtimeDrafts" :key="runtime.label + runtime.model" class="model-chip">
+                {{ runtime.provider }} / {{ runtime.model }}
+              </span>
+            </div>
+            <button type="button" class="compare-secondary" :disabled="isRunning" @click="configOpen = true">
+              展开配置
+            </button>
+          </div>
+
+          <template v-else>
           <input
             ref="imageInputRef"
             type="file"
@@ -197,7 +236,7 @@
             </div>
           </div>
 
-          <div class="compare-actions">
+            <div class="compare-actions">
             <button
               type="button"
               class="compare-primary"
@@ -215,10 +254,8 @@
             <button type="button" class="compare-secondary" :disabled="isRunning" @click="resetAllRuntimes">
               重置模型
             </button>
-            <button v-if="runs.length > 0" type="button" class="compare-secondary" :disabled="isRunning" @click="configOpen = false">
-              收起配置
-            </button>
           </div>
+          </template>
         </template>
       </section>
 
@@ -296,55 +333,56 @@
         </div>
       </section>
 
-      <section class="summary-panel" :class="{ empty: !summaryRun }">
-        <div class="summary-toolbar">
-          <div class="summary-copy">
-            <h2>汇总答案</h2>
-            <p>{{ summaryHint }}</p>
-          </div>
-          <textarea
-            v-model="summaryInstruction"
-            class="summary-instruction"
-            :disabled="isSummaryRunning || isHistorySession"
-            placeholder="可选：输入你的汇总要求，例如更偏向步骤、结论先行、只保留代码差异等"
-          ></textarea>
-          <div class="summary-actions">
-            <select
-              v-model="summaryRuntime.provider"
-              class="field-input summary-select"
-              :disabled="isSummaryRunning || isHistorySession"
-              @change="normalizeRuntime(summaryRuntime)"
-            >
-              <option value="ollama">Ollama</option>
-              <option value="openai">OpenAI 兼容</option>
-              <option value="claude">Claude</option>
-            </select>
-            <input
-              v-model="summaryRuntime.model"
-              class="field-input summary-model"
-              :disabled="isSummaryRunning || isHistorySession"
-              spellcheck="false"
-            />
-            <button type="button" class="compare-secondary" :disabled="isSummaryRunning || isHistorySession" @click="resetSummaryRuntime">
-              同步当前设置
-            </button>
-            <button type="button" class="compare-primary" :disabled="!canSummarize" @click="summarize">
-              生成汇总
-            </button>
-            <button type="button" class="compare-secondary" :disabled="!isSummaryRunning" @click="stopSummary">
-              停止汇总
-            </button>
-          </div>
-        </div>
-        <ComparisonRunCard
-          v-if="summaryRun"
-          :run="summaryRun"
-          :show-retry="false"
-          @stop="stopSummary"
-        />
       </section>
-      </template>
     </main>
+
+    <section class="summary-panel" :class="{ empty: !summaryRun }">
+      <div class="summary-toolbar">
+        <div class="summary-copy">
+          <h2>汇总答案</h2>
+          <p>{{ summaryHint }}</p>
+        </div>
+        <textarea
+          v-model="summaryInstruction"
+          class="summary-instruction"
+          :disabled="isSummaryRunning || isHistorySession"
+          placeholder="可选：输入你的汇总要求，例如更偏向步骤、结论先行、只保留代码差异等"
+        ></textarea>
+        <div class="summary-actions">
+          <select
+            v-model="summaryRuntime.provider"
+            class="field-input summary-select"
+            :disabled="isSummaryRunning || isHistorySession"
+            @change="normalizeRuntime(summaryRuntime)"
+          >
+            <option value="ollama">Ollama</option>
+            <option value="openai">OpenAI 兼容</option>
+            <option value="claude">Claude</option>
+          </select>
+          <input
+            v-model="summaryRuntime.model"
+            class="field-input summary-model"
+            :disabled="isSummaryRunning || isHistorySession"
+            spellcheck="false"
+          />
+          <button type="button" class="compare-secondary" :disabled="isSummaryRunning || isHistorySession" @click="resetSummaryRuntime">
+            同步当前设置
+          </button>
+          <button type="button" class="compare-primary" :disabled="!canSummarize" @click="summarize">
+            生成汇总
+          </button>
+          <button type="button" class="compare-secondary" :disabled="!isSummaryRunning" @click="stopSummary">
+            停止汇总
+          </button>
+        </div>
+      </div>
+      <ComparisonRunCard
+        v-if="summaryRun"
+        :run="summaryRun"
+        :show-retry="false"
+        @stop="stopSummary"
+      />
+    </section>
   </div>
 </template>
 
@@ -368,12 +406,10 @@ import { createRuntimeFromSettings } from '../services/runtime'
 import { settings } from '../stores/settings'
 import type { ModelRuntimeConfig } from '../types/model'
 
-type CompareView = 'run' | 'history'
-
 const prompt = ref('')
 const configOpen = ref(true)
 const summaryInstruction = ref('')
-const activeCompareView = ref<CompareView>('run')
+const historySidebarOpen = ref(true)
 const isHistorySession = ref(false)
 const selectedCodeLanguage = ref('')
 const leftCodeIndex = ref(0)
@@ -426,6 +462,7 @@ const selectedCodeCandidate = computed(() =>
 const selectedCodeBlocks = computed(() => selectedCodeCandidate.value?.blocks ?? [])
 const leftCodeBlock = computed(() => selectedCodeBlocks.value[leftCodeIndex.value])
 const rightCodeBlock = computed(() => selectedCodeBlocks.value[rightCodeIndex.value])
+const hasRuns = computed(() => runs.value.length > 0)
 const isSameCodeBlock = computed(() => {
   const left = leftCodeBlock.value
   const right = rightCodeBlock.value
@@ -437,7 +474,7 @@ const codeDiffLines = computed(() => {
   if (!left || !right || isSameCodeBlock.value) return []
   return createLineDiff(left.content, right.content)
 })
-const isConfigCollapsed = computed(() => !configOpen.value && runs.value.length > 0)
+const isConfigCollapsed = computed(() => !configOpen.value && runs.value.length === 0)
 const headerHint = computed(() => {
   if (isRunning.value) return '模型正在并发生成'
   if (isHistorySession.value) return '正在查看已保存的本地记录'
@@ -534,6 +571,25 @@ function resetSummaryRuntime(): void {
   Object.assign(summaryRuntime, createRuntimeFromSettings(settings))
 }
 
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'idle':
+      return '待开始'
+    case 'loading':
+      return '连接中'
+    case 'streaming':
+      return '生成中'
+    case 'done':
+      return '完成'
+    case 'error':
+      return '失败'
+    case 'aborted':
+      return '已停止'
+    default:
+      return status
+  }
+}
+
 async function start(): Promise<void> {
   if (!canStart.value) return
   isHistorySession.value = false
@@ -561,9 +617,11 @@ async function start(): Promise<void> {
   clearAttachments()
 }
 
-function showHistory(): void {
-  activeCompareView.value = 'history'
-  void refreshHistory()
+function toggleHistorySidebar(): void {
+  historySidebarOpen.value = !historySidebarOpen.value
+  if (historySidebarOpen.value) {
+    void refreshHistory()
+  }
 }
 
 function newComparison(): void {
@@ -573,13 +631,11 @@ function newComparison(): void {
   clearAttachments()
   configOpen.value = true
   isHistorySession.value = false
-  activeCompareView.value = 'run'
 }
 
 async function openHistory(sessionId: string): Promise<void> {
   await loadSession(sessionId)
   isHistorySession.value = true
-  activeCompareView.value = 'run'
 }
 
 async function deleteHistory(sessionId: string): Promise<void> {
@@ -703,21 +759,68 @@ async function summarize(): Promise<void> {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-base);
+  --compare-bg: #eeecfb;
+  --compare-panel: rgba(248, 247, 255, 0.86);
+  --compare-panel-strong: #ffffff;
+  --compare-soft: #f3f0fb;
+  --compare-line: #d8d4eb;
+  --compare-line-strong: #c5bfe0;
+  --compare-text: #17162a;
+  --compare-muted: #76718f;
+  --compare-primary: #8357e8;
+  --compare-primary-strong: #6f3fd9;
+  --compare-primary-soft: #ede6ff;
+  --compare-shadow: 0 18px 46px rgba(84, 69, 141, 0.14);
+  background: var(--compare-bg);
   color: var(--text-primary);
   font-family: 'SF Pro Display', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
+.compare-shell,
+.compare-shell * {
+  scrollbar-width: thin;
+  scrollbar-color: #b9addf #f4f1ff;
+}
+
+.compare-shell::-webkit-scrollbar,
+.compare-shell *::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.compare-shell::-webkit-scrollbar-track,
+.compare-shell *::-webkit-scrollbar-track {
+  background: #f4f1ff;
+  border-radius: 999px;
+}
+
+.compare-shell::-webkit-scrollbar-thumb,
+.compare-shell *::-webkit-scrollbar-thumb {
+  border: 2px solid #f4f1ff;
+  border-radius: 999px;
+  background: #b9addf;
+}
+
+.compare-shell::-webkit-scrollbar-thumb:hover,
+.compare-shell *::-webkit-scrollbar-thumb:hover {
+  background: #9f8ed4;
+}
+
+.compare-shell::-webkit-scrollbar-corner,
+.compare-shell *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .compare-header {
-  height: 56px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 0 24px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-topbar);
-  backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--compare-line);
+  background: rgba(248, 247, 255, 0.88);
+  backdrop-filter: blur(14px);
 }
 
 .compare-title {
@@ -729,24 +832,24 @@ async function summarize(): Promise<void> {
 
 .compare-title h1 {
   margin: 0;
-  color: var(--text-primary);
-  font-size: 17px;
-  line-height: 1.3;
+  color: var(--compare-text);
+  font-size: 16px;
+  line-height: 1;
   letter-spacing: 0;
 }
 
 .compare-title p {
   margin: 2px 0 0;
-  color: var(--text-muted);
+  color: var(--compare-muted);
   font-size: 12px;
 }
 
 .logo-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 14px var(--accent);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #8a5ff0, #5f7af1);
+  box-shadow: 0 10px 22px rgba(111, 63, 217, 0.28);
   flex-shrink: 0;
 }
 
@@ -755,58 +858,80 @@ async function summarize(): Promise<void> {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+  padding-right: 186px;
 }
 
 .compare-main {
-  flex: 1;
+  flex: 1 1 auto;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 18px;
+  width: min(1440px, calc(100vw - 48px));
   min-height: 0;
+  margin: 22px auto 18px;
 }
 
-.compare-main.history-view-active {
-  grid-template-rows: minmax(0, 1fr);
+.compare-main.history-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.comparison-sidebar,
+.comparison-workspace {
+  min-height: 0;
+  min-width: 0;
+}
+
+.comparison-sidebar {
+  display: grid;
+}
+
+.comparison-workspace {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--compare-line);
+  border-radius: 8px;
+  background: var(--compare-panel);
+  box-shadow: var(--compare-shadow);
 }
 
 .history-mode-banner {
-  padding: 10px 24px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--accent-bg);
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--compare-line);
+  background: var(--compare-primary-soft);
 }
 
 .history-mode-banner div {
-  max-width: 1180px;
-  margin: 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--text-secondary);
+  color: #4a465f;
   font-size: 12px;
   line-height: 1.5;
 }
 
 .history-mode-banner strong {
-  color: var(--accent-text);
+  color: var(--compare-primary-strong);
   font-size: 12px;
   flex-shrink: 0;
 }
 
 .stats-strip {
-  padding: 8px 24px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-sidebar);
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--compare-line);
+  background: rgba(255, 255, 255, 0.38);
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
 }
 
 .stats-strip span {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  padding: 3px 8px;
-  background: var(--bg-surface-2);
-  color: var(--text-secondary);
+  border: 1px solid var(--compare-line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #f6f4ff;
+  color: var(--compare-muted);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -818,9 +943,9 @@ async function summarize(): Promise<void> {
 }
 
 .compare-setup {
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-sidebar);
+  padding: 18px;
+  border-bottom: 1px solid var(--compare-line);
+  background: transparent;
 }
 
 .compare-setup.dragging {
@@ -830,12 +955,14 @@ async function summarize(): Promise<void> {
 }
 
 .compare-setup.collapsed {
-  padding: 8px 24px;
+  padding: 14px 18px;
+}
+
+.compare-setup.readonly {
+  padding: 12px 18px;
 }
 
 .setup-summary {
-  max-width: 1180px;
-  margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
@@ -849,18 +976,104 @@ async function summarize(): Promise<void> {
   min-width: 0;
 }
 
+.setup-readonly {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.setup-readonly-main {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
 .summary-label {
   flex-shrink: 0;
-  color: var(--text-muted);
+  color: var(--compare-muted);
   font-size: 12px;
   font-weight: 700;
 }
 
 .summary-prompt {
   min-width: 0;
-  color: var(--text-primary);
+  color: var(--compare-text);
   font-size: 13px;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  max-height: 220px;
+  margin-top: 12px;
+  overflow: auto;
+}
+
+.runtime-snapshot-card {
+  min-width: 0;
+  border: 1px solid var(--compare-line);
+  border-radius: 8px;
+  background: var(--compare-soft);
+  overflow: hidden;
+}
+
+.runtime-snapshot-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--compare-line);
+}
+
+.runtime-snapshot-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--compare-text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-snapshot-card header span {
+  flex-shrink: 0;
+  border: 1px solid #bdaaf2;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--compare-primary-soft);
+  color: var(--compare-primary-strong);
+  font-size: 12px;
+}
+
+.runtime-snapshot-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin: 0;
+  padding: 12px;
+}
+
+.runtime-snapshot-card dl div {
+  min-width: 0;
+}
+
+.runtime-snapshot-card dt {
+  margin: 0 0 4px;
+  color: var(--compare-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.runtime-snapshot-card dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--compare-text);
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -874,11 +1087,11 @@ async function summarize(): Promise<void> {
 
 .model-chip {
   max-width: 220px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  padding: 3px 8px;
-  background: var(--bg-surface-2);
-  color: var(--text-secondary);
+  border: 1px solid var(--compare-line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #f6f4ff;
+  color: var(--compare-muted);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -886,13 +1099,11 @@ async function summarize(): Promise<void> {
 }
 
 .prompt-panel {
-  max-width: 1180px;
-  margin: 0 auto 12px;
+  margin: 0 0 14px;
 }
 
 .attachment-preview {
-  max-width: 1180px;
-  margin: 0 auto 12px;
+  margin: 0 0 14px;
   display: grid;
   gap: 8px;
 }
@@ -908,10 +1119,10 @@ async function summarize(): Promise<void> {
   position: relative;
   width: 72px;
   height: 72px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--compare-line);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--bg-surface-2);
+  background: var(--compare-soft);
 }
 
 .image-preview-item img {
@@ -927,17 +1138,17 @@ async function summarize(): Promise<void> {
   gap: 8px;
   max-width: 320px;
   min-height: 34px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--compare-line);
   border-radius: 8px;
   padding: 6px 8px;
-  background: var(--bg-surface-2);
-  color: var(--text-secondary);
+  background: var(--compare-soft);
+  color: #4a465f;
   font-size: 12px;
 }
 
 .file-name {
   min-width: 0;
-  color: var(--text-primary);
+  color: var(--compare-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -945,18 +1156,18 @@ async function summarize(): Promise<void> {
 
 .file-size {
   flex-shrink: 0;
-  color: var(--text-muted);
+  color: var(--compare-muted);
 }
 
 .attachment-remove {
   flex-shrink: 0;
   width: 22px;
   height: 22px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--compare-line);
   border-radius: 50%;
   padding: 0;
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
+  background: var(--compare-panel-strong);
+  color: #4a465f;
   cursor: pointer;
 }
 
@@ -969,19 +1180,19 @@ async function summarize(): Promise<void> {
 .field-label {
   display: block;
   margin: 0 0 6px;
-  color: var(--text-muted);
+  color: #4a465f;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .prompt-input,
 .field-input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--compare-line-strong);
   border-radius: 8px;
-  background: var(--settings-input-bg);
-  color: var(--text-primary);
+  background: #f5f3ff;
+  color: var(--compare-text);
   outline: none;
   font: inherit;
   font-size: 13px;
@@ -994,9 +1205,9 @@ async function summarize(): Promise<void> {
 select.field-input {
   appearance: none;
   cursor: pointer;
-  background-color: var(--settings-input-bg);
-  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
-    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-color: #f5f3ff;
+  background-image: linear-gradient(45deg, transparent 50%, var(--compare-muted) 50%),
+    linear-gradient(135deg, var(--compare-muted) 50%, transparent 50%);
   background-position: calc(100% - 17px) 14px, calc(100% - 11px) 14px;
   background-size: 6px 6px, 6px 6px;
   background-repeat: no-repeat;
@@ -1004,12 +1215,12 @@ select.field-input {
 }
 
 select.field-input option {
-  background: var(--settings-select-bg);
-  color: var(--text-primary);
+  background: #fff;
+  color: var(--compare-text);
 }
 
 .prompt-input {
-  min-height: 76px;
+  min-height: 104px;
   resize: vertical;
   padding: 12px;
   line-height: 1.55;
@@ -1023,23 +1234,30 @@ select.field-input option {
 
 .prompt-input:focus,
 .field-input:focus {
-  border-color: var(--accent-border);
-  box-shadow: 0 0 0 3px var(--accent-bg);
+  border-color: #a897df;
+  box-shadow: 0 0 0 3px var(--compare-primary-soft);
 }
 
 .runtime-grid {
-  max-width: 1180px;
-  margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .runtime-editor {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--compare-line);
   border-radius: 8px;
-  padding: 10px;
-  background: var(--bg-surface-2);
+  padding: 14px;
+  background: var(--compare-soft);
+  overflow: hidden;
+}
+
+.runtime-editor:nth-child(1) {
+  border-top: 3px solid #6f79ee;
+}
+
+.runtime-editor:nth-child(2) {
+  border-top: 3px solid #9264e9;
 }
 
 .runtime-editor-header {
@@ -1048,14 +1266,13 @@ select.field-input option {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
-  color: var(--text-primary);
+  color: var(--compare-text);
   font-size: 13px;
   font-weight: 700;
 }
 
 .compare-actions {
-  max-width: 1180px;
-  margin: 12px auto 0;
+  margin: 14px 0 0;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -1065,31 +1282,34 @@ select.field-input option {
 .compare-secondary,
 .small-btn {
   border: 1px solid var(--border-subtle);
-  border-radius: 7px;
+  border-radius: 8px;
   cursor: pointer;
   font: inherit;
 }
 
 .compare-primary {
-  height: 34px;
+  height: 42px;
+  min-width: 132px;
   padding: 0 16px;
-  border-color: var(--accent-border);
+  border-color: transparent;
   color: #fff;
-  background: linear-gradient(135deg, var(--accent-deep), var(--accent-deeper));
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--compare-primary), #6b79eb);
+  box-shadow: 0 14px 26px rgba(111, 63, 217, 0.26);
 }
 
 .compare-secondary,
 .small-btn {
   height: 32px;
   padding: 0 12px;
-  color: var(--text-secondary);
-  background: var(--bg-surface-2);
+  color: #3b3752;
+  background: #f8f6ff;
 }
 
 .compare-secondary.active {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
-  color: var(--accent-text);
+  border-color: #bdaaf2;
+  background: var(--compare-primary-soft);
+  color: var(--compare-primary-strong);
 }
 
 .small-btn {
@@ -1108,7 +1328,7 @@ textarea:disabled {
 .run-grid {
   min-height: 0;
   overflow: auto;
-  padding: 14px 24px 18px;
+  padding: 18px;
   display: grid;
   grid-template-columns: repeat(2, minmax(320px, 1fr));
   grid-auto-rows: minmax(0, 1fr);
@@ -1116,25 +1336,28 @@ textarea:disabled {
 }
 
 .summary-panel {
-  max-height: 34vh;
-  min-height: 74px;
+  flex: 0 0 auto;
+  width: min(1440px, calc(100vw - 48px));
+  max-height: 32vh;
   overflow: auto;
-  padding: 10px 24px 14px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-sidebar);
+  margin: 0 auto 22px;
+  padding: 14px 18px;
+  border: 1px solid var(--compare-line);
+  border-radius: 8px;
+  background: var(--compare-panel);
+  box-shadow: var(--compare-shadow);
 }
 
 .summary-panel.empty {
-  max-height: 148px;
+  max-height: 178px;
 }
 
 .summary-toolbar {
   display: grid;
-  grid-template-columns: minmax(150px, 0.9fr) minmax(240px, 1.3fr) minmax(300px, 1.7fr);
-  align-items: start;
+  grid-template-columns: 280px minmax(260px, 1fr) auto;
+  align-items: center;
   gap: 16px;
-  max-width: 1180px;
-  margin: 0 auto 10px;
+  margin: 0 0 10px;
 }
 
 .summary-copy {
@@ -1143,7 +1366,7 @@ textarea:disabled {
 
 .summary-toolbar h2 {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--compare-text);
   font-size: 15px;
   line-height: 1.35;
   letter-spacing: 0;
@@ -1151,7 +1374,7 @@ textarea:disabled {
 
 .summary-toolbar p {
   margin: 3px 0 0;
-  color: var(--text-muted);
+  color: var(--compare-muted);
   font-size: 12px;
 }
 
@@ -1160,12 +1383,12 @@ textarea:disabled {
   min-height: 34px;
   max-height: 72px;
   box-sizing: border-box;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--compare-line-strong);
   border-radius: 8px;
   padding: 8px 10px;
   resize: vertical;
-  background: var(--settings-input-bg);
-  color: var(--text-primary);
+  background: #f5f3ff;
+  color: var(--compare-text);
   outline: none;
   font: inherit;
   font-size: 12px;
@@ -1174,7 +1397,7 @@ textarea:disabled {
 
 .summary-instruction:focus {
   border-color: var(--accent-border);
-  box-shadow: 0 0 0 3px var(--accent-bg);
+  box-shadow: 0 0 0 3px var(--compare-primary-soft);
 }
 
 .summary-actions {
@@ -1182,6 +1405,7 @@ textarea:disabled {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
 }
 
 .summary-select,
@@ -1191,9 +1415,8 @@ textarea:disabled {
 }
 
 .summary-panel :deep(.comparison-run-card) {
-  max-width: 1180px;
   min-height: 220px;
-  margin: 0 auto;
+  margin: 0;
 }
 
 .run-grid.empty {
@@ -1203,16 +1426,16 @@ textarea:disabled {
 }
 
 .compare-empty {
-  color: var(--text-faint);
+  color: var(--compare-muted);
   font-size: 14px;
 }
 
 .code-compare-panel {
   max-height: 38vh;
   overflow: auto;
-  padding: 12px 24px 14px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-sidebar);
+  padding: 14px 18px;
+  border-top: 1px solid var(--compare-line);
+  background: rgba(255, 255, 255, 0.40);
 }
 
 .code-compare-toolbar,
@@ -1221,7 +1444,7 @@ textarea:disabled {
 .code-diff-grid,
 .code-compare-empty {
   max-width: 1180px;
-  margin: 0 auto;
+  margin: 0;
 }
 
 .code-compare-toolbar {
@@ -1234,7 +1457,7 @@ textarea:disabled {
 
 .code-compare-toolbar h2 {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--compare-text);
   font-size: 15px;
   line-height: 1.35;
   letter-spacing: 0;
@@ -1242,7 +1465,7 @@ textarea:disabled {
 
 .code-compare-toolbar p {
   margin: 3px 0 0;
-  color: var(--text-muted);
+  color: var(--compare-muted);
   font-size: 12px;
 }
 
@@ -1270,7 +1493,7 @@ textarea:disabled {
 
 .code-compare-column {
   min-width: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--compare-line);
   border-radius: 8px;
   overflow: hidden;
   background: var(--bg-elevated);
@@ -1304,18 +1527,18 @@ textarea:disabled {
   padding: 14px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--bg-elevated);
-  color: var(--text-muted);
+  background: var(--compare-panel-strong);
+  color: var(--compare-muted);
   font-size: 13px;
   text-align: center;
 }
 
 .code-diff-grid {
   min-width: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--compare-line);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--bg-elevated);
+  background: var(--compare-panel-strong);
 }
 
 .code-diff-header {
@@ -1388,11 +1611,42 @@ textarea:disabled {
   background: transparent;
 }
 
+@media (max-width: 1120px) {
+  .compare-main,
+  .summary-panel {
+    width: calc(100vw - 28px);
+  }
+
+  .compare-main {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison-sidebar {
+    min-height: 320px;
+  }
+
+  .summary-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-actions {
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 860px) {
   .compare-header {
     height: auto;
     min-height: 52px;
     padding: 10px 14px;
+  }
+
+  .header-actions {
+    padding-right: 0;
+  }
+
+  .compare-main {
+    margin: 14px auto;
   }
 
   .compare-setup {

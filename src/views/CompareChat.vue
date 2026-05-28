@@ -68,15 +68,37 @@
         <div class="history-toolbar">
           <div>
             <h2>历史对比</h2>
-            <p>{{ history.length ? `共 ${history.length} 条本地记录` : '暂无已保存记录' }}</p>
+            <p>{{ historySummaryText }}</p>
           </div>
           <button type="button" class="compare-secondary" @click="refreshHistory">
             刷新
           </button>
         </div>
-        <div v-if="history.length" class="history-list">
+        <div class="history-filters">
+          <input
+            v-model="historySearch"
+            class="history-search"
+            type="search"
+            placeholder="搜索问题或状态"
+          />
+          <div class="history-filter-tabs" role="tablist" aria-label="历史筛选">
+            <button
+              v-for="filter in historyFilters"
+              :key="filter.value"
+              type="button"
+              class="history-filter-tab"
+              :class="{ active: historyFilter === filter.value }"
+              role="tab"
+              :aria-selected="historyFilter === filter.value"
+              @click="historyFilter = filter.value"
+            >
+              {{ filter.label }}
+            </button>
+          </div>
+        </div>
+        <div v-if="filteredHistory.length" class="history-list">
           <article
-            v-for="item in history"
+            v-for="item in filteredHistory"
             :key="item.id"
             class="history-item"
             :class="{ active: comparison.session.value?.id === item.id }"
@@ -91,6 +113,9 @@
               删除
             </button>
           </article>
+        </div>
+        <div v-else class="history-empty">
+          没有匹配的对比记录
         </div>
       </section>
 
@@ -312,10 +337,14 @@ import { createRuntimeFromSettings } from '../services/runtime'
 import { settings } from '../stores/settings'
 import type { ModelRuntimeConfig } from '../types/model'
 
+type HistoryFilter = 'all' | 'success' | 'failed' | 'with-summary'
+
 const prompt = ref('')
 const configOpen = ref(true)
 const summaryInstruction = ref('')
 const historyOpen = ref(false)
+const historySearch = ref('')
+const historyFilter = ref<HistoryFilter>('all')
 const isHistorySession = ref(false)
 const dragOver = ref(false)
 const imageInputRef = ref<HTMLInputElement | null>(null)
@@ -357,6 +386,12 @@ const summaryRuntime = reactive<ModelRuntimeConfig>(createRuntimeFromSettings(se
 
 const currentSession = computed(() => comparison.session.value)
 const sessionStats = computed(() => getSessionStats(runs.value))
+const historyFilters: { label: string; value: HistoryFilter }[] = [
+  { label: '全部', value: 'all' },
+  { label: '成功', value: 'success' },
+  { label: '失败', value: 'failed' },
+  { label: '含汇总', value: 'with-summary' },
+]
 const isConfigCollapsed = computed(() => !configOpen.value && runs.value.length > 0)
 const headerHint = computed(() => {
   if (isRunning.value) return '模型正在并发生成'
@@ -378,6 +413,36 @@ const canSummarize = computed(() =>
 const summaryHint = computed(() => {
   if (successfulRuns.value.length === 0) return '等待至少一个模型完成'
   return `将使用 ${successfulRuns.value.length} 个成功结果发送给 ${summaryRuntime.provider} / ${summaryRuntime.model}`
+})
+const filteredHistory = computed(() => {
+  const query = historySearch.value.trim().toLowerCase()
+
+  return history.value.filter(item => {
+    const matchesFilter =
+      historyFilter.value === 'all' ||
+      (historyFilter.value === 'success' && item.stats.done > 0) ||
+      (historyFilter.value === 'failed' && item.stats.error + item.stats.aborted > 0) ||
+      (historyFilter.value === 'with-summary' && Boolean(item.summaryRunId))
+
+    if (!matchesFilter) return false
+    if (!query) return true
+
+    const searchable = [
+      item.prompt,
+      item.stats.done ? '成功' : '',
+      item.stats.error ? '失败' : '',
+      item.stats.aborted ? '停止' : '',
+      item.summaryRunId ? '汇总' : '',
+    ].join(' ').toLowerCase()
+    return searchable.includes(query)
+  })
+})
+const historySummaryText = computed(() => {
+  if (history.value.length === 0) return '暂无已保存记录'
+  if (filteredHistory.value.length === history.value.length) {
+    return `共 ${history.value.length} 条本地记录`
+  }
+  return `匹配 ${filteredHistory.value.length} / ${history.value.length} 条本地记录`
 })
 
 watch(() => comparison.session.value, currentSession => {
@@ -753,6 +818,59 @@ async function summarize(): Promise<void> {
   font-size: 12px;
 }
 
+.history-filters {
+  max-width: 1180px;
+  margin: 0 auto 10px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.history-search {
+  width: 100%;
+  height: 34px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--settings-input-bg);
+  color: var(--text-primary);
+  outline: none;
+  font: inherit;
+  font-size: 13px;
+}
+
+.history-search:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.history-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.history-filter-tab {
+  height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.history-filter-tab.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-text);
+}
+
 .history-list {
   max-width: 1180px;
   max-height: 220px;
@@ -806,6 +924,13 @@ async function summarize(): Promise<void> {
   margin-top: 2px;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.history-empty {
+  max-width: 1180px;
+  margin: 8px auto 0;
+  color: var(--text-faint);
+  font-size: 13px;
 }
 
 .small-btn.danger {
@@ -1226,6 +1351,14 @@ textarea:disabled {
 
   .history-panel {
     padding: 12px 14px;
+  }
+
+  .history-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .history-filter-tabs {
+    justify-content: flex-start;
   }
 
   .setup-summary {

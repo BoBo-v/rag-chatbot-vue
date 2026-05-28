@@ -9,8 +9,13 @@
         </div>
       </div>
       <div class="header-actions">
-        <button type="button" class="compare-secondary" @click="toggleHistory">
-          历史记录
+        <button
+          type="button"
+          class="compare-secondary"
+          :class="{ active: activeCompareView === 'history' }"
+          @click="showHistory"
+        >
+          对比历史
         </button>
         <button
           type="button"
@@ -47,7 +52,24 @@
       </div>
     </header>
 
-    <main class="compare-main" :class="{ 'has-summary': Boolean(summaryRun) }">
+    <main
+      class="compare-main"
+      :class="{
+        'has-summary': Boolean(summaryRun),
+        'history-view-active': activeCompareView === 'history',
+      }"
+    >
+      <CompareHistoryView
+        v-if="activeCompareView === 'history'"
+        :history="history"
+        :active-session-id="currentSession?.id"
+        @back="activeCompareView = 'run'"
+        @refresh="refreshHistory"
+        @open="openHistory"
+        @delete="deleteHistory"
+      />
+
+      <template v-else>
       <section v-if="isHistorySession" class="history-mode-banner">
         <div>
           <strong>历史查看模式</strong>
@@ -62,61 +84,6 @@
         <span>停止 {{ sessionStats.aborted }}</span>
         <span v-if="sessionStats.running">生成中 {{ sessionStats.running }}</span>
         <span>平均耗时 {{ formatLatency(sessionStats.averageLatencyMs) }}</span>
-      </section>
-
-      <section v-if="historyOpen" class="history-panel">
-        <div class="history-toolbar">
-          <div>
-            <h2>历史对比</h2>
-            <p>{{ historySummaryText }}</p>
-          </div>
-          <button type="button" class="compare-secondary" @click="refreshHistory">
-            刷新
-          </button>
-        </div>
-        <div class="history-filters">
-          <input
-            v-model="historySearch"
-            class="history-search"
-            type="search"
-            placeholder="搜索问题或状态"
-          />
-          <div class="history-filter-tabs" role="tablist" aria-label="历史筛选">
-            <button
-              v-for="filter in historyFilters"
-              :key="filter.value"
-              type="button"
-              class="history-filter-tab"
-              :class="{ active: historyFilter === filter.value }"
-              role="tab"
-              :aria-selected="historyFilter === filter.value"
-              @click="historyFilter = filter.value"
-            >
-              {{ filter.label }}
-            </button>
-          </div>
-        </div>
-        <div v-if="filteredHistory.length" class="history-list">
-          <article
-            v-for="item in filteredHistory"
-            :key="item.id"
-            class="history-item"
-            :class="{ active: comparison.session.value?.id === item.id }"
-          >
-            <button type="button" class="history-open" @click="openHistory(item.id)">
-              <span class="history-prompt">{{ item.prompt }}</span>
-              <span class="history-meta">
-                {{ formatDate(item.updatedAt) }} · 成功 {{ item.stats.done }} · 失败 {{ item.stats.error }} · 停止 {{ item.stats.aborted }}
-              </span>
-            </button>
-            <button type="button" class="small-btn danger" @click="deleteHistory(item.id)">
-              删除
-            </button>
-          </article>
-        </div>
-        <div v-else class="history-empty">
-          没有匹配的对比记录
-        </div>
       </section>
 
       <section
@@ -305,15 +272,27 @@
             </option>
           </select>
         </div>
-        <div class="code-compare-grid">
-          <article v-if="leftCodeBlock" class="code-compare-column">
-            <header>{{ leftCodeBlock.modelName }} · #{{ leftCodeBlock.blockIndex + 1 }}</header>
-            <pre><code>{{ leftCodeBlock.content }}</code></pre>
-          </article>
-          <article v-if="rightCodeBlock" class="code-compare-column">
-            <header>{{ rightCodeBlock.modelName }} · #{{ rightCodeBlock.blockIndex + 1 }}</header>
-            <pre><code>{{ rightCodeBlock.content }}</code></pre>
-          </article>
+        <div v-if="isSameCodeBlock" class="code-compare-empty">
+          请选择不同代码块查看差异。
+        </div>
+        <div v-else-if="leftCodeBlock && rightCodeBlock" class="code-diff-grid">
+          <div class="code-diff-header">
+            <span>{{ leftCodeBlock.modelName }} · #{{ leftCodeBlock.blockIndex + 1 }}</span>
+            <span>{{ rightCodeBlock.modelName }} · #{{ rightCodeBlock.blockIndex + 1 }}</span>
+          </div>
+          <div class="code-diff-table">
+            <div
+              v-for="(line, index) in codeDiffLines"
+              :key="`${line.type}-${line.leftLineNumber ?? 0}-${line.rightLineNumber ?? 0}-${index}`"
+              class="code-diff-row"
+              :class="`diff-${line.type}`"
+            >
+              <span class="diff-line-no">{{ line.leftLineNumber ?? '' }}</span>
+              <code class="diff-cell diff-left-cell">{{ line.left ?? '' }}</code>
+              <span class="diff-line-no">{{ line.rightLineNumber ?? '' }}</span>
+              <code class="diff-cell diff-right-cell">{{ line.right ?? '' }}</code>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -364,17 +343,20 @@
           @stop="stopSummary"
         />
       </section>
+      </template>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import CompareHistoryView from './CompareHistoryView.vue'
 import ComparisonRunCard from '../components/ComparisonRunCard.vue'
 import { useAttachments } from '../composables/useAttachments'
 import { useModelComparison } from '../composables/useModelComparison'
 import { useToast } from '../composables/useToast'
 import { getCodeComparisonCandidates } from '../services/comparisonCode'
+import { createLineDiff } from '../services/comparisonDiff'
 import {
   buildComparisonExportFilename,
   exportComparisonAsJson,
@@ -386,14 +368,12 @@ import { createRuntimeFromSettings } from '../services/runtime'
 import { settings } from '../stores/settings'
 import type { ModelRuntimeConfig } from '../types/model'
 
-type HistoryFilter = 'all' | 'success' | 'failed' | 'with-summary'
+type CompareView = 'run' | 'history'
 
 const prompt = ref('')
 const configOpen = ref(true)
 const summaryInstruction = ref('')
-const historyOpen = ref(false)
-const historySearch = ref('')
-const historyFilter = ref<HistoryFilter>('all')
+const activeCompareView = ref<CompareView>('run')
 const isHistorySession = ref(false)
 const selectedCodeLanguage = ref('')
 const leftCodeIndex = ref(0)
@@ -446,12 +426,17 @@ const selectedCodeCandidate = computed(() =>
 const selectedCodeBlocks = computed(() => selectedCodeCandidate.value?.blocks ?? [])
 const leftCodeBlock = computed(() => selectedCodeBlocks.value[leftCodeIndex.value])
 const rightCodeBlock = computed(() => selectedCodeBlocks.value[rightCodeIndex.value])
-const historyFilters: { label: string; value: HistoryFilter }[] = [
-  { label: '全部', value: 'all' },
-  { label: '成功', value: 'success' },
-  { label: '失败', value: 'failed' },
-  { label: '含汇总', value: 'with-summary' },
-]
+const isSameCodeBlock = computed(() => {
+  const left = leftCodeBlock.value
+  const right = rightCodeBlock.value
+  return Boolean(left && right && left.runId === right.runId && left.blockIndex === right.blockIndex)
+})
+const codeDiffLines = computed(() => {
+  const left = leftCodeBlock.value
+  const right = rightCodeBlock.value
+  if (!left || !right || isSameCodeBlock.value) return []
+  return createLineDiff(left.content, right.content)
+})
 const isConfigCollapsed = computed(() => !configOpen.value && runs.value.length > 0)
 const headerHint = computed(() => {
   if (isRunning.value) return '模型正在并发生成'
@@ -474,37 +459,6 @@ const summaryHint = computed(() => {
   if (successfulRuns.value.length === 0) return '等待至少一个模型完成'
   return `将使用 ${successfulRuns.value.length} 个成功结果发送给 ${summaryRuntime.provider} / ${summaryRuntime.model}`
 })
-const filteredHistory = computed(() => {
-  const query = historySearch.value.trim().toLowerCase()
-
-  return history.value.filter(item => {
-    const matchesFilter =
-      historyFilter.value === 'all' ||
-      (historyFilter.value === 'success' && item.stats.done > 0) ||
-      (historyFilter.value === 'failed' && item.stats.error + item.stats.aborted > 0) ||
-      (historyFilter.value === 'with-summary' && Boolean(item.summaryRunId))
-
-    if (!matchesFilter) return false
-    if (!query) return true
-
-    const searchable = [
-      item.prompt,
-      item.stats.done ? '成功' : '',
-      item.stats.error ? '失败' : '',
-      item.stats.aborted ? '停止' : '',
-      item.summaryRunId ? '汇总' : '',
-    ].join(' ').toLowerCase()
-    return searchable.includes(query)
-  })
-})
-const historySummaryText = computed(() => {
-  if (history.value.length === 0) return '暂无已保存记录'
-  if (filteredHistory.value.length === history.value.length) {
-    return `共 ${history.value.length} 条本地记录`
-  }
-  return `匹配 ${filteredHistory.value.length} / ${history.value.length} 条本地记录`
-})
-
 watch(() => comparison.session.value, currentSession => {
   if (!currentSession) {
     prompt.value = ''
@@ -607,11 +561,9 @@ async function start(): Promise<void> {
   clearAttachments()
 }
 
-function toggleHistory(): void {
-  historyOpen.value = !historyOpen.value
-  if (historyOpen.value) {
-    void refreshHistory()
-  }
+function showHistory(): void {
+  activeCompareView.value = 'history'
+  void refreshHistory()
 }
 
 function newComparison(): void {
@@ -621,12 +573,13 @@ function newComparison(): void {
   clearAttachments()
   configOpen.value = true
   isHistorySession.value = false
+  activeCompareView.value = 'run'
 }
 
 async function openHistory(sessionId: string): Promise<void> {
   await loadSession(sessionId)
   isHistorySession.value = true
-  historyOpen.value = false
+  activeCompareView.value = 'run'
 }
 
 async function deleteHistory(sessionId: string): Promise<void> {
@@ -635,15 +588,6 @@ async function deleteHistory(sessionId: string): Promise<void> {
   if (deletingCurrentSession) {
     isHistorySession.value = false
   }
-}
-
-function formatDate(timestamp: number): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(timestamp)
 }
 
 function formatFileSize(bytes: number): string {
@@ -820,6 +764,10 @@ async function summarize(): Promise<void> {
   min-height: 0;
 }
 
+.compare-main.history-view-active {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .history-mode-banner {
   padding: 10px 24px;
   border-bottom: 1px solid var(--border-subtle);
@@ -861,150 +809,6 @@ async function summarize(): Promise<void> {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.4;
-}
-
-.history-panel {
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-sidebar);
-}
-
-.history-toolbar {
-  max-width: 1180px;
-  margin: 0 auto 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.history-toolbar h2 {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 15px;
-  line-height: 1.35;
-  letter-spacing: 0;
-}
-
-.history-toolbar p {
-  margin: 3px 0 0;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.history-filters {
-  max-width: 1180px;
-  margin: 0 auto 10px;
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.history-search {
-  width: 100%;
-  height: 34px;
-  box-sizing: border-box;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 0 10px;
-  background: var(--settings-input-bg);
-  color: var(--text-primary);
-  outline: none;
-  font: inherit;
-  font-size: 13px;
-}
-
-.history-search:focus {
-  border-color: var(--accent-border);
-  box-shadow: 0 0 0 3px var(--accent-bg);
-}
-
-.history-filter-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.history-filter-tab {
-  height: 30px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 7px;
-  padding: 0 10px;
-  background: var(--bg-surface-2);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-}
-
-.history-filter-tab.active {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
-  color: var(--accent-text);
-}
-
-.history-list {
-  max-width: 1180px;
-  max-height: 220px;
-  margin: 0 auto;
-  overflow: auto;
-  display: grid;
-  gap: 8px;
-}
-
-.history-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 8px;
-  background: var(--bg-surface-2);
-}
-
-.history-item.active {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
-}
-
-.history-open {
-  min-width: 0;
-  border: 0;
-  padding: 0;
-  text-align: left;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.history-prompt,
-.history-meta {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.history-prompt {
-  color: var(--text-primary);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.history-meta {
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.history-empty {
-  max-width: 1180px;
-  margin: 8px auto 0;
-  color: var(--text-faint);
-  font-size: 13px;
 }
 
 .small-btn.danger {
@@ -1282,6 +1086,12 @@ select.field-input option {
   background: var(--bg-surface-2);
 }
 
+.compare-secondary.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-text);
+}
+
 .small-btn {
   height: 26px;
   font-size: 12px;
@@ -1407,7 +1217,9 @@ textarea:disabled {
 
 .code-compare-toolbar,
 .code-compare-selectors,
-.code-compare-grid {
+.code-compare-grid,
+.code-diff-grid,
+.code-compare-empty {
   max-width: 1180px;
   margin: 0 auto;
 }
@@ -1488,6 +1300,94 @@ textarea:disabled {
   white-space: pre;
 }
 
+.code-compare-empty {
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.code-diff-grid {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.code-diff-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  border-bottom: 1px solid var(--border-faint);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.code-diff-header span {
+  min-width: 0;
+  padding: 8px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-diff-header span + span {
+  border-left: 1px solid var(--border-faint);
+}
+
+.code-diff-table {
+  max-height: 260px;
+  overflow: auto;
+  background: var(--bg-code);
+}
+
+.code-diff-row {
+  display: grid;
+  grid-template-columns: 48px minmax(320px, 1fr) 48px minmax(320px, 1fr);
+  min-width: 760px;
+  color: var(--text-code);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.diff-line-no {
+  padding: 0 8px;
+  border-right: 1px solid var(--border-faint);
+  color: var(--text-faint);
+  text-align: right;
+  user-select: none;
+}
+
+.diff-cell {
+  min-width: 0;
+  padding: 0 10px;
+  overflow: visible;
+  white-space: pre;
+}
+
+.diff-left-cell {
+  border-right: 1px solid var(--border-faint);
+}
+
+.diff-added .diff-right-cell,
+.diff-added .diff-line-no:nth-child(3) {
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.diff-removed .diff-left-cell,
+.diff-removed .diff-line-no:first-child {
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.diff-same .diff-cell,
+.diff-same .diff-line-no {
+  background: transparent;
+}
+
 @media (max-width: 860px) {
   .compare-header {
     height: auto;
@@ -1512,18 +1412,6 @@ textarea:disabled {
   .stats-strip {
     justify-content: flex-start;
     padding: 8px 14px;
-  }
-
-  .history-panel {
-    padding: 12px 14px;
-  }
-
-  .history-filters {
-    grid-template-columns: 1fr;
-  }
-
-  .history-filter-tabs {
-    justify-content: flex-start;
   }
 
   .setup-summary {

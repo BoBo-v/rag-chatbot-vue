@@ -1,10 +1,12 @@
 import { db, type DBComparisonRun, type DBComparisonSession } from '../db'
+import { getSessionStats, type ComparisonSessionStats } from './comparisonStats'
 import type { ComparisonRun, ComparisonSession, ModelRuntimeConfig } from '../types/model'
 
 export interface ComparisonSessionListItem {
     id: string
     prompt: string
     runCount: number
+    stats: ComparisonSessionStats
     summaryRunId?: string
     createdAt: number
     updatedAt: number
@@ -126,11 +128,15 @@ export async function listComparisonSessions(): Promise<ComparisonSessionListIte
     const sessions = await db.comparisonSessions.orderBy('updatedAt').reverse().toArray()
 
     return Promise.all(sessions.map(async session => {
-        const runCount = await db.comparisonRuns.where('sessionId').equals(session.id).count()
+        const runRows = await db.comparisonRuns.where('sessionId').equals(session.id).toArray()
+        const answerRuns = runRows
+            .filter(row => row.kind === 'answer')
+            .map(normalizeRestoredRun)
         return {
             id: session.id,
             prompt: session.prompt,
-            runCount,
+            runCount: answerRuns.length,
+            stats: getSessionStats(answerRuns),
             summaryRunId: session.summaryRunId,
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,

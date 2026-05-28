@@ -55,6 +55,15 @@
         </div>
       </section>
 
+      <section v-if="currentSession" class="stats-strip">
+        <span>模型 {{ sessionStats.total }}</span>
+        <span>成功 {{ sessionStats.done }}</span>
+        <span>失败 {{ sessionStats.error }}</span>
+        <span>停止 {{ sessionStats.aborted }}</span>
+        <span v-if="sessionStats.running">生成中 {{ sessionStats.running }}</span>
+        <span>平均耗时 {{ formatLatency(sessionStats.averageLatencyMs) }}</span>
+      </section>
+
       <section v-if="historyOpen" class="history-panel">
         <div class="history-toolbar">
           <div>
@@ -75,7 +84,7 @@
             <button type="button" class="history-open" @click="openHistory(item.id)">
               <span class="history-prompt">{{ item.prompt }}</span>
               <span class="history-meta">
-                {{ formatDate(item.updatedAt) }} · {{ item.runCount }} 个结果
+                {{ formatDate(item.updatedAt) }} · 成功 {{ item.stats.done }} · 失败 {{ item.stats.error }} · 停止 {{ item.stats.aborted }}
               </span>
             </button>
             <button type="button" class="small-btn danger" @click="deleteHistory(item.id)">
@@ -246,6 +255,7 @@ import {
   exportComparisonAsJson,
   exportComparisonAsMarkdown,
 } from '../services/comparisonExport'
+import { formatLatency, getSessionStats } from '../services/comparisonStats'
 import { createRuntimeFromSettings } from '../services/runtime'
 import { settings } from '../stores/settings'
 import type { ModelRuntimeConfig } from '../types/model'
@@ -281,6 +291,7 @@ const runtimeDrafts = reactive<ModelRuntimeConfig[]>([
 const summaryRuntime = reactive<ModelRuntimeConfig>(createRuntimeFromSettings(settings))
 
 const currentSession = computed(() => comparison.session.value)
+const sessionStats = computed(() => getSessionStats(runs.value))
 const isConfigCollapsed = computed(() => !configOpen.value && runs.value.length > 0)
 const headerHint = computed(() => {
   if (isRunning.value) return '模型正在并发生成'
@@ -545,6 +556,26 @@ async function summarize(): Promise<void> {
   color: var(--accent-text);
   font-size: 12px;
   flex-shrink: 0;
+}
+
+.stats-strip {
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-sidebar);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.stats-strip span {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 3px 8px;
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .history-panel {
@@ -958,6 +989,11 @@ textarea:disabled {
     align-items: flex-start;
     flex-direction: column;
     gap: 2px;
+  }
+
+  .stats-strip {
+    justify-content: flex-start;
+    padding: 8px 14px;
   }
 
   .history-panel {

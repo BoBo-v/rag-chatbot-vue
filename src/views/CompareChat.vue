@@ -196,6 +196,9 @@
                 </button>
               </div>
             </div>
+            <div class="attachment-risk-note">
+              {{ attachmentNotice }}
+            </div>
           </div>
 
           <div class="runtime-grid">
@@ -350,6 +353,12 @@
               :disabled="isSummaryRunning || isHistorySession"
               placeholder="可选：输入你的汇总要求，例如更偏向步骤、结论先行、只保留代码差异等"
             ></textarea>
+            <div v-if="successfulRuns.length > 0" class="summary-source-list">
+              <span>将汇总</span>
+              <span v-for="run in successfulRuns" :key="run.id" class="summary-source-chip">
+                {{ run.config.provider }} / {{ run.config.model || run.config.label }}
+              </span>
+            </div>
             <div class="summary-actions">
               <select
                 v-model="summaryRuntime.provider"
@@ -500,6 +509,44 @@ const summaryHint = computed(() => {
   if (successfulRuns.value.length === 0) return '等待至少一个模型完成'
   return `将使用 ${successfulRuns.value.length} 个成功结果发送给 ${summaryRuntime.provider} / ${summaryRuntime.model}`
 })
+const attachmentNotice = computed(() => {
+  const attachmentParts = [
+    pendingImages.value.length ? `${pendingImages.value.length} 张图片` : '',
+    pendingFiles.value.length ? `${pendingFiles.value.length} 个文件` : '',
+  ].filter(Boolean).join('、')
+  return `${attachmentParts} 会发送给每个参与对比的模型；汇总时只发送成功回答，不重复发送原始附件。`
+})
+
+function getCodeBlockKey(index: number): string {
+  const block = selectedCodeBlocks.value[index]
+  return block ? `${block.runId}:${block.blockIndex}` : ''
+}
+
+function findCodeBlockIndexByKey(key: string): number {
+  if (!key) return -1
+  return selectedCodeBlocks.value.findIndex(block => `${block.runId}:${block.blockIndex}` === key)
+}
+
+function normalizeCodeSelection(previousLeftKey = '', previousRightKey = ''): void {
+  const blockCount = selectedCodeBlocks.value.length
+  if (blockCount === 0) {
+    leftCodeIndex.value = 0
+    rightCodeIndex.value = 0
+    return
+  }
+
+  const nextLeftIndex = findCodeBlockIndexByKey(previousLeftKey)
+  const nextRightIndex = findCodeBlockIndexByKey(previousRightKey)
+  leftCodeIndex.value = nextLeftIndex >= 0 ? nextLeftIndex : Math.min(leftCodeIndex.value, blockCount - 1)
+  rightCodeIndex.value = nextRightIndex >= 0
+    ? nextRightIndex
+    : Math.min(rightCodeIndex.value, blockCount - 1)
+
+  if (blockCount > 1 && leftCodeIndex.value === rightCodeIndex.value) {
+    rightCodeIndex.value = leftCodeIndex.value === 0 ? 1 : 0
+  }
+}
+
 watch(() => comparison.session.value, currentSession => {
   if (!currentSession) {
     prompt.value = ''
@@ -514,17 +561,21 @@ watch(() => comparison.session.value, currentSession => {
 })
 
 watch(codeComparisonCandidates, candidates => {
+  const previousLanguage = selectedCodeLanguage.value
+  const previousLeftKey = getCodeBlockKey(leftCodeIndex.value)
+  const previousRightKey = getCodeBlockKey(rightCodeIndex.value)
   const currentLanguageExists = candidates.some(candidate => candidate.language === selectedCodeLanguage.value)
   if (!currentLanguageExists) {
     selectedCodeLanguage.value = candidates[0]?.language ?? ''
   }
-  leftCodeIndex.value = 0
-  rightCodeIndex.value = candidates[0]?.blocks.length && candidates[0].blocks.length > 1 ? 1 : 0
+  normalizeCodeSelection(
+    previousLanguage === selectedCodeLanguage.value ? previousLeftKey : '',
+    previousLanguage === selectedCodeLanguage.value ? previousRightKey : ''
+  )
 })
 
 watch(selectedCodeLanguage, () => {
-  leftCodeIndex.value = 0
-  rightCodeIndex.value = selectedCodeBlocks.value.length > 1 ? 1 : 0
+  normalizeCodeSelection()
 })
 
 onMounted(() => {
@@ -643,10 +694,19 @@ async function openHistory(sessionId: string): Promise<void> {
 }
 
 async function deleteHistory(sessionId: string): Promise<void> {
+  const confirmed = window.confirm('确定删除这条本地对比记录吗？删除后无法恢复。')
+  if (!confirmed) return
+
   const deletingCurrentSession = currentSession.value?.id === sessionId
-  await removeSession(sessionId)
-  if (deletingCurrentSession) {
-    isHistorySession.value = false
+  try {
+    await removeSession(sessionId)
+    if (deletingCurrentSession) {
+      isHistorySession.value = false
+    }
+    toast.show('已删除对比记录', 'success')
+  } catch (err) {
+    console.warn('[comparison] 删除对比记录失败', err)
+    toast.show('删除对比记录失败，请稍后重试', 'error')
   }
 }
 
@@ -729,21 +789,33 @@ function downloadTextFile(filename: string, content: string, mimeType: string): 
 function exportMarkdown(): void {
   const session = currentSession.value
   if (!session) return
-  downloadTextFile(
-    buildComparisonExportFilename(session, 'md'),
-    exportComparisonAsMarkdown(session),
-    'text/markdown;charset=utf-8'
-  )
+  try {
+    downloadTextFile(
+      buildComparisonExportFilename(session, 'md'),
+      exportComparisonAsMarkdown(session),
+      'text/markdown;charset=utf-8'
+    )
+    toast.show('已导出 Markdown', 'success')
+  } catch (err) {
+    console.warn('[comparison] 导出 Markdown 失败', err)
+    toast.show('导出 Markdown 失败', 'error')
+  }
 }
 
 function exportJson(): void {
   const session = currentSession.value
   if (!session) return
-  downloadTextFile(
-    buildComparisonExportFilename(session, 'json'),
-    exportComparisonAsJson(session),
-    'application/json;charset=utf-8'
-  )
+  try {
+    downloadTextFile(
+      buildComparisonExportFilename(session, 'json'),
+      exportComparisonAsJson(session),
+      'application/json;charset=utf-8'
+    )
+    toast.show('已导出 JSON', 'success')
+  } catch (err) {
+    console.warn('[comparison] 导出 JSON 失败', err)
+    toast.show('导出 JSON 失败', 'error')
+  }
 }
 
 async function retryRun(runId: string): Promise<void> {
@@ -1270,6 +1342,16 @@ async function summarize(): Promise<void> {
   color: var(--compare-muted);
 }
 
+.attachment-risk-note {
+  border: 1px solid var(--compare-warning-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--compare-warning-bg);
+  color: var(--compare-warning-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .attachment-remove {
   flex-shrink: 0;
   width: 22px;
@@ -1508,6 +1590,28 @@ textarea:disabled {
 .summary-instruction:focus {
   border-color: var(--accent-border);
   box-shadow: 0 0 0 3px var(--compare-primary-soft);
+}
+
+.summary-source-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--compare-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.summary-source-chip {
+  max-width: 100%;
+  border: 1px solid var(--compare-line);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--compare-soft);
+  color: var(--compare-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .summary-actions {

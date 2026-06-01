@@ -1190,6 +1190,24 @@
     cursor: not-allowed;
 }
 
+.knowledge-upload-btn.uploading {
+    color: var(--accent);
+    background: var(--accent-bg);
+}
+
+.upload-spinner {
+    width: 15px;
+    height: 15px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: upload-spin 0.8s linear infinite;
+}
+
+@keyframes upload-spin {
+    to { transform: rotate(360deg); }
+}
+
 /* ─── 语音输入按钮 ───────────────────────────── */
 .voice-btn.is-listening {
     color: #ef4444;

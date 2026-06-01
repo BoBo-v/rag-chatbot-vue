@@ -252,6 +252,14 @@ class="input-box" :class="{ disabled: isStreaming }"
               hidden
               @change="handleFileSelect"
           />
+          <input
+              ref="knowledgeInputRef"
+              type="file"
+              accept=".txt,.pdf"
+              multiple
+              hidden
+              @change="handleKnowledgeFileSelect"
+          />
           <textarea
               ref="textareaRef"
               v-model="inputValue"
@@ -279,6 +287,21 @@ class="input-box" :class="{ disabled: isStreaming }"
                   <line x1="16" y1="13" x2="8" y2="13"/>
                   <line x1="16" y1="17" x2="8" y2="17"/>
                   <polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </button>
+              <button
+                  class="tool-btn knowledge-upload-btn"
+                  :class="{ uploading: isKnowledgeUploading }"
+                  :disabled="isStreaming || isKnowledgeUploading"
+                  :title="isKnowledgeUploading ? '知识库上传中' : '上传到知识库'"
+                  @click="knowledgeInputRef?.click()"
+              >
+                <span v-if="isKnowledgeUploading" class="upload-spinner"></span>
+                <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                  <path d="M12 13V7"/>
+                  <path d="m9 10 3-3 3 3"/>
                 </svg>
               </button>
               <button
@@ -311,7 +334,7 @@ v-if="speechSupported"
         <div class="input-hint">
           <template v-if="isStreaming">AI 正在回复中...</template>
           <template v-else>
-            <span class="hint-key">Enter</span> 发送 · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 支持粘贴/拖拽图片和文件
+            <span class="hint-key">Enter</span> 发送 · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 纸夹为本轮附件，书本上传到知识库
           </template>
         </div>
       </div>
@@ -353,6 +376,7 @@ import { useConversationSearch } from '../composables/useConversationSearch'
 import { useMessageRenderer } from '../composables/useMessageRenderer'
 import { useConversationGroups } from '../composables/useConversationGroups'
 import { settings as currentSettings } from '../stores/settings'
+import { uploadKnowledgeFile } from '../services/knowledgeUpload'
 import SettingsPanel from '../components/SettingsPanel.vue'
 
 // StyleChat 是主聊天页面组件。
@@ -428,6 +452,8 @@ function openImagePreview(src: string) {
 // ── 上传相关 ──────────────────────────────────────
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const knowledgeInputRef = ref<HTMLInputElement | null>(null)
+const isKnowledgeUploading = ref(false)
 
 function handleImageSelect(e: Event) {
   // 文件 input 选中图片后，把 FileList 转成数组交给 useChatView 校验和读取。
@@ -444,6 +470,44 @@ function handleFileSelect(e: Event) {
   if (input.files?.length) {
     addFiles(Array.from(input.files))
     input.value = ''
+  }
+}
+
+async function handleKnowledgeFileSelect(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = input.files ? Array.from(input.files) : []
+  input.value = ''
+  if (!files.length) return
+
+  isKnowledgeUploading.value = true
+  let successCount = 0
+  let totalChunks = 0
+  let totalChars = 0
+  const failures: string[] = []
+
+  try {
+    for (const file of files) {
+      const result = await uploadKnowledgeFile(file)
+      if (result.ok) {
+        successCount++
+        totalChunks += result.chunkCount ?? 0
+        totalChars += result.charCount ?? 0
+      } else {
+        failures.push(`${result.fileName}: ${result.message || '上传失败'}`)
+      }
+    }
+
+    if (successCount > 0) {
+      const details = totalChunks > 0
+          ? `，生成 ${totalChunks} 个片段，${totalChars} 字`
+          : ''
+      toast.show(`已上传 ${successCount} 个文件到知识库${details}`, 'success')
+    }
+    if (failures.length > 0) {
+      toast.show(failures[0], 'error', 7000)
+    }
+  } finally {
+    isKnowledgeUploading.value = false
   }
 }
 

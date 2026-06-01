@@ -10,6 +10,12 @@ export default defineConfig(({ mode }) => ({
     server: {
         // 允许局域网设备访问开发服务器。只本机开发时可以改成 127.0.0.1。
         host: '0.0.0.0',
+        proxy: {
+            '/api': {
+                target: 'http://127.0.0.1:3001',
+                changeOrigin: true,
+            },
+        },
     },
     plugins: [
         {

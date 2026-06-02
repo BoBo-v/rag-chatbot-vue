@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import StyleChat from "./views/StyleChat.vue"
 import CompareChat from './views/CompareChat.vue'
+import KnowledgeBase from './views/KnowledgeBase.vue'
 import { watch, onMounted, ref } from 'vue'
 import { settings } from './stores/settings'
 
-type AppMode = 'chat' | 'compare'
+type AppMode = 'chat' | 'compare' | 'knowledge'
 
 const mode = ref<AppMode>('chat')
+const modes: { value: AppMode; label: string }[] = [
+  { value: 'chat', label: '普通聊天' },
+  { value: 'compare', label: '多模型对比' },
+  { value: 'knowledge', label: '知识库' },
+]
 
 function applyTheme(theme: string) {
   const resolved = theme === 'system'
@@ -29,24 +35,16 @@ window.matchMedia('(prefers-color-scheme: dark)')
   <div class="mode-shell">
     <div class="mode-switch" role="tablist" aria-label="应用模式">
       <button
+        v-for="item in modes"
+        :key="item.value"
         type="button"
         class="mode-tab"
-        :class="{ active: mode === 'chat' }"
+        :class="{ active: mode === item.value }"
         role="tab"
-        :aria-selected="mode === 'chat'"
-        @click="mode = 'chat'"
+        :aria-selected="mode === item.value"
+        @click="mode = item.value"
       >
-        普通聊天
-      </button>
-      <button
-        type="button"
-        class="mode-tab"
-        :class="{ active: mode === 'compare' }"
-        role="tab"
-        :aria-selected="mode === 'compare'"
-        @click="mode = 'compare'"
-      >
-        多模型对比
+        {{ item.label }}
       </button>
     </div>
     <div v-show="mode === 'chat'" class="mode-page">
@@ -54,6 +52,9 @@ window.matchMedia('(prefers-color-scheme: dark)')
     </div>
     <div v-show="mode === 'compare'" class="mode-page">
       <CompareChat />
+    </div>
+    <div v-show="mode === 'knowledge'" class="mode-page">
+      <KnowledgeBase />
     </div>
   </div>
 </template>
@@ -85,6 +86,7 @@ window.matchMedia('(prefers-color-scheme: dark)')
   border-radius: 8px;
   background: var(--bg-elevated);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  max-width: calc(100vw - 36px);
 }
 
 .mode-tab {
@@ -114,6 +116,7 @@ window.matchMedia('(prefers-color-scheme: dark)')
 
   .mode-tab {
     flex: 1;
+    padding: 0 8px;
   }
 }
 </style>

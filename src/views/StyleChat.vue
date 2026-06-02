@@ -376,7 +376,7 @@ import { useConversationSearch } from '../composables/useConversationSearch'
 import { useMessageRenderer } from '../composables/useMessageRenderer'
 import { useConversationGroups } from '../composables/useConversationGroups'
 import { settings as currentSettings } from '../stores/settings'
-import { uploadKnowledgeFile } from '../services/knowledgeUpload'
+import { uploadKnowledgeFile } from '../services/knowledge'
 import SettingsPanel from '../components/SettingsPanel.vue'
 
 // StyleChat 是主聊天页面组件。

@@ -22,7 +22,7 @@
         <input
           ref="fileInputRef"
           type="file"
-          accept=".txt,.pdf"
+          accept=".txt,.md,.pdf"
           multiple
           hidden
           @change="handleUpload"

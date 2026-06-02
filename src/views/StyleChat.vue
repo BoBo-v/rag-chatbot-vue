@@ -255,7 +255,7 @@ class="input-box" :class="{ disabled: isStreaming }"
           <input
               ref="knowledgeInputRef"
               type="file"
-              accept=".txt,.pdf"
+              accept=".txt,.md,.pdf"
               multiple
               hidden
               @change="handleKnowledgeFileSelect"

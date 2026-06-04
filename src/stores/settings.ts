@@ -11,6 +11,7 @@ export interface AppSettings {
     theme: ThemeType
     systemPrompt: string
     maxContextTokens: number
+    responseTimeoutSeconds: number
     showModelInTopbar: boolean
     ollama: {
         url: string
@@ -35,6 +36,7 @@ const defaults: AppSettings = {
     theme: 'dark',
     systemPrompt: '你是一个专业的 AI 助手，回答要简洁清晰。',
     maxContextTokens: 128000,
+    responseTimeoutSeconds: 30,
     showModelInTopbar: true,
     ollama: {
         url: 'http://localhost:11434',
@@ -63,6 +65,7 @@ function load(): AppSettings {
                 ...defaults,
                 ...saved,
                 theme:  saved.theme  ?? defaults.theme,
+                responseTimeoutSeconds: normalizeTimeout(saved.responseTimeoutSeconds),
                 ollama: { ...defaults.ollama, ...saved.ollama },
                 openai: { ...defaults.openai, ...saved.openai },
                 claude: { ...defaults.claude, ...saved.claude },
@@ -70,6 +73,12 @@ function load(): AppSettings {
         }
     } catch {}
     return { ...defaults, ollama: { ...defaults.ollama }, openai: { ...defaults.openai }, claude: { ...defaults.claude } }
+}
+
+function normalizeTimeout(value: unknown): number {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return defaults.responseTimeoutSeconds
+    return Math.min(300, Math.max(5, Math.round(parsed)))
 }
 
 export const settings = reactive<AppSettings>(load())

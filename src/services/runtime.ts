@@ -6,6 +6,7 @@ export function createRuntimeFromSettings(appSettings: AppSettings): ModelRuntim
         provider: appSettings.provider,
         systemPrompt: appSettings.systemPrompt,
         maxContextTokens: appSettings.maxContextTokens,
+        responseTimeoutSeconds: appSettings.responseTimeoutSeconds,
     }
 
     switch (appSettings.provider) {

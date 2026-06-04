@@ -1282,6 +1282,54 @@
     width: 100%;
 }
 
+.knowledge-upload-progress {
+    max-width: 860px;
+    width: 100%;
+    margin: 0 auto 8px;
+    padding: 9px 11px;
+    box-sizing: border-box;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--bg-surface-2);
+}
+
+.knowledge-upload-progress-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-muted);
+    font-size: 11.5px;
+}
+
+.knowledge-upload-progress-row span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.knowledge-upload-progress-row strong {
+    flex-shrink: 0;
+    color: var(--accent-text);
+    font-size: 11.5px;
+}
+
+.knowledge-upload-progress-track {
+    height: 5px;
+    margin-top: 7px;
+    overflow: hidden;
+    border-radius: 5px;
+    background: var(--border-subtle);
+}
+
+.knowledge-upload-progress-bar {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #0891b2, #10b981);
+    transition: width 0.2s ease;
+}
+
 .file-preview-item {
     display: flex;
     align-items: center;

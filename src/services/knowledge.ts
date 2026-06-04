@@ -6,6 +6,7 @@ export interface StoredKnowledgeFile {
     charCount: number
     chunkCount: number
     createdAt: string
+    contentHash?: string
 }
 
 export interface KnowledgeChunk {
@@ -43,6 +44,27 @@ export interface KnowledgeUploadResult {
     chunks?: { text: string; chunkIndex: number }[]
     charCount?: number
     chunkCount?: number
+    deduplicated?: boolean
+    overwritten?: boolean
+}
+
+export type UploadProgressPhase = 'receiving' | 'parsing' | 'chunking' | 'embedding' | 'storing' | 'completed' | 'failed'
+
+export interface UploadProgress {
+    id: string
+    phase: UploadProgressPhase
+    percent: number
+    message: string
+    loaded?: number
+    total?: number
+    done: boolean
+    error?: string
+    updatedAt: string
+}
+
+export interface KnowledgeUploadOptions {
+    overwrite?: boolean
+    onProgress?: (progress: UploadProgress) => void
 }
 
 export interface KnowledgeSearchOptions {
@@ -55,17 +77,29 @@ export interface KnowledgeSearchOptions {
 const KNOWLEDGE_UPLOAD_ENDPOINT = '/api/upload'
 const KNOWLEDGE_FILE_FIELD = 'file'
 
-export async function uploadKnowledgeFile(file: File): Promise<KnowledgeUploadResult> {
+export async function uploadKnowledgeFile(file: File, options: KnowledgeUploadOptions = {}): Promise<KnowledgeUploadResult> {
     const formData = new FormData()
     formData.append(KNOWLEDGE_FILE_FIELD, file, file.name)
 
+    const progressId = options.onProgress ? createProgressId() : undefined
+    const events = progressId && options.onProgress
+        ? subscribeUploadProgress(progressId, options.onProgress)
+        : undefined
+    const params = new URLSearchParams()
+    if (options.overwrite) params.set('overwrite', 'true')
+    if (progressId) params.set('progressId', progressId)
+    const endpoint = params.size > 0
+        ? `${KNOWLEDGE_UPLOAD_ENDPOINT}?${params.toString()}`
+        : KNOWLEDGE_UPLOAD_ENDPOINT
+
     let response: Response
     try {
-        response = await fetch(KNOWLEDGE_UPLOAD_ENDPOINT, {
+        response = await fetch(endpoint, {
             method: 'POST',
             body: formData,
         })
     } catch (error) {
+        events?.close()
         return {
             fileName: file.name,
             ok: false,
@@ -81,7 +115,14 @@ export async function uploadKnowledgeFile(file: File): Promise<KnowledgeUploadRe
         }
     }
 
-    const data = await readJson<{ message?: string; detail?: string; file?: StoredKnowledgeFile; chunks?: { text: string; chunkIndex: number }[] }>(response)
+    const data = await readJson<{
+        message?: string
+        detail?: string
+        file?: StoredKnowledgeFile
+        chunks?: { text: string; chunkIndex: number }[]
+        deduplicated?: boolean
+        overwritten?: boolean
+    }>(response)
     return {
         fileName: file.name,
         ok: true,
@@ -90,7 +131,32 @@ export async function uploadKnowledgeFile(file: File): Promise<KnowledgeUploadRe
         chunks: data?.chunks,
         charCount: data?.file?.charCount,
         chunkCount: data?.file?.chunkCount ?? data?.chunks?.length,
+        deduplicated: data?.deduplicated,
+        overwritten: data?.overwritten,
     }
+}
+
+function subscribeUploadProgress(
+    progressId: string,
+    onProgress: (progress: UploadProgress) => void
+): EventSource {
+    const events = new EventSource(`/api/upload/progress/${encodeURIComponent(progressId)}`)
+    events.addEventListener('progress', event => {
+        const progress = JSON.parse(event.data) as UploadProgress
+        onProgress(progress)
+        if (progress.done) events.close()
+    })
+    events.onerror = () => {
+        events.close()
+    }
+    return events
+}
+
+function createProgressId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID()
+    }
+    return Math.random().toString(36).slice(2)
 }
 
 export async function listKnowledgeFiles(): Promise<StoredKnowledgeFile[]> {

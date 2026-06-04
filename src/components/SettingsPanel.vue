@@ -139,6 +139,17 @@ v-model="draft.claude.model" class="settings-input"
           </div>
 
           <div class="settings-group">
+            <div class="settings-label-row">
+              <label class="settings-label">首个响应超时</label>
+              <span class="settings-token-val">{{ draft.responseTimeoutSeconds }} 秒</span>
+            </div>
+            <input
+v-model.number="draft.responseTimeoutSeconds"
+              class="settings-input" type="number" min="5" max="300" step="5" />
+            <span class="settings-hint">等待模型返回第一段内容的最长时间，收到首个片段后流式阶段不限时</span>
+          </div>
+
+          <div class="settings-group">
             <label class="settings-label">系统提示词</label>
             <textarea
 v-model="draft.systemPrompt"
@@ -307,16 +318,23 @@ watch(() => draft.provider, () => {
 if (draft.provider !== 'claude') loadModels()
 
 function save() {
+  draft.responseTimeoutSeconds = normalizeTimeout(draft.responseTimeoutSeconds)
   // Copy draft values back to global settings. The settings store persists them to localStorage.
   Object.assign(settings, {
     provider:          draft.provider,
     systemPrompt:      draft.systemPrompt,
     maxContextTokens:  draft.maxContextTokens,
+    responseTimeoutSeconds: draft.responseTimeoutSeconds,
     showModelInTopbar: draft.showModelInTopbar,
   })
   Object.assign(settings.ollama,  draft.ollama)
   Object.assign(settings.openai,  draft.openai)
   Object.assign(settings.claude,  draft.claude)
   emit('close')
+}
+
+function normalizeTimeout(value: number): number {
+  if (!Number.isFinite(value)) return 30
+  return Math.min(300, Math.max(5, Math.round(value)))
 }
 </script>

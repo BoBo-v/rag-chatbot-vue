@@ -224,6 +224,15 @@ v-for="(img, idx) in msg.images" :key="idx"
             <button class="file-remove-btn" @click="removeFile(idx)">×</button>
           </div>
         </div>
+        <div v-if="isKnowledgeUploading" class="knowledge-upload-progress">
+          <div class="knowledge-upload-progress-row">
+            <span>{{ knowledgeUploadLabel }}</span>
+            <strong>{{ Math.round(knowledgeUploadPercent) }}%</strong>
+          </div>
+          <div class="knowledge-upload-progress-track">
+            <div class="knowledge-upload-progress-bar" :style="{ width: knowledgeUploadPercent + '%' }"></div>
+          </div>
+        </div>
         <!-- 图片预览 -->
         <div v-if="pendingImages.length > 0" class="image-preview-bar">
           <div v-for="(img, idx) in pendingImages" :key="idx" class="image-preview-item">
@@ -377,6 +386,7 @@ import { useMessageRenderer } from '../composables/useMessageRenderer'
 import { useConversationGroups } from '../composables/useConversationGroups'
 import { settings as currentSettings } from '../stores/settings'
 import { uploadKnowledgeFile } from '../services/knowledge'
+import type { UploadProgress } from '../services/knowledge'
 import SettingsPanel from '../components/SettingsPanel.vue'
 
 // StyleChat 是主聊天页面组件。
@@ -454,6 +464,8 @@ const imageInputRef = ref<HTMLInputElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const knowledgeInputRef = ref<HTMLInputElement | null>(null)
 const isKnowledgeUploading = ref(false)
+const knowledgeUploadLabel = ref('')
+const knowledgeUploadPercent = ref(0)
 
 function handleImageSelect(e: Event) {
   // 文件 input 选中图片后，把 FileList 转成数组交给 useChatView 校验和读取。
@@ -480,6 +492,8 @@ async function handleKnowledgeFileSelect(e: Event) {
   if (!files.length) return
 
   isKnowledgeUploading.value = true
+  knowledgeUploadLabel.value = '准备上传到知识库'
+  knowledgeUploadPercent.value = 0
   let successCount = 0
   let totalChunks = 0
   let totalChars = 0
@@ -487,7 +501,11 @@ async function handleKnowledgeFileSelect(e: Event) {
 
   try {
     for (const file of files) {
-      const result = await uploadKnowledgeFile(file)
+      knowledgeUploadLabel.value = file.name
+      knowledgeUploadPercent.value = 0
+      const result = await uploadKnowledgeFile(file, {
+        onProgress: progress => updateKnowledgeUploadProgress(file.name, progress),
+      })
       if (result.ok) {
         successCount++
         totalChunks += result.chunkCount ?? 0
@@ -509,6 +527,11 @@ async function handleKnowledgeFileSelect(e: Event) {
   } finally {
     isKnowledgeUploading.value = false
   }
+}
+
+function updateKnowledgeUploadProgress(fileName: string, progress: UploadProgress) {
+  knowledgeUploadLabel.value = `${fileName} · ${progress.message}`
+  knowledgeUploadPercent.value = progress.percent
 }
 
 function formatFileSize(bytes: number): string {

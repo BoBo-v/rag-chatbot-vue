@@ -30,6 +30,26 @@
       </div>
     </header>
 
+    <section v-if="uploadItems.length > 0" class="kb-upload-strip">
+      <article
+        v-for="item in uploadItems"
+        :key="item.id"
+        class="kb-upload-item"
+        :class="{ done: item.status === 'done', failed: item.status === 'failed' }"
+      >
+        <div class="kb-upload-info">
+          <strong>{{ item.name }}</strong>
+          <span>{{ item.message }}</span>
+        </div>
+        <div class="kb-upload-progress">
+          <span>{{ Math.round(item.percent) }}%</span>
+          <div class="kb-upload-track">
+            <div class="kb-upload-bar" :style="{ width: item.percent + '%' }"></div>
+          </div>
+        </div>
+      </article>
+    </section>
+
     <main class="knowledge-layout">
       <aside class="kb-panel kb-files-panel">
         <div class="kb-panel-header">
@@ -210,6 +230,7 @@ import {
   listKnowledgeFiles,
   searchKnowledge,
   uploadKnowledgeFile,
+  type UploadProgress,
   type KnowledgeFileDetail,
   type KnowledgeSearchResult,
   type StoredKnowledgeFile,
@@ -226,6 +247,15 @@ const loadingDetail = ref(false)
 const uploading = ref(false)
 const deleting = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+type UploadItemStatus = 'uploading' | 'done' | 'failed'
+interface UploadItem {
+  id: string
+  name: string
+  percent: number
+  message: string
+  status: UploadItemStatus
+}
+const uploadItems = ref<UploadItem[]>([])
 
 const query = ref('')
 const topK = ref(5)
@@ -285,10 +315,30 @@ async function handleUpload(e: Event) {
   let successCount = 0
   try {
     for (const file of uploadFiles) {
-      const result = await uploadKnowledgeFile(file)
+      const item: UploadItem = {
+        id: crypto.randomUUID(),
+        name: file.name,
+        percent: 0,
+        message: '准备上传',
+        status: 'uploading',
+      }
+      uploadItems.value.unshift(item)
+      const result = await uploadKnowledgeFile(file, {
+        onProgress: progress => updateUploadItem(item.id, progress),
+      })
       if (result.ok) {
         successCount++
+        item.percent = 100
+        item.status = 'done'
+        item.message = result.deduplicated
+            ? '已存在相同内容，复用已有记录'
+            : result.overwritten
+              ? '已覆盖并写入知识库'
+              : '上传完成'
       } else {
+        item.percent = 100
+        item.status = 'failed'
+        item.message = result.message || '上传失败'
         toast.show(`${result.fileName}: ${result.message || '上传失败'}`, 'error', 7000)
       }
     }
@@ -298,6 +348,16 @@ async function handleUpload(e: Event) {
     }
   } finally {
     uploading.value = false
+  }
+}
+
+function updateUploadItem(id: string, progress: UploadProgress) {
+  const item = uploadItems.value.find(entry => entry.id === id)
+  if (!item) return
+  item.percent = progress.percent
+  item.message = progress.message
+  if (progress.done) {
+    item.status = progress.error ? 'failed' : 'done'
   }
 }
 
@@ -488,6 +548,88 @@ onMounted(loadFiles)
   grid-template-columns: 300px minmax(0, 1fr) 380px;
   gap: 1px;
   background: var(--border-subtle);
+}
+
+.kb-upload-strip {
+  position: absolute;
+  top: 74px;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  padding: 10px 28px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(7, 7, 15, 0.74);
+  backdrop-filter: blur(18px);
+}
+
+[data-theme="light"] .kb-upload-strip {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.kb-upload-item {
+  flex: 0 0 280px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface-2);
+}
+
+.kb-upload-item.done {
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.kb-upload-item.failed {
+  border-color: rgba(248, 113, 113, 0.34);
+}
+
+.kb-upload-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kb-upload-info strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.kb-upload-info span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.kb-upload-progress {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.kb-upload-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--border-subtle);
+}
+
+.kb-upload-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0891b2, #10b981);
+  transition: width 0.2s ease;
 }
 
 .kb-panel {

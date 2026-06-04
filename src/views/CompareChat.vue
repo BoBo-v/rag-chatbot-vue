@@ -591,6 +591,7 @@ function cloneRuntime(runtime: ModelRuntimeConfig): ModelRuntimeConfig {
     apiKey: runtime.apiKey,
     systemPrompt: runtime.systemPrompt,
     maxContextTokens: runtime.maxContextTokens,
+    responseTimeoutSeconds: runtime.responseTimeoutSeconds,
   }
 }
 
@@ -610,6 +611,7 @@ function normalizeRuntime(runtime: ModelRuntimeConfig): void {
   }
   runtime.systemPrompt = settings.systemPrompt
   runtime.maxContextTokens = settings.maxContextTokens
+  runtime.responseTimeoutSeconds = settings.responseTimeoutSeconds
   runtime.label = `${runtime.provider} - ${runtime.model}`
 }
 

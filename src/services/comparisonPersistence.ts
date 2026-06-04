@@ -22,6 +22,7 @@ function sanitizeRuntimeConfig(config: ModelRuntimeConfig): ModelRuntimeConfig {
         apiKey: undefined,
         systemPrompt: config.systemPrompt,
         maxContextTokens: config.maxContextTokens,
+        responseTimeoutSeconds: config.responseTimeoutSeconds,
     }
 }
 

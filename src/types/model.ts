@@ -11,6 +11,7 @@ export interface ModelRuntimeConfig {
     apiKey?: string
     systemPrompt: string
     maxContextTokens: number
+    responseTimeoutSeconds: number
 }
 
 export type ComparisonRunStatus =

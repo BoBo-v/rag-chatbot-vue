@@ -5,6 +5,7 @@ import { reactive, watch } from 'vue'
 
 export type ProviderType = 'ollama' | 'openai' | 'claude'
 export type ThemeType   = 'dark' | 'light' | 'system'
+export type BackendChatProviderType = 'ollama' | 'openai' | 'anthropic'
 
 export interface AppSettings {
     provider: ProviderType
@@ -16,6 +17,9 @@ export interface AppSettings {
     ollama: {
         url: string
         model: string
+        useBackendChat: boolean
+        backendProvider: BackendChatProviderType
+        backendModel: string
     }
     openai: {
         apiKey: string
@@ -41,6 +45,9 @@ const defaults: AppSettings = {
     ollama: {
         url: 'http://localhost:11434',
         model: 'qwen2.5:7b',
+        useBackendChat: false,
+        backendProvider: 'ollama',
+        backendModel: 'qwen2.5:7b',
     },
     openai: {
         apiKey: '',

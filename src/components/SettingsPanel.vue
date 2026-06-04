@@ -68,6 +68,45 @@ v-model="draft.ollama.model" class="settings-input"
               <span v-if="modelError" class="settings-hint error">{{ modelError }}</span>
               <span v-else class="settings-hint">支持下拉选择或手动输入模型名称</span>
             </div>
+            <div class="settings-divider"></div>
+            <div class="settings-group">
+              <div class="settings-label-row">
+                <label class="settings-label">后端 RAG 对话</label>
+                <label class="settings-toggle">
+                  <input v-model="draft.ollama.useBackendChat" type="checkbox" />
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+              <span class="settings-hint">开启后 Ollama 聊天请求会走前端同源 /api/chat，并由后端注入知识库上下文</span>
+            </div>
+            <template v-if="draft.ollama.useBackendChat">
+              <div class="settings-group">
+                <div class="settings-label-row">
+                  <label class="settings-label">后端厂商</label>
+                  <button class="btn-refresh" :class="{ loading: loadingBackendProviders }" @click="loadBackendProviders">
+                    {{ loadingBackendProviders ? '获取中...' : '刷新厂商' }}
+                  </button>
+                </div>
+                <select v-model="draft.ollama.backendProvider" class="settings-input settings-select" @change="applyBackendDefaultModel">
+                  <option
+                    v-for="provider in backendProviders"
+                    :key="provider.id"
+                    :value="provider.id"
+                  >
+                    {{ provider.name }}
+                  </option>
+                </select>
+                <span v-if="backendProviderError" class="settings-hint error">{{ backendProviderError }}</span>
+                <span v-else class="settings-hint">只显示后端 configured=true 的厂商</span>
+              </div>
+              <div class="settings-group">
+                <label class="settings-label">后端模型</label>
+                <input
+v-model="draft.ollama.backendModel" class="settings-input"
+                  placeholder="使用厂商默认模型或手动输入" spellcheck="false" autocomplete="off" />
+                <span class="settings-hint">最终会作为 model 写入 /api/chat 请求体</span>
+              </div>
+            </template>
           </template>
 
           <!-- ── OpenAI 兼容 ── -->
@@ -198,6 +237,7 @@ import { reactive, ref, watch, computed } from 'vue'
 import { settings } from '../stores/settings'
 import { fetchModels } from '../services/stream'
 import { getClaudeModels } from '../services/providers/claude'
+import { fetchBackendChatProviders, type BackendChatProvider } from '../services/knowledge'
 import type { ProviderType, ThemeType } from '../stores/settings'
 
 const emit = defineEmits<{ close: [] }>()
@@ -274,6 +314,9 @@ const contextTokenLabel = computed(() => {
 const modelList    = ref<string[]>([])
 const loadingModels = ref(false)
 const modelError   = ref('')
+const backendProviders = ref<BackendChatProvider[]>([])
+const loadingBackendProviders = ref(false)
+const backendProviderError = ref('')
 
 async function loadModels() {
   // fetchModels reads from global settings, so this function temporarily applies the draft provider config,
@@ -316,9 +359,43 @@ watch(() => draft.provider, () => {
 
 // 打开面板时自动拉取
 if (draft.provider !== 'claude') loadModels()
+loadBackendProviders()
+
+async function loadBackendProviders() {
+  loadingBackendProviders.value = true
+  backendProviderError.value = ''
+  try {
+    backendProviders.value = await fetchBackendChatProviders()
+    if (backendProviders.value.length === 0) {
+      backendProviderError.value = '后端没有可用厂商，请检查 /api/providers 配置'
+      return
+    }
+    if (!backendProviders.value.some(provider => provider.id === draft.ollama.backendProvider)) {
+      draft.ollama.backendProvider = backendProviders.value[0].id
+      draft.ollama.backendModel = backendProviders.value[0].defaultModel
+    } else if (!draft.ollama.backendModel) {
+      applyBackendDefaultModel()
+    }
+  } catch (error) {
+    backendProviderError.value = error instanceof Error ? error.message : '后端厂商列表获取失败'
+  } finally {
+    loadingBackendProviders.value = false
+  }
+}
+
+function applyBackendDefaultModel() {
+  const provider = backendProviders.value.find(item => item.id === draft.ollama.backendProvider)
+  if (provider) {
+    draft.ollama.backendModel = provider.defaultModel
+  }
+}
 
 function save() {
   draft.responseTimeoutSeconds = normalizeTimeout(draft.responseTimeoutSeconds)
+  if (!draft.ollama.backendModel) {
+    const provider = backendProviders.value.find(item => item.id === draft.ollama.backendProvider)
+    draft.ollama.backendModel = provider?.defaultModel ?? draft.ollama.model
+  }
   // Copy draft values back to global settings. The settings store persists them to localStorage.
   Object.assign(settings, {
     provider:          draft.provider,

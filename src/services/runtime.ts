@@ -33,6 +33,9 @@ export function createRuntimeFromSettings(appSettings: AppSettings): ModelRuntim
                 label: `Ollama - ${appSettings.ollama.model}`,
                 model: appSettings.ollama.model,
                 baseUrl: appSettings.ollama.url,
+                useBackendChat: appSettings.ollama.useBackendChat,
+                backendProvider: appSettings.ollama.backendProvider,
+                backendModel: appSettings.ollama.backendModel,
             }
     }
 }

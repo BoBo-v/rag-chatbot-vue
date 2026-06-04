@@ -1,4 +1,4 @@
-import type { ProviderType } from '../stores/settings'
+import type { BackendChatProviderType, ProviderType } from '../stores/settings'
 import type { FileAttachment, ImageAttachment } from './chat'
 
 export type ModelProvider = ProviderType
@@ -12,6 +12,9 @@ export interface ModelRuntimeConfig {
     systemPrompt: string
     maxContextTokens: number
     responseTimeoutSeconds: number
+    useBackendChat?: boolean
+    backendProvider?: BackendChatProviderType
+    backendModel?: string
 }
 
 export type ComparisonRunStatus =

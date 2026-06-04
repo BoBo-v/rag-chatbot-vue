@@ -5,6 +5,7 @@ import { createRuntimeFromSettings } from './runtime'
 import { ollamaStream, fetchOllamaModels } from './providers/ollama'
 import { openaiStream, fetchOpenAIModels } from './providers/openai'
 import { claudeStream, getClaudeModels } from './providers/claude'
+import { backendChatStream } from './providers/backendChat'
 
 const DEFAULT_RESPONSE_TIMEOUT_SECONDS = 30
 
@@ -56,7 +57,11 @@ export async function generateStreamWithContext(options: GenerateStreamWithConte
                 break
             case 'ollama':
             default:
-                await ollamaStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
+                if (runtime.useBackendChat) {
+                    await backendChatStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
+                } else {
+                    await ollamaStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
+                }
                 break
         }
     } catch (err) {

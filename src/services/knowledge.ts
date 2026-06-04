@@ -74,6 +74,13 @@ export interface KnowledgeSearchOptions {
     fileId?: string
 }
 
+export interface BackendChatProvider {
+    id: 'ollama' | 'openai' | 'anthropic'
+    name: string
+    defaultModel: string
+    configured: boolean
+}
+
 const KNOWLEDGE_UPLOAD_ENDPOINT = '/api/upload'
 const KNOWLEDGE_FILE_FIELD = 'file'
 
@@ -185,6 +192,11 @@ export async function searchKnowledge(options: KnowledgeSearchOptions): Promise<
 
     const data = await fetchJson<{ results: KnowledgeSearchResult[] }>(`/api/search?${params.toString()}`)
     return data.results ?? []
+}
+
+export async function fetchBackendChatProviders(): Promise<BackendChatProvider[]> {
+    const data = await fetchJson<{ providers: BackendChatProvider[] }>('/api/providers')
+    return (data.providers ?? []).filter(provider => provider.configured)
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {

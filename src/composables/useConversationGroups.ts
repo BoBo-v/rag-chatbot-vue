@@ -38,7 +38,12 @@ export function useConversationGroups(conversations: Ref<Conversation[]>) {
 
     const currentModelName = computed(() => {
         const p = settings.provider
-        if (p === 'ollama') return settings.ollama.model
+        if (p === 'ollama') {
+            if (settings.ollama.useBackendChat) {
+                return `${settings.ollama.backendProvider} / ${settings.ollama.backendModel || settings.ollama.model}`
+            }
+            return settings.ollama.model
+        }
         if (p === 'openai') return settings.openai.model
         return settings.claude.model
     })

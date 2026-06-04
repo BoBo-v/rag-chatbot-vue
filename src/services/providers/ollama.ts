@@ -41,6 +41,15 @@ export async function ollamaStream(
 
     if (!res.ok) throw new Error(`Ollama error ${res.status}: ${await res.text()}`)
 
+    await readOllamaNdjsonStream(res, onChunk, onDone, signal)
+}
+
+export async function readOllamaNdjsonStream(
+    res: Response,
+    onChunk: (chunk: string) => void,
+    onDone: () => void,
+    signal?: AbortSignal
+): Promise<void> {
     const reader = res.body!.getReader()
     const decoder = new TextDecoder()
     let buffer = ''

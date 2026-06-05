@@ -2,17 +2,39 @@
 import StyleChat from "./views/StyleChat.vue"
 import CompareChat from './views/CompareChat.vue'
 import KnowledgeBase from './views/KnowledgeBase.vue'
-import { watch, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { settings } from './stores/settings'
 
 type AppMode = 'chat' | 'compare' | 'knowledge'
+type SwitchPosition = { x: number; y: number }
+type DragState = {
+  pointerId: number
+  startX: number
+  startY: number
+  originX: number
+  originY: number
+  moved: boolean
+}
 
 const mode = ref<AppMode>('chat')
 const modes: { value: AppMode; label: string }[] = [
-  { value: 'chat', label: '普通聊天' },
-  { value: 'compare', label: '多模型对比' },
-  { value: 'knowledge', label: '知识库' },
+  { value: 'chat', label: '\u666e\u901a\u804a\u5929' },
+  { value: 'compare', label: '\u591a\u6a21\u578b\u5bf9\u6bd4' },
+  { value: 'knowledge', label: '\u77e5\u8bc6\u5e93' },
 ]
+
+const SWITCH_MARGIN = 8
+const SWITCH_STORAGE_KEY = 'ai-chat-mode-switch-position'
+const switchRef = ref<HTMLElement | null>(null)
+const switchPosition = ref<SwitchPosition>({ x: 18, y: 68 })
+const isSwitchDragging = ref(false)
+let dragState: DragState | null = null
+let mediaQuery: MediaQueryList | null = null
+
+const switchStyle = computed(() => ({
+  left: `${switchPosition.value.x}px`,
+  top: `${switchPosition.value.y}px`,
+}))
 
 function applyTheme(theme: string) {
   const resolved = theme === 'system'
@@ -21,31 +43,149 @@ function applyTheme(theme: string) {
   document.documentElement.setAttribute('data-theme', resolved)
 }
 
-onMounted(() => applyTheme(settings.theme))
-watch(() => settings.theme, applyTheme)
+function getDefaultSwitchPosition(): SwitchPosition {
+  const width = switchRef.value?.offsetWidth ?? 260
+  const rightOffset = window.innerWidth <= 640 ? 10 : 18
+  return {
+    x: window.innerWidth - width - rightOffset,
+    y: window.innerWidth <= 640 ? 58 : 68,
+  }
+}
 
-// 跟随系统时，监听系统主题变化
-window.matchMedia('(prefers-color-scheme: dark)')
-  .addEventListener('change', () => {
-    if (settings.theme === 'system') applyTheme('system')
+function clampSwitchPosition(position: SwitchPosition): SwitchPosition {
+  const width = switchRef.value?.offsetWidth ?? 260
+  const height = switchRef.value?.offsetHeight ?? 40
+  const maxX = Math.max(SWITCH_MARGIN, window.innerWidth - width - SWITCH_MARGIN)
+  const maxY = Math.max(SWITCH_MARGIN, window.innerHeight - height - SWITCH_MARGIN)
+  return {
+    x: Math.min(Math.max(position.x, SWITCH_MARGIN), maxX),
+    y: Math.min(Math.max(position.y, SWITCH_MARGIN), maxY),
+  }
+}
+
+function readStoredSwitchPosition(): SwitchPosition | null {
+  try {
+    const raw = localStorage.getItem(SWITCH_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<SwitchPosition>
+    if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') return null
+    return parsed as SwitchPosition
+  } catch {
+    return null
+  }
+}
+
+function saveSwitchPosition(position: SwitchPosition) {
+  try {
+    localStorage.setItem(SWITCH_STORAGE_KEY, JSON.stringify(position))
+  } catch {
+    // Ignore storage failures so dragging still works in restricted browser contexts.
+  }
+}
+
+function initializeSwitchPosition() {
+  const stored = readStoredSwitchPosition()
+  switchPosition.value = clampSwitchPosition(stored ?? getDefaultSwitchPosition())
+}
+
+function handleSwitchPointerDown(event: PointerEvent) {
+  if (event.button !== 0) return
+  dragState = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    originX: switchPosition.value.x,
+    originY: switchPosition.value.y,
+    moved: false,
+  }
+  isSwitchDragging.value = true
+  if (event.currentTarget instanceof HTMLElement) {
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+}
+
+function handleSwitchPointerMove(event: PointerEvent) {
+  if (!dragState || event.pointerId !== dragState.pointerId) return
+  const deltaX = event.clientX - dragState.startX
+  const deltaY = event.clientY - dragState.startY
+  if (!dragState.moved && Math.hypot(deltaX, deltaY) > 4) {
+    dragState.moved = true
+  }
+  switchPosition.value = clampSwitchPosition({
+    x: dragState.originX + deltaX,
+    y: dragState.originY + deltaY,
   })
+}
+
+function handleSwitchPointerUp(event: PointerEvent) {
+  if (!dragState || event.pointerId !== dragState.pointerId) return
+  if (event.currentTarget instanceof HTMLElement) {
+    event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+  if (dragState.moved) {
+    saveSwitchPosition(switchPosition.value)
+  }
+  dragState = null
+  isSwitchDragging.value = false
+}
+
+function handleResize() {
+  switchPosition.value = clampSwitchPosition(switchPosition.value)
+  saveSwitchPosition(switchPosition.value)
+}
+
+function handleThemeMediaChange() {
+  if (settings.theme === 'system') applyTheme('system')
+}
+
+onMounted(() => {
+  applyTheme(settings.theme)
+  nextTick(initializeSwitchPosition)
+  window.addEventListener('resize', handleResize)
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  mediaQuery.addEventListener('change', handleThemeMediaChange)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  mediaQuery?.removeEventListener('change', handleThemeMediaChange)
+})
+watch(() => settings.theme, applyTheme)
 </script>
 
 <template>
   <div class="mode-shell">
-    <div class="mode-switch" role="tablist" aria-label="应用模式">
+    <div
+      ref="switchRef"
+      class="mode-switch"
+      :class="{ dragging: isSwitchDragging }"
+      :style="switchStyle"
+    >
       <button
-        v-for="item in modes"
-        :key="item.value"
+        class="mode-drag-handle"
         type="button"
-        class="mode-tab"
-        :class="{ active: mode === item.value }"
-        role="tab"
-        :aria-selected="mode === item.value"
-        @click="mode = item.value"
+        aria-label="Drag mode switch"
+        title="Drag"
+        @pointerdown="handleSwitchPointerDown"
+        @pointermove="handleSwitchPointerMove"
+        @pointerup="handleSwitchPointerUp"
+        @pointercancel="handleSwitchPointerUp"
       >
-        {{ item.label }}
+        <span class="mode-drag-grip" aria-hidden="true"></span>
       </button>
+      <div class="mode-tabs" role="tablist" aria-label="App mode">
+        <button
+          v-for="item in modes"
+          :key="item.value"
+          type="button"
+          class="mode-tab"
+          :class="{ active: mode === item.value }"
+          role="tab"
+          :aria-selected="mode === item.value"
+          @click="mode = item.value"
+        >
+          {{ item.label }}
+        </button>
+      </div>
     </div>
     <div v-show="mode === 'chat'" class="mode-page">
       <StyleChat />
@@ -76,47 +216,103 @@ window.matchMedia('(prefers-color-scheme: dark)')
 
 .mode-switch {
   position: fixed;
-  top: 68px;
-  right: 18px;
   z-index: 200;
   display: flex;
-  gap: 4px;
-  padding: 4px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--bg-elevated);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  background: var(--bg-topbar);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
   max-width: calc(100vw - 36px);
+  backdrop-filter: blur(16px);
+  user-select: none;
+}
+
+.mode-drag-handle {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0;
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.mode-drag-grip {
+  width: 10px;
+  height: 14px;
+  background-image: radial-gradient(currentColor 1.2px, transparent 1.2px);
+  background-position: 0 0;
+  background-size: 5px 5px;
+  opacity: 0.9;
+}
+
+.mode-drag-handle:hover,
+.mode-switch.dragging .mode-drag-handle {
+  border-color: var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.mode-switch.dragging .mode-drag-handle {
+  cursor: grabbing;
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--bg-surface-2);
+  min-width: 0;
 }
 
 .mode-tab {
-  height: 28px;
+  height: 30px;
   border: none;
-  border-radius: 6px;
-  padding: 0 12px;
+  border-radius: 5px;
+  padding: 0 11px;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
   font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+.mode-tab:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .mode-tab.active {
   background: var(--accent-bg);
   color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px var(--accent-border);
 }
 
 @media (max-width: 640px) {
   .mode-switch {
-    top: 58px;
-    right: 10px;
-    left: 10px;
-    justify-content: center;
+    gap: 4px;
+    padding: 4px;
+    max-width: calc(100vw - 20px);
+  }
+
+  .mode-drag-handle {
+    width: 22px;
   }
 
   .mode-tab {
     flex: 1;
-    padding: 0 8px;
+    padding: 0 7px;
   }
 }
 </style>

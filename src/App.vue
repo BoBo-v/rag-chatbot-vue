@@ -2,7 +2,7 @@
 import StyleChat from "./views/StyleChat.vue"
 import CompareChat from './views/CompareChat.vue'
 import KnowledgeBase from './views/KnowledgeBase.vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type StyleValue } from 'vue'
 import { settings } from './stores/settings'
 
 type AppMode = 'chat' | 'compare' | 'knowledge'
@@ -25,15 +25,19 @@ const modes: { value: AppMode; label: string }[] = [
 
 const SWITCH_MARGIN = 8
 const SWITCH_STORAGE_KEY = 'ai-chat-mode-switch-position'
+const APP_MODE_LABEL = '\u5e94\u7528\u6a21\u5f0f'
+const DRAG_HANDLE_LABEL = '\u62d6\u52a8\u5207\u6362\u6309\u94ae\uff0c\u53cc\u51fb\u91cd\u7f6e\u4f4d\u7f6e'
 const switchRef = ref<HTMLElement | null>(null)
 const switchPosition = ref<SwitchPosition>({ x: 18, y: 68 })
 const isSwitchDragging = ref(false)
+const isSwitchReady = ref(false)
 let dragState: DragState | null = null
 let mediaQuery: MediaQueryList | null = null
 
-const switchStyle = computed(() => ({
+const switchStyle = computed<StyleValue>(() => ({
   left: `${switchPosition.value.x}px`,
   top: `${switchPosition.value.y}px`,
+  visibility: isSwitchReady.value ? 'visible' : 'hidden',
 }))
 
 function applyTheme(theme: string) {
@@ -48,7 +52,7 @@ function getDefaultSwitchPosition(): SwitchPosition {
   const rightOffset = window.innerWidth <= 640 ? 10 : 18
   return {
     x: window.innerWidth - width - rightOffset,
-    y: window.innerWidth <= 640 ? 58 : 68,
+    y: window.innerWidth <= 640 ? 64 : 84,
   }
 }
 
@@ -86,6 +90,13 @@ function saveSwitchPosition(position: SwitchPosition) {
 function initializeSwitchPosition() {
   const stored = readStoredSwitchPosition()
   switchPosition.value = clampSwitchPosition(stored ?? getDefaultSwitchPosition())
+  isSwitchReady.value = true
+}
+
+function resetSwitchPosition() {
+  const nextPosition = clampSwitchPosition(getDefaultSwitchPosition())
+  switchPosition.value = nextPosition
+  saveSwitchPosition(nextPosition)
 }
 
 function handleSwitchPointerDown(event: PointerEvent) {
@@ -119,7 +130,10 @@ function handleSwitchPointerMove(event: PointerEvent) {
 
 function handleSwitchPointerUp(event: PointerEvent) {
   if (!dragState || event.pointerId !== dragState.pointerId) return
-  if (event.currentTarget instanceof HTMLElement) {
+  if (
+    event.currentTarget instanceof HTMLElement &&
+    event.currentTarget.hasPointerCapture(event.pointerId)
+  ) {
     event.currentTarget.releasePointerCapture(event.pointerId)
   }
   if (dragState.moved) {
@@ -129,9 +143,32 @@ function handleSwitchPointerUp(event: PointerEvent) {
   isSwitchDragging.value = false
 }
 
+function handleSwitchKeydown(event: KeyboardEvent) {
+  const step = event.shiftKey ? 48 : 12
+  const deltaByKey: Partial<Record<string, SwitchPosition>> = {
+    ArrowUp: { x: 0, y: -step },
+    ArrowDown: { x: 0, y: step },
+    ArrowLeft: { x: -step, y: 0 },
+    ArrowRight: { x: step, y: 0 },
+  }
+  if (event.key === 'Home') {
+    event.preventDefault()
+    resetSwitchPosition()
+    return
+  }
+  const delta = deltaByKey[event.key]
+  if (!delta) return
+  event.preventDefault()
+  const nextPosition = clampSwitchPosition({
+    x: switchPosition.value.x + (delta.x ?? 0),
+    y: switchPosition.value.y + (delta.y ?? 0),
+  })
+  switchPosition.value = nextPosition
+  saveSwitchPosition(nextPosition)
+}
+
 function handleResize() {
   switchPosition.value = clampSwitchPosition(switchPosition.value)
-  saveSwitchPosition(switchPosition.value)
 }
 
 function handleThemeMediaChange() {
@@ -163,16 +200,18 @@ watch(() => settings.theme, applyTheme)
       <button
         class="mode-drag-handle"
         type="button"
-        aria-label="Drag mode switch"
-        title="Drag"
+        :aria-label="DRAG_HANDLE_LABEL"
+        :title="DRAG_HANDLE_LABEL"
         @pointerdown="handleSwitchPointerDown"
         @pointermove="handleSwitchPointerMove"
         @pointerup="handleSwitchPointerUp"
         @pointercancel="handleSwitchPointerUp"
+        @dblclick="resetSwitchPosition"
+        @keydown="handleSwitchKeydown"
       >
         <span class="mode-drag-grip" aria-hidden="true"></span>
       </button>
-      <div class="mode-tabs" role="tablist" aria-label="App mode">
+      <div class="mode-tabs" role="tablist" :aria-label="APP_MODE_LABEL">
         <button
           v-for="item in modes"
           :key="item.value"
@@ -224,7 +263,7 @@ watch(() => settings.theme, applyTheme)
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-topbar);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
   max-width: calc(100vw - 36px);
   backdrop-filter: blur(16px);
   user-select: none;
@@ -233,8 +272,8 @@ watch(() => settings.theme, applyTheme)
 .mode-drag-handle {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 0;
@@ -260,6 +299,12 @@ watch(() => settings.theme, applyTheme)
   color: var(--text-secondary);
 }
 
+.mode-drag-handle:focus-visible,
+.mode-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
 .mode-switch.dragging .mode-drag-handle {
   cursor: grabbing;
   box-shadow: 0 0 0 3px var(--accent-bg);
@@ -272,10 +317,11 @@ watch(() => settings.theme, applyTheme)
   border-radius: 7px;
   background: var(--bg-surface-2);
   min-width: 0;
+  flex: 1;
 }
 
 .mode-tab {
-  height: 30px;
+  height: 32px;
   border: none;
   border-radius: 5px;
   padding: 0 11px;
@@ -288,7 +334,7 @@ watch(() => settings.theme, applyTheme)
   cursor: pointer;
 }
 
-.mode-tab:hover {
+.mode-tab:hover:not(.active) {
   background: var(--bg-surface);
   color: var(--text-primary);
 }
@@ -303,16 +349,21 @@ watch(() => settings.theme, applyTheme)
   .mode-switch {
     gap: 4px;
     padding: 4px;
+    width: calc(100vw - 20px);
     max-width: calc(100vw - 20px);
   }
 
   .mode-drag-handle {
-    width: 22px;
+    width: 36px;
+    height: 34px;
   }
 
   .mode-tab {
     flex: 1;
-    padding: 0 7px;
+    min-width: 0;
+    height: 34px;
+    padding: 0 4px;
+    font-size: 11px;
   }
 }
 </style>

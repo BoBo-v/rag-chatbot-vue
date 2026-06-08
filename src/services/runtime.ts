@@ -34,6 +34,7 @@ export function createRuntimeFromSettings(appSettings: AppSettings): ModelRuntim
                 model: appSettings.ollama.model,
                 baseUrl: appSettings.ollama.url,
                 useBackendChat: appSettings.ollama.useBackendChat,
+                enableBackendRag: appSettings.ollama.enableBackendRag,
                 backendProvider: appSettings.ollama.backendProvider,
                 backendModel: appSettings.ollama.backendModel,
             }

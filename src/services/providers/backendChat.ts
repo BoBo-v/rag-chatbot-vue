@@ -28,12 +28,12 @@ export async function backendChatStream(
                 role: message.role,
                 content: message.content,
             })),
-            rag: true,
+            rag: runtime.enableBackendRag ?? true,
         }),
         signal,
     })
 
-    if (!res.ok) throw new Error(`RAG chat error ${res.status}: ${await res.text()}`)
+    if (!res.ok) throw new Error(`Backend chat error ${res.status}: ${await res.text()}`)
 
     await readOllamaNdjsonStream(res, onChunk, onDone, signal)
 }

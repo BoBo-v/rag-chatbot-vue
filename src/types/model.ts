@@ -13,6 +13,7 @@ export interface ModelRuntimeConfig {
     maxContextTokens: number
     responseTimeoutSeconds: number
     useBackendChat?: boolean
+    enableBackendRag?: boolean
     backendProvider?: BackendChatProviderType
     backendModel?: string
 }

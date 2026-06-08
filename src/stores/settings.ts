@@ -18,6 +18,7 @@ export interface AppSettings {
         url: string
         model: string
         useBackendChat: boolean
+        enableBackendRag: boolean
         backendProvider: BackendChatProviderType
         backendModel: string
     }
@@ -46,6 +47,7 @@ const defaults: AppSettings = {
         url: 'http://localhost:11434',
         model: 'qwen2.5:7b',
         useBackendChat: false,
+        enableBackendRag: true,
         backendProvider: 'ollama',
         backendModel: 'qwen2.5:7b',
     },

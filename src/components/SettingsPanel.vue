@@ -71,15 +71,25 @@ v-model="draft.ollama.model" class="settings-input"
             <div class="settings-divider"></div>
             <div class="settings-group">
               <div class="settings-label-row">
-                <label class="settings-label">后端 RAG 对话</label>
+                <label class="settings-label">&#21518;&#31471;&#23545;&#35805;&#26381;&#21153;</label>
                 <label class="settings-toggle">
                   <input v-model="draft.ollama.useBackendChat" type="checkbox" />
                   <span class="toggle-track"><span class="toggle-thumb"></span></span>
                 </label>
               </div>
-              <span class="settings-hint">开启后 Ollama 聊天请求会走前端同源 /api/chat，并由后端注入知识库上下文</span>
+              <span class="settings-hint">&#24320;&#21551;&#21518;&#65292;Ollama &#32842;&#22825;&#35831;&#27714;&#20250;&#36208;&#21069;&#31471;&#21516;&#28304; /api/chat&#65307;&#26159;&#21542;&#20351;&#29992;&#30693;&#35782;&#24211;&#30001;&#19979;&#38754;&#30340; RAG &#24320;&#20851;&#21333;&#29420;&#25511;&#21046;</span>
             </div>
             <template v-if="draft.ollama.useBackendChat">
+              <div class="settings-group">
+                <div class="settings-label-row">
+                  <label class="settings-label">Backend RAG</label>
+                  <label class="settings-toggle">
+                    <input v-model="draft.ollama.enableBackendRag" type="checkbox" />
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                  </label>
+                </div>
+                <span class="settings-hint">Off sends rag:false to /api/chat, so the backend skips retrieval and embedding.</span>
+              </div>
               <div class="settings-group">
                 <div class="settings-label-row">
                   <label class="settings-label">后端厂商</label>

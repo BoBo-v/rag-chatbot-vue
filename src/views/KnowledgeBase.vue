@@ -17,12 +17,12 @@
           刷新
         </button>
         <button type="button" class="kb-primary" :disabled="uploading" @click="fileInputRef?.click()">
-          {{ uploading ? '上传中...' : '上传文档' }}
+          {{ uploading ? '上传中...' : '上传资料' }}
         </button>
         <input
           ref="fileInputRef"
           type="file"
-          accept=".txt,.md,.pdf"
+          accept=".txt,.md,.pdf,.png,.jpg,.jpeg,.webp"
           multiple
           hidden
           @change="handleUpload"
@@ -41,12 +41,21 @@
           <strong>{{ item.name }}</strong>
           <span>{{ item.message }}</span>
         </div>
+        <div v-if="item.isImage && item.status === 'uploading'" class="kb-upload-note">
+          图片正在转成知识库文本，识别阶段可能较慢
+        </div>
         <div class="kb-upload-progress">
           <span>{{ Math.round(item.percent) }}%</span>
           <div class="kb-upload-track">
             <div class="kb-upload-bar" :style="{ width: item.percent + '%' }"></div>
           </div>
         </div>
+        <details v-if="item.previewChunks.length > 0" class="kb-upload-preview">
+          <summary>预览 {{ item.previewChunks.length }} 个片段</summary>
+          <p v-for="chunk in item.previewChunks" :key="chunk.chunkIndex">
+            <span>#{{ chunk.chunkIndex }}</span>{{ chunk.text }}
+          </p>
+        </details>
       </article>
     </section>
 
@@ -248,14 +257,21 @@ const uploading = ref(false)
 const deleting = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 type UploadItemStatus = 'uploading' | 'done' | 'failed'
+type UploadPreviewChunk = { text: string; chunkIndex: number }
 interface UploadItem {
   id: string
   name: string
   percent: number
   message: string
   status: UploadItemStatus
+  isImage: boolean
+  previewChunks: UploadPreviewChunk[]
 }
 const uploadItems = ref<UploadItem[]>([])
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const PREVIEW_CHUNK_LIMIT = 3
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
 
 const query = ref('')
 const topK = ref(5)
@@ -321,8 +337,22 @@ async function handleUpload(e: Event) {
         percent: 0,
         message: '准备上传',
         status: 'uploading',
+        isImage: isImageFile(file),
+        previewChunks: [],
       }
       uploadItems.value.unshift(item)
+      if (file.size > MAX_UPLOAD_BYTES) {
+        item.percent = 100
+        item.status = 'failed'
+        item.message = `文件超过 ${formatFileSize(MAX_UPLOAD_BYTES)} 限制`
+        toast.show(`${file.name}: 文件超过 ${formatFileSize(MAX_UPLOAD_BYTES)} 限制`, 'error', 7000)
+        continue
+      }
+
+      if (item.isImage) {
+        item.message = '准备上传图片，后端会识别为 Markdown 后入库'
+      }
+
       const result = await uploadKnowledgeFile(file, {
         onProgress: progress => updateUploadItem(item.id, progress),
       })
@@ -330,11 +360,14 @@ async function handleUpload(e: Event) {
         successCount++
         item.percent = 100
         item.status = 'done'
+        item.previewChunks = (result.chunks ?? []).slice(0, PREVIEW_CHUNK_LIMIT)
         item.message = result.deduplicated
             ? '已存在相同内容，复用已有记录'
             : result.overwritten
               ? '已覆盖并写入知识库'
-              : '上传完成'
+              : item.isImage
+                ? '图片识别完成，已写入知识库'
+                : '上传完成'
       } else {
         item.percent = 100
         item.status = 'failed'
@@ -355,10 +388,18 @@ function updateUploadItem(id: string, progress: UploadProgress) {
   const item = uploadItems.value.find(entry => entry.id === id)
   if (!item) return
   item.percent = progress.percent
-  item.message = progress.message
+  item.message = item.isImage && progress.phase === 'parsing'
+      ? progress.message || '正在识别图片内容'
+      : progress.message
   if (progress.done) {
     item.status = progress.error ? 'failed' : 'done'
   }
+}
+
+function isImageFile(file: File): boolean {
+  if (file.type.startsWith('image/')) return true
+  const ext = file.name.split('.').pop()?.toLowerCase()
+  return Boolean(ext && IMAGE_EXTENSIONS.has(ext))
 }
 
 async function deleteSelectedFile() {
@@ -608,6 +649,16 @@ onMounted(loadFiles)
   font-size: 11px;
 }
 
+.kb-upload-note {
+  margin-top: 7px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: #67e8f9;
+  background: rgba(8, 145, 178, 0.12);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .kb-upload-progress {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
@@ -630,6 +681,34 @@ onMounted(loadFiles)
   border-radius: inherit;
   background: linear-gradient(90deg, #0891b2, #10b981);
   transition: width 0.2s ease;
+}
+
+.kb-upload-preview {
+  margin-top: 9px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.kb-upload-preview summary {
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.kb-upload-preview p {
+  max-height: 82px;
+  overflow: hidden;
+  margin-top: 7px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.kb-upload-preview p span {
+  margin-right: 6px;
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .kb-panel {

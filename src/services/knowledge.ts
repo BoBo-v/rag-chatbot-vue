@@ -115,6 +115,7 @@ export async function uploadKnowledgeFile(file: File, options: KnowledgeUploadOp
     }
 
     if (!response.ok) {
+        events?.close()
         return {
             fileName: file.name,
             ok: false,
@@ -130,6 +131,7 @@ export async function uploadKnowledgeFile(file: File, options: KnowledgeUploadOp
         deduplicated?: boolean
         overwritten?: boolean
     }>(response)
+    events?.close()
     return {
         fileName: file.name,
         ok: true,

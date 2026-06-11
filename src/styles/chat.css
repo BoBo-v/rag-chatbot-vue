@@ -1806,6 +1806,34 @@ datalist option {
     background: var(--accent);
 }
 
+.rag-mode-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.rag-mode-btn {
+    min-height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface-2);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.rag-mode-btn:hover {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+}
+
+.rag-mode-btn.active {
+    background: var(--accent-bg);
+    border-color: var(--accent-border);
+    color: var(--accent-text);
+}
+
 .settings-hint { font-size: 11px; color: var(--text-muted); }
 .settings-hint.error { color: #f87171; }
 

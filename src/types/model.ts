@@ -1,4 +1,4 @@
-import type { BackendChatProviderType, ProviderType } from '../stores/settings'
+import type { BackendChatProviderType, BackendRagMode, ProviderType } from '../stores/settings'
 import type { FileAttachment, ImageAttachment } from './chat'
 
 export type ModelProvider = ProviderType
@@ -13,7 +13,7 @@ export interface ModelRuntimeConfig {
     maxContextTokens: number
     responseTimeoutSeconds: number
     useBackendChat?: boolean
-    enableBackendRag?: boolean
+    backendRagMode?: BackendRagMode
     backendProvider?: BackendChatProviderType
     backendModel?: string
 }

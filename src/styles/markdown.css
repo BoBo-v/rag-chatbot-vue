@@ -17,6 +17,43 @@
     white-space: pre-wrap;
 }
 
+/* ── 数学公式 ──────────────────────────────────── */
+.markdown-body .katex {
+    color: var(--text-primary);
+    font-size: 1.05em;
+}
+
+.markdown-body .math-block {
+    width: 100%;
+    margin: 12px 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 0 8px;
+}
+
+.markdown-body .math-block > .katex-display {
+    margin: 0;
+}
+
+.markdown-body .math-inline-display {
+    display: block;
+    max-width: 100%;
+    margin: 10px 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.markdown-body .math-inline-display > .katex-display {
+    margin: 0;
+}
+
+.markdown-body .katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 0 6px;
+}
+
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3,

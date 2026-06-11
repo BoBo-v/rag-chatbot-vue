@@ -72,6 +72,7 @@ v-model="draft.ollama.model" class="settings-input"
             <div class="settings-group">
               <div class="settings-label-row">
                 <label class="settings-label">&#21518;&#31471;&#23545;&#35805;&#26381;&#21153;</label>
+                <label class="settings-hint">注意：这里功能需要配合后端支持</label>
                 <label class="settings-toggle">
                   <input v-model="draft.ollama.useBackendChat" type="checkbox" />
                   <span class="toggle-track"><span class="toggle-thumb"></span></span>
@@ -83,12 +84,20 @@ v-model="draft.ollama.model" class="settings-input"
               <div class="settings-group">
                 <div class="settings-label-row">
                   <label class="settings-label">Backend RAG</label>
-                  <label class="settings-toggle">
-                    <input v-model="draft.ollama.enableBackendRag" type="checkbox" />
-                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                  </label>
                 </div>
-                <span class="settings-hint">Off sends rag:false to /api/chat, so the backend skips retrieval and embedding.</span>
+                <div class="rag-mode-tabs">
+                  <button
+                    v-for="mode in ragModes"
+                    :key="mode.value"
+                    class="rag-mode-btn"
+                    :class="{ active: draft.ollama.backendRagMode === mode.value }"
+                    type="button"
+                    @click="draft.ollama.backendRagMode = mode.value"
+                  >
+                    {{ mode.label }}
+                  </button>
+                </div>
+                <span class="settings-hint">{{ activeRagModeHint }}</span>
               </div>
               <div class="settings-group">
                 <div class="settings-label-row">
@@ -248,7 +257,7 @@ import { settings } from '../stores/settings'
 import { fetchModels } from '../services/stream'
 import { getClaudeModels } from '../services/providers/claude'
 import { fetchBackendChatProviders, type BackendChatProvider } from '../services/knowledge'
-import type { ProviderType, ThemeType } from '../stores/settings'
+import type { BackendRagMode, ProviderType, ThemeType } from '../stores/settings'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -289,6 +298,12 @@ const providers: { value: ProviderType; label: string; icon: string }[] = [
   { value: 'claude',  label: 'Claude',        icon: '✦' },
 ]
 
+const ragModes: { value: BackendRagMode; label: string; hint: string }[] = [
+  { value: 'auto', label: '自动', hint: '发送 rag:auto，由后端按问题和命中分数自动判断是否检索。' },
+  { value: 'off', label: '关闭', hint: '发送 rag:false，后端直接推理，不检索知识库。' },
+  { value: 'force', label: '强制', hint: '发送 rag:true，后端强制检索，命中后注入资料。' },
+]
+
 const claudeModels = getClaudeModels()
 
 // 编辑草稿，保存前不改动 settings
@@ -301,6 +316,9 @@ const draft = reactive({
 
 const activeTierIndex = ref(findTierIndex(draft.maxContextTokens))
 const activeTier = computed(() => contextTiers[activeTierIndex.value])
+const activeRagModeHint = computed(() =>
+  ragModes.find(mode => mode.value === draft.ollama.backendRagMode)?.hint ?? ragModes[0].hint
+)
 
 function selectTier(index: number) {
   // Clicking a preset updates both the active preset and the actual numeric setting.

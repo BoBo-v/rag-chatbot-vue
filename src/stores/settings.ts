@@ -6,6 +6,7 @@ import { reactive, watch } from 'vue'
 export type ProviderType = 'ollama' | 'openai' | 'claude'
 export type ThemeType   = 'dark' | 'light' | 'system'
 export type BackendChatProviderType = 'ollama' | 'openai' | 'anthropic'
+export type BackendRagMode = 'auto' | 'off' | 'force'
 
 export interface AppSettings {
     provider: ProviderType
@@ -18,7 +19,7 @@ export interface AppSettings {
         url: string
         model: string
         useBackendChat: boolean
-        enableBackendRag: boolean
+        backendRagMode: BackendRagMode
         backendProvider: BackendChatProviderType
         backendModel: string
     }
@@ -47,7 +48,7 @@ const defaults: AppSettings = {
         url: 'http://localhost:11434',
         model: 'qwen2.5:7b',
         useBackendChat: false,
-        enableBackendRag: true,
+        backendRagMode: 'auto',
         backendProvider: 'ollama',
         backendModel: 'qwen2.5:7b',
     },
@@ -75,13 +76,24 @@ function load(): AppSettings {
                 ...saved,
                 theme:  saved.theme  ?? defaults.theme,
                 responseTimeoutSeconds: normalizeTimeout(saved.responseTimeoutSeconds),
-                ollama: { ...defaults.ollama, ...saved.ollama },
+                ollama: {
+                    ...defaults.ollama,
+                    ...saved.ollama,
+                    backendRagMode: normalizeBackendRagMode(saved.ollama?.backendRagMode, saved.ollama?.enableBackendRag),
+                },
                 openai: { ...defaults.openai, ...saved.openai },
                 claude: { ...defaults.claude, ...saved.claude },
             }
         }
     } catch {}
     return { ...defaults, ollama: { ...defaults.ollama }, openai: { ...defaults.openai }, claude: { ...defaults.claude } }
+}
+
+function normalizeBackendRagMode(value: unknown, legacyEnabled?: unknown): BackendRagMode {
+    if (value === 'auto' || value === 'off' || value === 'force') return value
+    if (legacyEnabled === false) return 'off'
+    if (legacyEnabled === true) return 'force'
+    return defaults.ollama.backendRagMode
 }
 
 function normalizeTimeout(value: unknown): number {

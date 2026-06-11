@@ -3,6 +3,18 @@ import type { ModelRuntimeConfig } from '../../types/model'
 import { buildMessages } from '../context'
 import { readOllamaNdjsonStream } from './ollama'
 
+function toBackendRagValue(runtime: ModelRuntimeConfig): 'auto' | boolean {
+    switch (runtime.backendRagMode) {
+        case 'off':
+            return false
+        case 'force':
+            return true
+        case 'auto':
+        default:
+            return 'auto'
+    }
+}
+
 export async function backendChatStream(
     messages: Message[],
     userText: string,
@@ -28,7 +40,7 @@ export async function backendChatStream(
                 role: message.role,
                 content: message.content,
             })),
-            rag: runtime.enableBackendRag ?? true,
+            rag: toBackendRagValue(runtime),
         }),
         signal,
     })

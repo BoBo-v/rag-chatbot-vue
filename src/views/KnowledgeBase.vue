@@ -30,33 +30,50 @@
       </div>
     </header>
 
-    <section v-if="uploadItems.length > 0" class="kb-upload-strip">
-      <article
-        v-for="item in uploadItems"
-        :key="item.id"
-        class="kb-upload-item"
-        :class="{ done: item.status === 'done', failed: item.status === 'failed' }"
-      >
-        <div class="kb-upload-info">
-          <strong>{{ item.name }}</strong>
-          <span>{{ item.message }}</span>
+    <section v-if="uploadItems.length > 0" class="kb-upload-panel" :class="{ collapsed: uploadPanelCollapsed }">
+      <div class="kb-upload-panel-header">
+        <div>
+          <span class="kb-eyebrow">上传队列</span>
+          <strong>{{ uploadQueueSummary }}</strong>
         </div>
-        <div v-if="item.isImage && item.status === 'uploading'" class="kb-upload-note">
-          图片正在转成知识库文本，识别阶段可能较慢
+        <div class="kb-upload-panel-actions">
+          <button type="button" class="kb-secondary" @click="uploadPanelCollapsed = !uploadPanelCollapsed">
+            {{ uploadPanelCollapsed ? '展开' : '收起' }}
+          </button>
+          <button type="button" class="kb-secondary" :disabled="hasActiveUploads" @click="clearFinishedUploads">
+            清空
+          </button>
         </div>
-        <div class="kb-upload-progress">
-          <span>{{ Math.round(item.percent) }}%</span>
-          <div class="kb-upload-track">
-            <div class="kb-upload-bar" :style="{ width: item.percent + '%' }"></div>
+      </div>
+
+      <div v-show="!uploadPanelCollapsed" class="kb-upload-strip">
+        <article
+          v-for="item in uploadItems"
+          :key="item.id"
+          class="kb-upload-item"
+          :class="{ done: item.status === 'done', failed: item.status === 'failed' }"
+        >
+          <div class="kb-upload-info">
+            <strong>{{ item.name }}</strong>
+            <span>{{ item.message }}</span>
           </div>
-        </div>
-        <details v-if="item.previewChunks.length > 0" class="kb-upload-preview">
-          <summary>预览 {{ item.previewChunks.length }} 个片段</summary>
-          <p v-for="chunk in item.previewChunks" :key="chunk.chunkIndex">
-            <span>#{{ chunk.chunkIndex }}</span>{{ chunk.text }}
-          </p>
-        </details>
-      </article>
+          <div v-if="item.isImage && item.status === 'uploading'" class="kb-upload-note">
+            图片正在转成知识库文本，识别阶段可能较慢
+          </div>
+          <div class="kb-upload-progress">
+            <span>{{ Math.round(item.percent) }}%</span>
+            <div class="kb-upload-track">
+              <div class="kb-upload-bar" :style="{ width: item.percent + '%' }"></div>
+            </div>
+          </div>
+          <details v-if="item.previewChunks.length > 0" class="kb-upload-preview">
+            <summary>预览 {{ item.previewChunks.length }} 个片段</summary>
+            <p v-for="chunk in item.previewChunks" :key="chunk.chunkIndex">
+              <span>#{{ chunk.chunkIndex }}</span>{{ chunk.text }}
+            </p>
+          </details>
+        </article>
+      </div>
     </section>
 
     <main class="knowledge-layout">
@@ -255,6 +272,7 @@ const loadingFiles = ref(false)
 const loadingDetail = ref(false)
 const uploading = ref(false)
 const deleting = ref(false)
+const uploadPanelCollapsed = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 type UploadItemStatus = 'uploading' | 'done' | 'failed'
 type UploadPreviewChunk = { text: string; chunkIndex: number }
@@ -285,6 +303,15 @@ const searchResults = ref<KnowledgeSearchResult[]>([])
 const totalChunks = computed(() => files.value.reduce((sum, file) => sum + file.chunkCount, 0))
 const totalChars = computed(() => files.value.reduce((sum, file) => sum + file.charCount, 0))
 const selectedFile = computed(() => files.value.find(file => file.id === selectedFileId.value))
+const hasActiveUploads = computed(() => uploadItems.value.some(item => item.status === 'uploading'))
+const uploadQueueSummary = computed(() => {
+  const total = uploadItems.value.length
+  const active = uploadItems.value.filter(item => item.status === 'uploading').length
+  const failed = uploadItems.value.filter(item => item.status === 'failed').length
+  if (active > 0) return `${active} 个上传中 · 共 ${total} 个`
+  if (failed > 0) return `${failed} 个失败 · 共 ${total} 个`
+  return `${total} 个已完成`
+})
 const filteredFiles = computed(() => {
   const keyword = fileFilter.value.trim().toLowerCase()
   if (!keyword) return files.value
@@ -402,6 +429,10 @@ function isImageFile(file: File): boolean {
   return Boolean(ext && IMAGE_EXTENSIONS.has(ext))
 }
 
+function clearFinishedUploads() {
+  uploadItems.value = uploadItems.value.filter(item => item.status === 'uploading')
+}
+
 async function deleteSelectedFile() {
   if (!selectedFile.value) return
   const deletingName = selectedFile.value.filename
@@ -475,6 +506,8 @@ onMounted(loadFiles)
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   color: var(--text-primary);
   background: var(--bg-canvas);
 }
@@ -583,7 +616,7 @@ onMounted(loadFiles)
 .knowledge-layout {
   position: relative;
   z-index: 1;
-  height: calc(100% - 74px);
+  flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr) 380px;
@@ -591,23 +624,47 @@ onMounted(loadFiles)
   background: var(--border-subtle);
 }
 
-.kb-upload-strip {
-  position: absolute;
-  top: 74px;
-  left: 0;
-  right: 0;
-  z-index: 3;
-  display: flex;
-  gap: 8px;
-  padding: 10px 28px;
-  overflow-x: auto;
+.kb-upload-panel {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
   border-bottom: 1px solid var(--border-subtle);
-  background: rgba(7, 7, 15, 0.74);
+  background: rgba(7, 7, 15, 0.66);
   backdrop-filter: blur(18px);
 }
 
-[data-theme="light"] .kb-upload-strip {
-  background: rgba(255, 255, 255, 0.86);
+[data-theme="light"] .kb-upload-panel {
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.kb-upload-panel-header {
+  min-height: 50px;
+  padding: 10px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kb-upload-panel-header strong {
+  display: block;
+  font-size: 13px;
+}
+
+.kb-upload-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.kb-upload-strip {
+  display: flex;
+  gap: 8px;
+  max-height: 178px;
+  padding: 0 28px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .kb-upload-item {
@@ -1025,9 +1082,17 @@ onMounted(loadFiles)
   }
 
   .knowledge-layout {
-    height: calc(100% - 116px);
+    flex: 1;
     grid-template-columns: 1fr;
     overflow-y: auto;
+  }
+
+  .kb-upload-panel-header {
+    padding: 10px 14px;
+  }
+
+  .kb-upload-strip {
+    padding: 0 14px 10px;
   }
 
   .kb-panel {

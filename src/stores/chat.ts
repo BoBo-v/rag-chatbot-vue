@@ -7,6 +7,19 @@ import { db } from '../db'
 const messages = ref<Message[]>([])
 
 export function useChat() {
+    function normalizeRestoredMessageStatus(m: { role: Role; status: MessageStatus }) {
+        if (m.role === 'assistant' && (m.status === 'loading' || m.status === 'streaming')) {
+            return {
+                status: 'aborted' as MessageStatus,
+                canContinue: true,
+            }
+        }
+        return {
+            status: m.status,
+            canContinue: undefined,
+        }
+    }
+
     // 从 IndexedDB 加载某个会话的全部消息，并替换当前内存消息列表。
     // 切换会话时调用它，保证页面展示的是目标会话的历史记录。
     async function loadForConversation(conversationId: number) {
@@ -15,17 +28,25 @@ export function useChat() {
             .equals(conversationId)
             .sortBy('createdAt')
 
-        messages.value = dbMessages.map(m => ({
-            id: m.id,
-            role: m.role as Role,
-            content: m.content,
-            images: m.images,
-            files: m.files,
-            status: m.status as MessageStatus,
-            canContinue: m.canContinue,
-            errorMessage: m.errorMessage,
-            ragContext: m.ragContext,
-        }))
+        messages.value = dbMessages.map(m => {
+            const role = m.role as Role
+            const restored = normalizeRestoredMessageStatus({
+                role,
+                status: m.status as MessageStatus,
+            })
+
+            return {
+                id: m.id,
+                role,
+                content: m.content,
+                images: m.images,
+                files: m.files,
+                status: restored.status,
+                canContinue: restored.canContinue ?? m.canContinue,
+                errorMessage: m.errorMessage,
+                ragContext: m.ragContext,
+            }
+        })
     }
 
     // 新建会话或取消选中会话时，用空列表清空聊天区域。

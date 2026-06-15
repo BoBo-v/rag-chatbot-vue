@@ -92,13 +92,18 @@ export function useChatView() {
     // Creating the first message also creates a conversation and changes currentId.
     // This flag skips the currentId watcher once so it does not reload and wipe the just-added message.
     let suppressConvWatch = false
+    const streamMessageConversations = new Map<string, number>()
+    const persistTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
     // ── 会话切换 ─────────────────────────────────────────────
 
     watch(currentId, async (newId) => {
         // currentId is the single source of truth for conversation switching.
         // When it changes, load that conversation's messages into the chat window.
-        if (suppressConvWatch) return
+        if (suppressConvWatch) {
+            suppressConvWatch = false
+            return
+        }
         if (newId !== null) {
             await loadForConversation(newId)
         } else {
@@ -141,12 +146,10 @@ export function useChatView() {
 
     // ── 持久化 ───────────────────────────────────────────────
 
-    // upsert 一条消息到 IndexedDB（runStream finally 中调用）
-    async function persistMessage(msgId: string, convId: number) {
-        // Persist the final in-memory message into IndexedDB.
-        // AI messages are written after streaming finishes so the stored content is complete.
+    async function persistMessage(msgId: string, convId: number, createdAt?: number) {
         const msg = messages.value.find(m => m.id === msgId)
         if (!msg) return
+        const existing = await db.messages.get(msgId)
         await db.messages.put({
             id: msg.id,
             conversationId: convId,
@@ -158,8 +161,32 @@ export function useChatView() {
             canContinue: msg.canContinue,
             errorMessage: msg.errorMessage,
             ragContext: msg.ragContext,
-            createdAt: Date.now(),
+            createdAt: createdAt ?? existing?.createdAt ?? Date.now(),
         })
+    }
+
+    function clearPersistTimer(msgId: string) {
+        const timer = persistTimers.get(msgId)
+        if (!timer) return
+        clearTimeout(timer)
+        persistTimers.delete(msgId)
+    }
+
+    function scheduleMessagePersist(msgId: string) {
+        const convId = streamMessageConversations.get(msgId)
+        if (convId === undefined || persistTimers.has(msgId)) return
+
+        persistTimers.set(msgId, setTimeout(() => {
+            persistTimers.delete(msgId)
+            void persistMessage(msgId, convId).catch(err => {
+                console.warn('[chat] 持久化流式消息失败', err)
+            })
+        }, 500))
+    }
+
+    async function flushMessagePersist(msgId: string, convId: number) {
+        clearPersistTimer(msgId)
+        await persistMessage(msgId, convId)
     }
 
     function queueSearchIndex(msg: Message, convId: number, createdAt: number, updatedAt = createdAt) {
@@ -267,7 +294,6 @@ export function useChatView() {
         if (convId === null) {
             suppressConvWatch = true
             convId = await createConversation(displayText.slice(0, 28) || '新对话')
-            suppressConvWatch = false
         }
 
         const userMsgId = crypto.randomUUID()
@@ -287,6 +313,8 @@ export function useChatView() {
         queueSearchIndex(userMessage, convId, userCreatedAt)
 
         const aiMsg = createAssistantMessage()
+        streamMessageConversations.set(aiMsg.id, convId)
+        await persistMessage(aiMsg.id, convId)
         await runStream({ aiMessageId: aiMsg.id, prompt: promptText, convId })
     }
 
@@ -315,6 +343,8 @@ export function useChatView() {
         messages.value.splice(msgIdx, 1)
 
         const aiMsg = createAssistantMessage()
+        streamMessageConversations.set(aiMsg.id, currentId.value)
+        await persistMessage(aiMsg.id, currentId.value)
         await runStream({ aiMessageId: aiMsg.id, prompt: userMsg.content, convId: currentId.value })
     }
 
@@ -332,6 +362,8 @@ export function useChatView() {
                 : item
         )
         updateMessage(msg.id, { status: 'loading', canContinue: false })
+        streamMessageConversations.set(messageId, currentId.value)
+        await flushMessagePersist(messageId, currentId.value)
         await runStream({
             aiMessageId: messageId,
             prompt: '',
@@ -406,6 +438,7 @@ export function useChatView() {
                 onChunk: (chunk) => {
                     if (streamCtrl?.isAborted) return
                     typewriter.push(options.aiMessageId, chunk)
+                    scheduleMessagePersist(options.aiMessageId)
                     handleIncomingChunk()
                 },
                 onDone: () => {
@@ -443,7 +476,7 @@ export function useChatView() {
                 }
             }
 
-            await persistMessage(options.aiMessageId, options.convId)
+            await flushMessagePersist(options.aiMessageId, options.convId)
             const updatedAt = Date.now()
             await db.conversations.update(options.convId, { updatedAt })
             await refreshList()
@@ -451,6 +484,7 @@ export function useChatView() {
             if (aiMessage) {
                 queueSearchIndex(aiMessage, options.convId, updatedAt, updatedAt)
             }
+            streamMessageConversations.delete(options.aiMessageId)
             streamCtrl = null
         }
     }
@@ -476,6 +510,11 @@ export function useChatView() {
 
     onUnmounted(() => {
         detachScrollListener()
+        for (const timer of persistTimers.values()) {
+            clearTimeout(timer)
+        }
+        persistTimers.clear()
+        streamMessageConversations.clear()
     })
 
     // ── 对外暴露 ─────────────────────────────────────────────

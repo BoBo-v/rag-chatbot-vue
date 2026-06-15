@@ -132,12 +132,11 @@
               v-for="msg in messages"
               :key="msg.id"
               class="msg-row"
-              :class="msg.role"
+              :class="[msg.role, { 'has-rag-context': msg.role === 'assistant' && msg.ragContext }]"
           >
             <div
                 v-if="msg.role === 'assistant'"
                 class="msg-avatar ai-avatar"
-                :class="{ 'has-followup': msg.status === 'aborted' || msg.status === 'error' }"
             >A</div>
             <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">U</div>
             <div class="msg-col">
@@ -200,6 +199,10 @@ v-for="(img, idx) in msg.images" :key="idx"
                   ↻ 重试
                 </button>
               </div>
+              <RagCitations
+                v-if="msg.role === 'assistant' && msg.ragContext"
+                :context="msg.ragContext"
+              />
             </div>
           </div>
 
@@ -388,6 +391,7 @@ import { settings as currentSettings } from '../stores/settings'
 import { uploadKnowledgeFile } from '../services/knowledge'
 import type { UploadProgress } from '../services/knowledge'
 import SettingsPanel from '../components/SettingsPanel.vue'
+import RagCitations from '../components/RagCitations.vue'
 
 // StyleChat 是主聊天页面组件。
 // 模板负责布局和绑定事件；具体业务逻辑尽量放在 composable 里，避免单文件过大。

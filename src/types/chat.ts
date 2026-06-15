@@ -21,6 +21,26 @@ export interface FileAttachment {
     size: number
 }
 
+export type RagMode = 'auto' | 'off' | 'force'
+
+export interface RagCitation {
+    fileId: string
+    filename: string
+    chunkIndex: number
+    score: number
+    vectorScore: number
+    keywordScore: number
+    text: string
+}
+
+// 展示“这次回答用了哪些资料”的结构化信息，不包含模型思维链。
+export interface RagContextInfo {
+    mode: RagMode
+    enabled: boolean
+    results: RagCitation[]
+    errorMessage?: string
+}
+
 // UI 层使用的消息对象。它比 DBMessage 多了 formattedContent、time 等展示用字段。
 export interface Message {
     id: string
@@ -33,6 +53,7 @@ export interface Message {
     canContinue?: boolean
     formattedContent?: string
     errorMessage?: string
+    ragContext?: RagContextInfo
 }
 
 // 统一错误分类，方便 UI 根据错误类型展示更友好的提示。

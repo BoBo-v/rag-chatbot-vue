@@ -3,6 +3,7 @@ import { useChat } from '../stores/chat'
 import { useConversations } from '../stores/conversations'
 import { generateStreamWithContext } from '../services/stream'
 import { createRuntimeFromSettings } from '../services/runtime'
+import { fetchBackendChatContext } from '../services/providers/backendChat'
 import { db } from '../db'
 import { classifyError } from '../utils/error'
 import { useToast } from './useToast'
@@ -144,6 +145,7 @@ export function useChatView() {
             status: msg.status,
             canContinue: msg.canContinue,
             errorMessage: msg.errorMessage,
+            ragContext: msg.ragContext,
             createdAt: Date.now(),
         })
     }
@@ -318,7 +320,13 @@ export function useChatView() {
                 : item
         )
         updateMessage(msg.id, { status: 'loading', canContinue: false })
-        await runStream({ aiMessageId: messageId, prompt: '', convId: currentId.value, contextMessages })
+        await runStream({
+            aiMessageId: messageId,
+            prompt: '',
+            convId: currentId.value,
+            contextMessages,
+            skipRagContext: true,
+        })
     }
 
     // ── 流式请求核心 ─────────────────────────────────────────
@@ -328,6 +336,7 @@ export function useChatView() {
         prompt: string   // 空字符串 = 续写
         convId: number
         contextMessages?: Message[]
+        skipRagContext?: boolean
     }
 
     /**
@@ -350,11 +359,36 @@ export function useChatView() {
         scheduleScroll()
         streamCtrl = createStreamController(options.aiMessageId)
         const runtime = createRuntimeFromSettings(settings)
+        const requestMessages = options.contextMessages ?? messages.value
+
+        if (!options.skipRagContext && runtime.provider === 'ollama' && runtime.useBackendChat) {
+            try {
+                const ragContext = await fetchBackendChatContext(
+                    requestMessages,
+                    options.prompt,
+                    runtime,
+                    streamCtrl.controller.signal,
+                )
+                updateMessage(options.aiMessageId, { ragContext })
+            } catch (err) {
+                if (!streamCtrl.controller.signal.aborted) {
+                    // 引用资料只是可解释信息，获取失败不能阻断主回答。
+                    updateMessage(options.aiMessageId, {
+                        ragContext: {
+                            mode: runtime.backendRagMode ?? 'auto',
+                            enabled: false,
+                            results: [],
+                            errorMessage: err instanceof Error ? err.message : '引用资料获取失败',
+                        },
+                    })
+                }
+            }
+        }
 
         try {
             // generateStreamWithContext chooses the active provider and calls onChunk for every text delta.
             await generateStreamWithContext({
-                messages: options.contextMessages ?? messages.value,
+                messages: requestMessages,
                 userText: options.prompt,
                 runtime,
                 onChunk: (chunk) => {
@@ -419,7 +453,12 @@ export function useChatView() {
             console.warn('[search] 初始化索引失败', err)
         })
         if (conversations.value.length > 0 && currentId.value === null) {
-            selectConversation(conversations.value[0].id!)
+            const latestId = conversations.value[0].id!
+            selectConversation(latestId)
+            // 刷新页面后 currentId 是内存态，watch 的触发时序不应承担首次恢复消息的职责。
+            await loadForConversation(latestId)
+            await nextTick()
+            resetAfterConversationChange()
         }
     })
 

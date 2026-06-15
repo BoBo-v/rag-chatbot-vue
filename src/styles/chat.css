@@ -18,10 +18,6 @@
     min-width: 0;
 }
 
-.msg-avatar.has-followup {
-    margin-bottom: 40px;
-}
-
 .msg-bubble.assistant.is-aborted {
     border-color: rgba(248, 113, 113, 0.35);
 }
@@ -195,6 +191,143 @@
     cursor: not-allowed;
     opacity: 0.55;
     transform: none;
+}
+
+.rag-citations {
+    width: 100%;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--bg-surface-2);
+    color: var(--text-secondary);
+    overflow: hidden;
+}
+
+.rag-citations-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 34px;
+    padding: 7px 10px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 12px;
+}
+
+.rag-citations-summary::-webkit-details-marker {
+    display: none;
+}
+
+.rag-citations-summary::before {
+    content: '▸';
+    color: var(--accent);
+    font-size: 11px;
+    transition: transform 0.16s ease;
+    flex-shrink: 0;
+}
+
+.rag-citations[open] .rag-citations-summary::before {
+    transform: rotate(90deg);
+}
+
+.rag-citations-title {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+    font-weight: 650;
+}
+
+.rag-citations-state {
+    flex-shrink: 0;
+    border: 1px solid var(--accent-border);
+    border-radius: 999px;
+    padding: 2px 8px;
+    color: var(--accent-text);
+    background: var(--accent-bg);
+    font-size: 10.5px;
+    white-space: nowrap;
+}
+
+.rag-citations-body {
+    border-top: 1px solid var(--border-subtle);
+    padding: 10px;
+}
+
+.rag-citations-empty {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.rag-citations-list {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.rag-citation-item {
+    padding: 10px 0;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.rag-citation-item:first-child {
+    padding-top: 0;
+    border-top: none;
+}
+
+.rag-citation-item:last-child {
+    padding-bottom: 0;
+}
+
+.rag-citation-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12px;
+}
+
+.rag-citation-head strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.rag-citation-head span {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.rag-score-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 7px;
+}
+
+.rag-score-row span {
+    border-radius: 6px;
+    padding: 2px 6px;
+    color: var(--text-muted);
+    background: var(--bg-surface-3);
+    font-family: 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+    font-size: 10.5px;
+    white-space: nowrap;
+}
+
+.rag-citation-text {
+    margin: 8px 0 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
 }
 
 .msg-bubble.assistant.is-error {
@@ -922,7 +1055,7 @@
 /* ─── 消息行（左右布局） ─────────────────────── */
 .msg-row {
     display: flex;
-    align-items: flex-end;
+    align-items: flex-start;
     gap: 10px;
     animation: msg-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
     min-width: 0;
@@ -940,6 +1073,38 @@
     justify-content: flex-start;
 }
 
+.msg-row.assistant.has-rag-context {
+    display: grid;
+    grid-template-columns: 34px minmax(0, min(560px, 76%));
+    align-items: flex-start;
+    column-gap: 10px;
+    row-gap: 6px;
+}
+
+.msg-row.assistant.has-rag-context .msg-avatar {
+    grid-column: 1;
+    grid-row: 2;
+    margin-top: 0;
+}
+
+.msg-row.assistant.has-rag-context .msg-col {
+    display: contents;
+}
+
+.msg-row.assistant.has-rag-context .msg-bubble {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.msg-row.assistant.has-rag-context .abort-badge-row,
+.msg-row.assistant.has-rag-context .error-badge-row {
+    grid-column: 2;
+}
+
+.msg-row.assistant.has-rag-context .rag-citations {
+    grid-column: 2;
+}
+
 /* ─── 头像 ───────────────────────────────────── */
 .msg-avatar {
     width: 34px; height: 34px;
@@ -950,6 +1115,7 @@
     font-size: 12px;
     font-weight: 800;
     flex-shrink: 0;
+    margin-top: 2px;
 }
 
 .user-avatar {

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { MessageStatus } from '../types/chat'
+import type { MessageStatus, RagContextInfo } from '../types/chat'
 import type { ComparisonRunStatus, ModelRuntimeConfig } from '../types/model'
 
 // 这个文件集中定义 IndexedDB 的表结构。
@@ -37,6 +37,7 @@ export interface DBMessage {
     status: MessageStatus
     canContinue?: boolean
     errorMessage?: string
+    ragContext?: RagContextInfo
     createdAt: number
 }
 

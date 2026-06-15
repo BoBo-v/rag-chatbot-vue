@@ -250,6 +250,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useToast } from '../composables/useToast'
+import { useConfirm } from '../composables/useConfirm'
 import {
   deleteKnowledgeFile,
   getKnowledgeFile,
@@ -263,6 +264,7 @@ import {
 } from '../services/knowledge'
 
 const toast = useToast()
+const { confirm } = useConfirm()
 
 const files = ref<StoredKnowledgeFile[]>([])
 const fileDetail = ref<KnowledgeFileDetail | null>(null)
@@ -436,6 +438,14 @@ function clearFinishedUploads() {
 async function deleteSelectedFile() {
   if (!selectedFile.value) return
   const deletingName = selectedFile.value.filename
+  const confirmed = await confirm({
+    title: '删除知识库文件',
+    message: `确定删除「${deletingName}」吗？删除后无法恢复。`,
+    confirmText: '删除',
+    danger: true,
+  })
+  if (!confirmed) return
+
   deleting.value = true
   try {
     await deleteKnowledgeFile(selectedFile.value.id)

@@ -12,6 +12,7 @@ import { searchService } from '../search/SearchService'
 import { useAttachments } from './useAttachments'
 import { useChatScroll } from './useChatScroll'
 import { useTypewriterStream } from './useTypewriterStream'
+import { useConfirm } from './useConfirm'
 import type {Message, StreamController} from "../types/chat.ts";
 
 /**
@@ -47,6 +48,7 @@ export function useChatView() {
     } = useConversations()
 
     const toast = useToast()
+    const { confirm } = useConfirm()
     const {
         pendingImages,
         pendingFiles,
@@ -120,6 +122,16 @@ export function useChatView() {
     }
 
     async function handleDeleteConversation(id: number) {
+        const conversation = conversations.value.find(item => item.id === id)
+        const title = conversation?.title || '这条对话'
+        const confirmed = await confirm({
+            title: '删除对话',
+            message: `确定删除「${title}」吗？删除后无法恢复。`,
+            confirmText: '删除',
+            danger: true,
+        })
+        if (!confirmed) return
+
         await deleteConversation(id)
         // Search index data is derived data. If cleanup fails, chat deletion should still succeed.
         void searchService.deleteConversation(id).catch(err => {

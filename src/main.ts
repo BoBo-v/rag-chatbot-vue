@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+import '@bobocn/element/style.css'
 import './styles/tokens.css'
 import './styles/markdown.css'
 import './style.css'

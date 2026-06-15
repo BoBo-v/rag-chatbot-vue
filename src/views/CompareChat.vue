@@ -406,6 +406,7 @@ import ComparisonRunCard from '../components/ComparisonRunCard.vue'
 import { useAttachments } from '../composables/useAttachments'
 import { useModelComparison } from '../composables/useModelComparison'
 import { useToast } from '../composables/useToast'
+import { useConfirm } from '../composables/useConfirm'
 import { getCodeComparisonCandidates } from '../services/comparisonCode'
 import { createLineDiff } from '../services/comparisonDiff'
 import {
@@ -431,6 +432,7 @@ const dragOver = ref(false)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const toast = useToast()
+const { confirm } = useConfirm()
 const {
   pendingImages,
   pendingFiles,
@@ -696,7 +698,12 @@ async function openHistory(sessionId: string): Promise<void> {
 }
 
 async function deleteHistory(sessionId: string): Promise<void> {
-  const confirmed = window.confirm('确定删除这条本地对比记录吗？删除后无法恢复。')
+  const confirmed = await confirm({
+    title: '删除对比记录',
+    message: '确定删除这条本地对比记录吗？删除后无法恢复。',
+    confirmText: '删除',
+    danger: true,
+  })
   if (!confirmed) return
 
   const deletingCurrentSession = currentSession.value?.id === sessionId

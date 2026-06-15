@@ -2,6 +2,7 @@
 import StyleChat from "./views/StyleChat.vue"
 import CompareChat from './views/CompareChat.vue'
 import KnowledgeBase from './views/KnowledgeBase.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type StyleValue } from 'vue'
 import { settings } from './stores/settings'
 
@@ -235,6 +236,7 @@ watch(() => settings.theme, applyTheme)
     <div v-show="mode === 'knowledge'" class="mode-page">
       <KnowledgeBase />
     </div>
+    <ConfirmDialog />
   </div>
 </template>
 

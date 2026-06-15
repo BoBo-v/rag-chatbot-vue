@@ -149,3 +149,101 @@
   --settings-input-bg:  rgba(0, 0, 0, 0.04);
   --settings-select-bg: #f5f5f7;
 }
+
+/* @bobocn/element 主题桥接
+   组件库内部使用 --vk-* 变量；这里统一映射到本项目主题 token，
+   确保 Modal / Button 等组件跟随 html[data-theme] 自动切换。 */
+:root,
+[data-theme="dark"],
+[data-theme="light"] {
+  --vk-color-white: #ffffff;
+  --vk-color-primary: var(--accent);
+  --vk-color-primary-dark-2: var(--accent-deep);
+  --vk-color-primary-light-3: color-mix(in srgb, var(--accent) 72%, white);
+  --vk-color-primary-light-5: color-mix(in srgb, var(--accent) 50%, transparent);
+  --vk-color-primary-light-7: color-mix(in srgb, var(--accent) 32%, transparent);
+  --vk-color-primary-light-8: color-mix(in srgb, var(--accent) 22%, transparent);
+  --vk-color-primary-light-9: var(--accent-bg);
+
+  --vk-color-success: #22c55e;
+  --vk-color-success-dark-2: #16a34a;
+  --vk-color-success-light-3: #4ade80;
+  --vk-color-success-light-5: rgba(34, 197, 94, 0.42);
+  --vk-color-success-light-8: rgba(34, 197, 94, 0.18);
+  --vk-color-success-light-9: rgba(34, 197, 94, 0.10);
+  --vk-color-warning: #f59e0b;
+  --vk-color-warning-dark-2: #d97706;
+  --vk-color-warning-light-3: #fbbf24;
+  --vk-color-warning-light-5: rgba(245, 158, 11, 0.42);
+  --vk-color-warning-light-8: rgba(245, 158, 11, 0.18);
+  --vk-color-warning-light-9: rgba(245, 158, 11, 0.10);
+  --vk-color-danger: #ef4444;
+  --vk-color-danger-dark-2: #dc2626;
+  --vk-color-danger-light-3: #f87171;
+  --vk-color-danger-light-5: rgba(239, 68, 68, 0.42);
+  --vk-color-danger-light-8: rgba(239, 68, 68, 0.18);
+  --vk-color-danger-light-9: rgba(239, 68, 68, 0.10);
+  --vk-color-info: var(--text-secondary);
+  --vk-color-info-dark-2: var(--text-muted);
+  --vk-color-info-light-3: color-mix(in srgb, var(--text-secondary) 55%, transparent);
+  --vk-color-info-light-5: color-mix(in srgb, var(--text-secondary) 35%, transparent);
+  --vk-color-info-light-8: color-mix(in srgb, var(--text-secondary) 18%, transparent);
+  --vk-color-info-light-9: color-mix(in srgb, var(--text-secondary) 10%, transparent);
+
+  --vk-bg-color-overlay: var(--bg-elevated);
+  --vk-fill-color-blank: var(--bg-elevated);
+  --vk-fill-color: var(--bg-surface);
+  --vk-fill-color-light: var(--bg-surface-2);
+  --vk-fill-color-lighter: var(--bg-surface-3);
+  --vk-text-color-primary: var(--text-primary);
+  --vk-text-color-regular: var(--text-secondary);
+  --vk-text-color-secondary: var(--text-muted);
+  --vk-text-color-placeholder: var(--text-placeholder);
+  --vk-border-color: var(--border);
+  --vk-border-color-hover: var(--accent-border);
+  --vk-border-color-light: var(--border-subtle);
+  --vk-border-color-lighter: var(--border-faint);
+  --vk-border-width: 1px;
+  --vk-border-style: solid;
+  --vk-border: var(--vk-border-width) var(--vk-border-style) var(--vk-border-color);
+
+  --vk-border-radius-base: 8px;
+  --vk-border-radius-round: 999px;
+  --vk-border-radius-circle: 50%;
+  --vk-font-size-base: 14px;
+  --vk-font-weight-primary: 500;
+  --vk-component-size: 32px;
+  --vk-component-size-large: 40px;
+  --vk-component-size-small: 24px;
+  --vk-disabled-bg-color: var(--bg-surface-3);
+  --vk-disabled-border-color: var(--border-faint);
+  --vk-disabled-text-color: var(--text-faint);
+  --vk-box-shadow-light: 0 18px 50px rgba(0, 0, 0, 0.28);
+  --vk-transition-duration: 0.2s;
+  --vk-transition-duration-fast: 0.16s;
+  --vk-transition-box-shadow: box-shadow var(--vk-transition-duration-fast);
+
+  --vk-modal-bg-color: var(--bg-elevated);
+  --vk-modal-header-text-color: var(--text-primary);
+  --vk-modal-body-text-color: var(--text-secondary);
+  --vk-modal-close-color: var(--text-muted);
+  --vk-modal-close-hover-color: var(--accent);
+  --vk-modal-border-radius: 8px;
+}
+
+/* 组件库遮罩默认写死为黑色透明，这里接入应用主题变量。 */
+.vk-overlay {
+  background-color: var(--bg-overlay);
+}
+
+.vk-modal {
+  --vk-modal-bg-color: var(--bg-elevated);
+  --vk-modal-header-text-color: var(--text-primary);
+  --vk-modal-body-text-color: var(--text-secondary);
+  --vk-modal-close-color: var(--text-muted);
+  --vk-modal-close-hover-color: var(--accent);
+  --vk-modal-border-radius: 8px;
+
+  border: 1px solid var(--border);
+  box-shadow: var(--vk-box-shadow-light);
+}

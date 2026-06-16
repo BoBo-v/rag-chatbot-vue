@@ -595,6 +595,9 @@ function cloneRuntime(runtime: ModelRuntimeConfig): ModelRuntimeConfig {
     systemPrompt: runtime.systemPrompt,
     maxContextTokens: runtime.maxContextTokens,
     responseTimeoutSeconds: runtime.responseTimeoutSeconds,
+    backendRagMode: runtime.backendRagMode,
+    backendProvider: runtime.backendProvider,
+    backendModel: runtime.backendModel,
   }
 }
 

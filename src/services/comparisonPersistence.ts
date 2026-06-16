@@ -24,6 +24,9 @@ function sanitizeRuntimeConfig(config: ModelRuntimeConfig): ModelRuntimeConfig {
         systemPrompt: config.systemPrompt,
         maxContextTokens: config.maxContextTokens,
         responseTimeoutSeconds: config.responseTimeoutSeconds,
+        backendRagMode: config.backendRagMode,
+        backendProvider: config.backendProvider,
+        backendModel: config.backendModel,
     }
 }
 

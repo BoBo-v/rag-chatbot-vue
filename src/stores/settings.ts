@@ -7,21 +7,24 @@ export type ProviderType = 'ollama' | 'openai' | 'claude'
 export type ThemeType   = 'dark' | 'light' | 'system'
 export type BackendChatProviderType = 'ollama' | 'openai' | 'anthropic'
 export type BackendRagMode = 'auto' | 'off' | 'force'
+export type TransportMode = 'direct' | 'backend'
 
 export interface AppSettings {
+    transport: TransportMode
     provider: ProviderType
     theme: ThemeType
     systemPrompt: string
     maxContextTokens: number
     responseTimeoutSeconds: number
     showModelInTopbar: boolean
+    ragMode: BackendRagMode
+    backend: {
+        provider: BackendChatProviderType
+        model: string
+    }
     ollama: {
         url: string
         model: string
-        useBackendChat: boolean
-        backendRagMode: BackendRagMode
-        backendProvider: BackendChatProviderType
-        backendModel: string
     }
     openai: {
         apiKey: string
@@ -38,19 +41,21 @@ const STORAGE_KEY = 'ai-chat-settings'
 
 // 默认设置。用户第一次打开应用，或者 localStorage 读取失败时会使用这些值。
 const defaults: AppSettings = {
+    transport: 'direct',
     provider: 'ollama',
     theme: 'dark',
     systemPrompt: '你是一个专业的 AI 助手，回答要简洁清晰。',
     maxContextTokens: 128000,
     responseTimeoutSeconds: 30,
     showModelInTopbar: true,
+    ragMode: 'auto',
+    backend: {
+        provider: 'ollama',
+        model: 'qwen2.5:7b',
+    },
     ollama: {
         url: 'http://localhost:11434',
         model: 'qwen2.5:7b',
-        useBackendChat: false,
-        backendRagMode: 'auto',
-        backendProvider: 'ollama',
-        backendModel: 'qwen2.5:7b',
     },
     openai: {
         apiKey: '',
@@ -70,36 +75,87 @@ function load(): AppSettings {
         const raw = localStorage.getItem(STORAGE_KEY)
         if (raw) {
             const saved = JSON.parse(raw)
-            // 深度合并，保留未存字段的默认值
+            // 只读取当前版本需要的字段。旧字段只用于迁移，不再写回 settings。
             return {
                 ...defaults,
-                ...saved,
-                theme:  saved.theme  ?? defaults.theme,
+                provider: normalizeProvider(saved.provider),
+                transport: normalizeTransportMode(saved.transport ?? saved.connectionMode, saved.ollama?.useBackendChat),
+                theme: normalizeTheme(saved.theme),
+                systemPrompt: typeof saved.systemPrompt === 'string' ? saved.systemPrompt : defaults.systemPrompt,
+                maxContextTokens: normalizeMaxContextTokens(saved.maxContextTokens),
                 responseTimeoutSeconds: normalizeTimeout(saved.responseTimeoutSeconds),
-                ollama: {
-                    ...defaults.ollama,
-                    ...saved.ollama,
-                    backendRagMode: normalizeBackendRagMode(saved.ollama?.backendRagMode, saved.ollama?.enableBackendRag),
+                showModelInTopbar: typeof saved.showModelInTopbar === 'boolean' ? saved.showModelInTopbar : defaults.showModelInTopbar,
+                ragMode: normalizeBackendRagMode(saved.ragMode ?? saved.ollama?.backendRagMode, saved.ollama?.enableBackendRag),
+                backend: {
+                    provider: normalizeBackendProvider(saved.backend?.provider ?? saved.ollama?.backendProvider),
+                    model: stringOrDefault(saved.backend?.model ?? saved.ollama?.backendModel, defaults.backend.model),
                 },
-                openai: { ...defaults.openai, ...saved.openai },
-                claude: { ...defaults.claude, ...saved.claude },
+                ollama: {
+                    url: stringOrDefault(saved.ollama?.url, defaults.ollama.url),
+                    model: stringOrDefault(saved.ollama?.model, defaults.ollama.model),
+                },
+                openai: {
+                    apiKey: stringOrDefault(saved.openai?.apiKey, defaults.openai.apiKey),
+                    baseUrl: stringOrDefault(saved.openai?.baseUrl, defaults.openai.baseUrl),
+                    model: stringOrDefault(saved.openai?.model, defaults.openai.model),
+                },
+                claude: {
+                    apiKey: stringOrDefault(saved.claude?.apiKey, defaults.claude.apiKey),
+                    model: stringOrDefault(saved.claude?.model, defaults.claude.model),
+                },
             }
         }
     } catch {}
-    return { ...defaults, ollama: { ...defaults.ollama }, openai: { ...defaults.openai }, claude: { ...defaults.claude } }
+    return {
+        ...defaults,
+        backend: { ...defaults.backend },
+        ollama: { ...defaults.ollama },
+        openai: { ...defaults.openai },
+        claude: { ...defaults.claude },
+    }
+}
+
+function normalizeProvider(value: unknown): ProviderType {
+    if (value === 'ollama' || value === 'openai' || value === 'claude') return value
+    return defaults.provider
+}
+
+function normalizeTheme(value: unknown): ThemeType {
+    if (value === 'dark' || value === 'light' || value === 'system') return value
+    return defaults.theme
+}
+
+function normalizeTransportMode(value: unknown, legacyUseBackendChat?: unknown): TransportMode {
+    if (value === 'direct' || value === 'backend') return value
+    return legacyUseBackendChat === true ? 'backend' : defaults.transport
+}
+
+function normalizeBackendProvider(value: unknown): BackendChatProviderType {
+    if (value === 'ollama' || value === 'openai' || value === 'anthropic') return value
+    return defaults.backend.provider
 }
 
 function normalizeBackendRagMode(value: unknown, legacyEnabled?: unknown): BackendRagMode {
     if (value === 'auto' || value === 'off' || value === 'force') return value
     if (legacyEnabled === false) return 'off'
     if (legacyEnabled === true) return 'force'
-    return defaults.ollama.backendRagMode
+    return defaults.ragMode
 }
 
 function normalizeTimeout(value: unknown): number {
     const parsed = Number(value)
     if (!Number.isFinite(parsed)) return defaults.responseTimeoutSeconds
     return Math.min(300, Math.max(5, Math.round(parsed)))
+}
+
+function normalizeMaxContextTokens(value: unknown): number {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return defaults.maxContextTokens
+    return Math.max(1, Math.round(parsed))
+}
+
+function stringOrDefault(value: unknown, fallback: string): string {
+    return typeof value === 'string' ? value : fallback
 }
 
 export const settings = reactive<AppSettings>(load())

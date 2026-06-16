@@ -405,7 +405,7 @@ export function useChatView() {
         const runtime = createRuntimeFromSettings(settings)
         const requestMessages = options.contextMessages ?? messages.value
 
-        if (!options.skipRagContext && runtime.provider === 'ollama' && runtime.useBackendChat) {
+        if (!options.skipRagContext && runtime.transport === 'backend') {
             try {
                 const ragContext = await fetchBackendChatContext(
                     requestMessages,

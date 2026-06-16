@@ -30,6 +30,74 @@
 
           <div class="settings-divider"></div>
 
+          <div class="settings-group">
+            <label class="settings-label">连接方式</label>
+            <div class="rag-mode-tabs">
+              <button
+                v-for="mode in connectionModes"
+                :key="mode.value"
+                class="rag-mode-btn"
+                :class="{ active: draft.transport === mode.value }"
+                type="button"
+                @click="draft.transport = mode.value"
+              >
+                {{ mode.label }}
+              </button>
+            </div>
+            <span class="settings-hint">{{ activeConnectionModeHint }}</span>
+          </div>
+
+          <div v-if="draft.transport === 'backend'" class="settings-group">
+            <div class="settings-label-row">
+              <label class="settings-label">后端代理模型</label>
+              <button class="btn-refresh" :class="{ loading: loadingBackendProviders }" @click="loadBackendProviders">
+                {{ loadingBackendProviders ? '获取中...' : '刷新厂商' }}
+              </button>
+            </div>
+            <select v-model="draft.backend.provider" class="settings-input settings-select" @change="applyBackendDefaultModel">
+              <option
+                v-for="provider in backendProviders"
+                :key="provider.id"
+                :value="provider.id"
+              >
+                {{ provider.name }}
+              </option>
+            </select>
+            <input
+              v-model="draft.backend.model"
+              class="settings-input"
+              placeholder="使用厂商默认模型或手动输入"
+              spellcheck="false"
+              autocomplete="off"
+            />
+            <span v-if="backendProviderError" class="settings-hint error">{{ backendProviderError }}</span>
+            <span v-else class="settings-hint">后端代理会统一请求 /api/chat，API Key 和厂商路由由后端管理。</span>
+          </div>
+
+          <div class="settings-group">
+            <div class="settings-label-row">
+              <label class="settings-label">知识库 RAG</label>
+            </div>
+            <div class="rag-mode-tabs" :class="{ disabled: draft.transport !== 'backend' }">
+              <button
+                v-for="mode in ragModes"
+                :key="mode.value"
+                class="rag-mode-btn"
+                :class="{ active: draft.ragMode === mode.value }"
+                :disabled="draft.transport !== 'backend'"
+                type="button"
+                @click="draft.ragMode = mode.value"
+              >
+                {{ mode.label }}
+              </button>
+            </div>
+            <span class="settings-hint">
+              {{ draft.transport === 'backend' ? activeRagModeHint : 'RAG 依赖后端知识库检索，只在后端代理模式下可用。' }}
+            </span>
+          </div>
+
+          <div class="settings-divider"></div>
+
           <!-- Provider 选择标签 -->
           <div class="provider-tabs">
             <button
@@ -68,64 +136,6 @@ v-model="draft.ollama.model" class="settings-input"
               <span v-if="modelError" class="settings-hint error">{{ modelError }}</span>
               <span v-else class="settings-hint">支持下拉选择或手动输入模型名称</span>
             </div>
-            <div class="settings-divider"></div>
-            <div class="settings-group">
-              <div class="settings-label-row">
-                <label class="settings-label">&#21518;&#31471;&#23545;&#35805;&#26381;&#21153;</label>
-                <label class="settings-hint">注意：这里功能需要配合后端支持</label>
-                <label class="settings-toggle">
-                  <input v-model="draft.ollama.useBackendChat" type="checkbox" />
-                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                </label>
-              </div>
-              <span class="settings-hint">&#24320;&#21551;&#21518;&#65292;Ollama &#32842;&#22825;&#35831;&#27714;&#20250;&#36208;&#21069;&#31471;&#21516;&#28304; /api/chat&#65307;&#26159;&#21542;&#20351;&#29992;&#30693;&#35782;&#24211;&#30001;&#19979;&#38754;&#30340; RAG &#24320;&#20851;&#21333;&#29420;&#25511;&#21046;</span>
-            </div>
-            <template v-if="draft.ollama.useBackendChat">
-              <div class="settings-group">
-                <div class="settings-label-row">
-                  <label class="settings-label">Backend RAG</label>
-                </div>
-                <div class="rag-mode-tabs">
-                  <button
-                    v-for="mode in ragModes"
-                    :key="mode.value"
-                    class="rag-mode-btn"
-                    :class="{ active: draft.ollama.backendRagMode === mode.value }"
-                    type="button"
-                    @click="draft.ollama.backendRagMode = mode.value"
-                  >
-                    {{ mode.label }}
-                  </button>
-                </div>
-                <span class="settings-hint">{{ activeRagModeHint }}</span>
-              </div>
-              <div class="settings-group">
-                <div class="settings-label-row">
-                  <label class="settings-label">后端厂商</label>
-                  <button class="btn-refresh" :class="{ loading: loadingBackendProviders }" @click="loadBackendProviders">
-                    {{ loadingBackendProviders ? '获取中...' : '刷新厂商' }}
-                  </button>
-                </div>
-                <select v-model="draft.ollama.backendProvider" class="settings-input settings-select" @change="applyBackendDefaultModel">
-                  <option
-                    v-for="provider in backendProviders"
-                    :key="provider.id"
-                    :value="provider.id"
-                  >
-                    {{ provider.name }}
-                  </option>
-                </select>
-                <span v-if="backendProviderError" class="settings-hint error">{{ backendProviderError }}</span>
-                <span v-else class="settings-hint">只显示后端 configured=true 的厂商</span>
-              </div>
-              <div class="settings-group">
-                <label class="settings-label">后端模型</label>
-                <input
-v-model="draft.ollama.backendModel" class="settings-input"
-                  placeholder="使用厂商默认模型或手动输入" spellcheck="false" autocomplete="off" />
-                <span class="settings-hint">最终会作为 model 写入 /api/chat 请求体</span>
-              </div>
-            </template>
           </template>
 
           <!-- ── OpenAI 兼容 ── -->
@@ -257,7 +267,7 @@ import { settings } from '../stores/settings'
 import { fetchModels } from '../services/stream'
 import { getClaudeModels } from '../services/providers/claude'
 import { fetchBackendChatProviders, type BackendChatProvider } from '../services/knowledge'
-import type { BackendRagMode, ProviderType, ThemeType } from '../stores/settings'
+import type { BackendRagMode, ProviderType, ThemeType, TransportMode } from '../stores/settings'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -298,6 +308,11 @@ const providers: { value: ProviderType; label: string; icon: string }[] = [
   { value: 'claude',  label: 'Claude',        icon: '✦' },
 ]
 
+const connectionModes: { value: TransportMode; label: string; hint: string }[] = [
+  { value: 'direct', label: '浏览器直连', hint: '前端直接请求当前模型厂商；配置保存在本地，RAG 不可用。' },
+  { value: 'backend', label: '后端代理', hint: '前端统一请求 /api/chat；后端管理厂商路由、鉴权和知识库 RAG。' },
+]
+
 const ragModes: { value: BackendRagMode; label: string; hint: string }[] = [
   { value: 'auto', label: '自动', hint: '发送 rag:auto，由后端按问题和命中分数自动判断是否检索。' },
   { value: 'off', label: '关闭', hint: '发送 rag:false，后端直接推理，不检索知识库。' },
@@ -309,6 +324,7 @@ const claudeModels = getClaudeModels()
 // 编辑草稿，保存前不改动 settings
 const draft = reactive({
   ...settings,
+  backend: { ...settings.backend },
   ollama:  { ...settings.ollama },
   openai:  { ...settings.openai },
   claude:  { ...settings.claude },
@@ -317,7 +333,10 @@ const draft = reactive({
 const activeTierIndex = ref(findTierIndex(draft.maxContextTokens))
 const activeTier = computed(() => contextTiers[activeTierIndex.value])
 const activeRagModeHint = computed(() =>
-  ragModes.find(mode => mode.value === draft.ollama.backendRagMode)?.hint ?? ragModes[0].hint
+  ragModes.find(mode => mode.value === draft.ragMode)?.hint ?? ragModes[0].hint
+)
+const activeConnectionModeHint = computed(() =>
+  connectionModes.find(mode => mode.value === draft.transport)?.hint ?? connectionModes[0].hint
 )
 
 function selectTier(index: number) {
@@ -355,14 +374,15 @@ async function loadModels() {
 
   // 用草稿里的配置临时覆盖 settings 来 fetch，fetch 完再恢复
   const prevProvider = settings.provider
+  const prevTransport = settings.transport
   const prevConfig   = { ...settings[draft.provider as 'ollama' | 'openai'] }
 
-  Object.assign(settings, { provider: draft.provider })
+  Object.assign(settings, { provider: draft.provider, transport: 'direct' })
   Object.assign(settings[draft.provider as 'ollama' | 'openai'], draft[draft.provider as 'ollama' | 'openai'])
 
   const list = await fetchModels()
 
-  Object.assign(settings, { provider: prevProvider })
+  Object.assign(settings, { provider: prevProvider, transport: prevTransport })
   Object.assign(settings[draft.provider as 'ollama' | 'openai'], prevConfig)
 
   if (list.length === 0) {
@@ -398,10 +418,10 @@ async function loadBackendProviders() {
       backendProviderError.value = '后端没有可用厂商，请检查 /api/providers 配置'
       return
     }
-    if (!backendProviders.value.some(provider => provider.id === draft.ollama.backendProvider)) {
-      draft.ollama.backendProvider = backendProviders.value[0].id
-      draft.ollama.backendModel = backendProviders.value[0].defaultModel
-    } else if (!draft.ollama.backendModel) {
+    if (!backendProviders.value.some(provider => provider.id === draft.backend.provider)) {
+      draft.backend.provider = backendProviders.value[0].id
+      draft.backend.model = backendProviders.value[0].defaultModel
+    } else if (!draft.backend.model) {
       applyBackendDefaultModel()
     }
   } catch (error) {
@@ -412,26 +432,29 @@ async function loadBackendProviders() {
 }
 
 function applyBackendDefaultModel() {
-  const provider = backendProviders.value.find(item => item.id === draft.ollama.backendProvider)
+  const provider = backendProviders.value.find(item => item.id === draft.backend.provider)
   if (provider) {
-    draft.ollama.backendModel = provider.defaultModel
+    draft.backend.model = provider.defaultModel
   }
 }
 
 function save() {
   draft.responseTimeoutSeconds = normalizeTimeout(draft.responseTimeoutSeconds)
-  if (!draft.ollama.backendModel) {
-    const provider = backendProviders.value.find(item => item.id === draft.ollama.backendProvider)
-    draft.ollama.backendModel = provider?.defaultModel ?? draft.ollama.model
+  if (!draft.backend.model) {
+    const provider = backendProviders.value.find(item => item.id === draft.backend.provider)
+    draft.backend.model = provider?.defaultModel ?? draft.ollama.model
   }
   // Copy draft values back to global settings. The settings store persists them to localStorage.
   Object.assign(settings, {
+    transport:         draft.transport,
     provider:          draft.provider,
+    ragMode:           draft.ragMode,
     systemPrompt:      draft.systemPrompt,
     maxContextTokens:  draft.maxContextTokens,
     responseTimeoutSeconds: draft.responseTimeoutSeconds,
     showModelInTopbar: draft.showModelInTopbar,
   })
+  Object.assign(settings.backend, draft.backend)
   Object.assign(settings.ollama,  draft.ollama)
   Object.assign(settings.openai,  draft.openai)
   Object.assign(settings.claude,  draft.claude)

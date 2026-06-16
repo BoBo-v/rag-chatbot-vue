@@ -2034,6 +2034,21 @@ datalist option {
     color: var(--text-primary);
 }
 
+.rag-mode-tabs.disabled {
+    opacity: 0.55;
+}
+
+.rag-mode-btn:disabled {
+    cursor: not-allowed;
+    color: var(--text-faint);
+    background: var(--bg-surface-3);
+}
+
+.rag-mode-btn:disabled:hover {
+    color: var(--text-faint);
+    background: var(--bg-surface-3);
+}
+
 .rag-mode-btn.active {
     background: var(--accent-bg);
     border-color: var(--accent-border);

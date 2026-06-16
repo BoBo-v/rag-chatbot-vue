@@ -4,9 +4,21 @@ import type { ModelRuntimeConfig } from '../types/model'
 export function createRuntimeFromSettings(appSettings: AppSettings): ModelRuntimeConfig {
     const common = {
         provider: appSettings.provider,
+        transport: appSettings.transport,
         systemPrompt: appSettings.systemPrompt,
         maxContextTokens: appSettings.maxContextTokens,
         responseTimeoutSeconds: appSettings.responseTimeoutSeconds,
+    }
+
+    if (appSettings.transport === 'backend') {
+        return {
+            ...common,
+            label: `后端代理 - ${appSettings.backend.model || appSettings.ollama.model}`,
+            model: appSettings.backend.model || appSettings.ollama.model,
+            backendRagMode: appSettings.ragMode,
+            backendProvider: appSettings.backend.provider,
+            backendModel: appSettings.backend.model || appSettings.ollama.model,
+        }
     }
 
     switch (appSettings.provider) {
@@ -33,10 +45,6 @@ export function createRuntimeFromSettings(appSettings: AppSettings): ModelRuntim
                 label: `Ollama - ${appSettings.ollama.model}`,
                 model: appSettings.ollama.model,
                 baseUrl: appSettings.ollama.url,
-                useBackendChat: appSettings.ollama.useBackendChat,
-                backendRagMode: appSettings.ollama.backendRagMode,
-                backendProvider: appSettings.ollama.backendProvider,
-                backendModel: appSettings.ollama.backendModel,
             }
     }
 }

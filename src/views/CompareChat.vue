@@ -587,6 +587,7 @@ onMounted(() => {
 function cloneRuntime(runtime: ModelRuntimeConfig): ModelRuntimeConfig {
   return {
     provider: runtime.provider,
+    transport: runtime.transport,
     label: runtime.label,
     model: runtime.model,
     baseUrl: runtime.baseUrl,

@@ -2,9 +2,11 @@ import type { BackendChatProviderType, BackendRagMode, ProviderType } from '../s
 import type { FileAttachment, ImageAttachment } from './chat'
 
 export type ModelProvider = ProviderType
+export type ModelTransport = 'direct' | 'backend'
 
 export interface ModelRuntimeConfig {
     provider: ModelProvider
+    transport: ModelTransport
     label: string
     model: string
     baseUrl?: string
@@ -12,7 +14,6 @@ export interface ModelRuntimeConfig {
     systemPrompt: string
     maxContextTokens: number
     responseTimeoutSeconds: number
-    useBackendChat?: boolean
     backendRagMode?: BackendRagMode
     backendProvider?: BackendChatProviderType
     backendModel?: string

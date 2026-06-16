@@ -16,6 +16,7 @@ export interface ComparisonSessionListItem {
 function sanitizeRuntimeConfig(config: ModelRuntimeConfig): ModelRuntimeConfig {
     return {
         provider: config.provider,
+        transport: config.transport,
         label: config.label,
         model: config.model,
         baseUrl: config.baseUrl,

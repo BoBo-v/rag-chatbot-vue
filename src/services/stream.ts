@@ -47,6 +47,11 @@ export async function generateStreamWithContext(options: GenerateStreamWithConte
     }
 
     try {
+        if (runtime.transport === 'backend') {
+            await backendChatStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
+            return
+        }
+
         // 根据设置面板中选择的 provider 分发到对应适配器。
         switch (runtime.provider) {
             case 'openai':
@@ -57,11 +62,7 @@ export async function generateStreamWithContext(options: GenerateStreamWithConte
                 break
             case 'ollama':
             default:
-                if (runtime.useBackendChat) {
-                    await backendChatStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
-                } else {
-                    await ollamaStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
-                }
+                await ollamaStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
                 break
         }
     } catch (err) {

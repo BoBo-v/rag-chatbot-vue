@@ -1,26 +1,101 @@
 # AI Chat
 
-一个基于 Vue 3、TypeScript 和 Vite 的本地优先 AI 聊天前端。项目支持普通聊天、多模型对比、本地会话持久化、全文搜索、图片/文件附件、Markdown/数学公式渲染，以及接入后端知识库 RAG。
+AI Chat 是一个面向本地知识库问答、模型效果评估和检索链路排查的工程化前端项目。它不是单纯的聊天 Demo，而是把“资料入库、RAG 检索、引用解释、多模型对比、运行指标观察”串成一套可调试的 AI 工作台。
 
-## 功能
+项目基于 Vue 3、TypeScript 和 Vite 构建，默认面向本地 Ollama 和同源后端服务，也支持 OpenAI 兼容接口与 Claude。
 
-- 普通聊天：支持 Ollama、OpenAI 兼容接口、Claude，以及同源后端 `/api/chat`。
-- 流式输出：统一处理 Ollama NDJSON、OpenAI SSE、Claude 流式响应，并支持停止生成、重试、继续生成。
-- 会话管理：会话和消息保存在浏览器 IndexedDB，刷新页面后仍可恢复。
-- 本地搜索：通过 Web Worker 建立会话搜索索引，避免阻塞聊天界面。
-- 附件输入：支持图片附件和文本/代码文件附件；视觉能力取决于所选模型。
-- Markdown 渲染：支持代码高亮、复制按钮、任务列表、行内公式 `$...$` 和块级公式 `$$...$$`。
-- 多模型对比：多个模型并发回答同一问题，记录耗时和状态，支持汇总、历史查看、导出 Markdown/JSON。
-- 知识库管理：上传 txt、md、pdf、png、jpg、jpeg、webp 到后端 RAG；查看文件、chunk、删除文件、检索调试。
-- RAG 模式：后端聊天支持自动、强制、关闭三种模式，对应 `rag: "auto" | true | false`。
-- 设置持久化：模型、主题、上下文长度、超时、后端 RAG 模式等保存在 `localStorage`。
+## 核心定位
+
+- 本地知识库 RAG：上传文本、PDF 和图片资料，经过后端解析、切块、embedding 后进入 SQLite 向量库和全文索引。
+- 多模型对比：同一问题并发请求多个模型，观察回答质量、耗时、成功失败状态，并支持汇总和导出。
+- 可观测指标：展示 RAG 是否启用、命中文件、chunk 分数、向量分、关键词分、片段内容、上传阶段、对比耗时和运行状态。
+- 本地优先：会话、消息、搜索索引和对比历史保存在浏览器 IndexedDB；设置保存在 localStorage。
+
+## 功能总览
+
+### 聊天与 RAG
+
+- 支持 Ollama、OpenAI 兼容接口、Claude，以及同源后端 `/api/chat`。
+- 设置层把连接方式、模型厂商和 RAG 开关拆开：
+  - 浏览器直连：前端直接请求 Ollama、OpenAI 兼容接口或 Claude。
+  - 后端代理：前端统一请求 `/api/chat`，由后端管理厂商路由、鉴权和 RAG。
+  - RAG 开关：只在后端代理模式下生效。
+- 支持流式输出、停止生成、重试、继续生成。
+- 支持后端 RAG 模式：
+  - `rag: "auto"`：由后端自动判断是否检索并注入资料。
+  - `rag: true`：强制检索知识库，有结果则注入资料。
+  - `rag: false`：关闭知识库，直接推理。
+- 发送聊天前可调用 `/api/chat/context` 预取 RAG 上下文，并在 AI 回复下方展示引用资料。
+- 引用资料展示包含：
+  - 本次是否启用 RAG
+  - 命中文件名
+  - chunk 编号
+  - `score`
+  - `vectorScore`
+  - `keywordScore`
+  - chunk 片段预览
+
+### 本地知识库
+
+- 支持上传：
+  - `.txt`
+  - `.md`
+  - `.pdf`
+  - `.png`
+  - `.jpg`
+  - `.jpeg`
+  - `.webp`
+- 普通文本和 PDF 由后端解析为文本。
+- 图片先保存原图，再由本地视觉模型识别、翻译、整理为 Markdown，然后进入现有 RAG 流程。
+- 上传进度通过 SSE 展示，包含：
+  - `receiving`
+  - `parsing`
+  - `chunking`
+  - `embedding`
+  - `storing`
+  - `completed`
+  - `failed`
+- 图片入库时会重点展示解析阶段，因为这里需要等待视觉模型。
+- 文件详情页可以查看文件元数据、chunk 数量和 chunk 文本预览。
+- 检索调试页可查看某个问题会命中哪些资料以及对应分数。
+
+### 多模型对比
+
+- 支持配置多个模型运行时，并发回答同一个问题。
+- 支持图片或文本附件作为共同输入。
+- 支持单独停止某个模型或停止全部模型。
+- 展示每个模型的运行状态、耗时、错误信息和回答内容。
+- 支持对多个成功回答生成汇总答案。
+- 对比历史保存到 IndexedDB。
+- 支持导出 Markdown 和 JSON。
+
+### 可观测与排查
+
+这个项目重点保留了排查 AI 系统行为所需的信息：
+
+- RAG 是否启用。
+- RAG 是自动、强制还是关闭。
+- 检索命中了哪些文件。
+- 命中了哪些 chunk。
+- 综合分、向量分、关键词分。
+- 注入片段预览。
+- 上传进度和图片识别阶段。
+- 多模型耗时、成功数、失败数、平均耗时。
+- 流式请求错误、超时、停止状态。
+
+项目不展示模型完整思维链，只展示可解释的外部上下文和运行指标。
 
 ## 技术栈
 
-- Vue 3 + TypeScript + Vite
+- Vue 3
+- TypeScript
+- Vite
 - Dexie / IndexedDB
-- markdown-it + highlight.js + KaTeX
+- markdown-it
+- highlight.js
+- KaTeX
 - Web Worker 搜索索引
+- @bobocn/element
 - ESLint
 
 ## 快速开始
@@ -55,111 +130,184 @@ npm run preview
 npm run lint
 ```
 
-## 模型接入
+## 后端接口约定
 
-### Ollama
+知识库和后端 RAG 能力依赖同源后端接口。只运行前端时，普通聊天、本地历史、多模型对比等前端能力仍可使用，但知识库相关能力不可用。
 
-默认配置：
+前端有两种连接方式：
 
-- Base URL: `http://localhost:11434`
-- Model: `qwen2.5:7b`
+- 浏览器直连模式：前端直接访问当前 provider 的接口，适合本地 Ollama 或允许浏览器访问的 OpenAI 兼容服务。
+- 后端代理模式：前端统一访问 `/api/chat`，后端负责 provider、model、API Key 和 RAG 注入。
 
-如果关闭“后端对话服务”，前端会直接请求 Ollama：
+RAG 依赖后端知识库检索，因此只在后端代理模式下可用。
 
-```http
-POST http://localhost:11434/api/chat
-```
-
-如果开启“后端对话服务”，前端会请求同源后端：
+### 上传知识库文件
 
 ```http
-POST /api/chat
+POST /api/upload
 ```
 
-请求体会包含：
+请求：
 
-```json
-{
-  "provider": "ollama",
-  "model": "qwen2.5:7b",
-  "rag": "auto",
-  "messages": []
-}
-```
+- `multipart/form-data`
+- 字段：`file`
+- query：
+  - `progressId=前端生成的ID`
+  - `overwrite=true | false`
 
-### OpenAI 兼容接口
-
-支持配置 Base URL 和 API Key。开发环境下，OpenAI 兼容接口会走 Vite 同源代理前缀 `/__ai_proxy/openai`，用于绕过浏览器 CORS；生产环境会直接请求配置的厂商地址。
-
-可用于 OpenAI、DeepSeek、通义千问兼容接口、Kimi 等 OpenAI 兼容服务。
-
-### Claude
-
-支持 Claude provider 配置 API Key 和模型名。浏览器直连 Claude API 可能受 CORS 限制，公开部署时建议通过后端代理。
-
-## 知识库 RAG
-
-知识库页面依赖后端提供以下接口：
-
-| 功能 | 接口 |
-| --- | --- |
-| 上传文件 | `POST /api/upload` |
-| 上传进度 | `GET /api/upload/progress/:progressId` |
-| 文件列表 | `GET /api/files` |
-| 文件详情 | `GET /api/files/:id` |
-| 删除文件 | `DELETE /api/files/:id` |
-| 检索调试 | `GET /api/search?q=...&topK=5&minScore=0.2` |
-| 后端聊天 | `POST /api/chat` |
-| 后端厂商列表 | `GET /api/providers` |
-
-上传支持：
-
-- `.txt`
-- `.md`
-- `.pdf`
-- `.png`
-- `.jpg`
-- `.jpeg`
-- `.webp`
-
-前端默认不传 `overwrite`，也就是请求形态通常是：
+当前前端默认不传 `overwrite`，也就是：
 
 ```http
 POST /api/upload?progressId=前端生成的ID
 ```
 
-只有显式传入 `overwrite: true` 时才会发送 `overwrite=true`。
+只有明确覆盖时才传 `overwrite=true`。
 
-当前前端会在上传前做 10MB 大小校验。这个限制来自后端 Fastify multipart 默认配置。
+后端文件大小限制来自 Fastify multipart 配置，当前按 10MB 处理。
 
-图片入库流程由后端完成：图片先保存原图，再调用本地视觉模型识别成 Markdown；识别结果直接进入现有 RAG 流程，切块、embedding、写入 SQLite 向量库和全文索引。前端只展示上传进度和接口返回的 chunk 预览，不直接调用视觉模型。
+### 上传进度
 
-RAG 模式：
+```http
+GET /api/upload/progress/:progressId
+```
 
-- 自动：发送 `rag: "auto"`，由后端判断是否检索并注入资料。
-- 关闭：发送 `rag: false`，直接推理，不检索知识库。
-- 强制：发送 `rag: true`，强制检索，有结果则注入资料。
+SSE 返回进度：
 
-## 多模型对比
+```json
+{
+  "phase": "parsing",
+  "percent": 45,
+  "message": "正在识别图片内容",
+  "done": false
+}
+```
 
-多模型对比页可以：
+### 文件管理
 
-- 配置多个运行时并发生成。
-- 上传图片或文本文件作为共同输入。
-- 单独停止某个模型或停止全部。
-- 查看状态、耗时、成功/失败统计。
-- 对多个成功回答生成汇总答案。
-- 保存对比历史到 IndexedDB。
-- 导出 Markdown 或 JSON。
+```http
+GET /api/files
+GET /api/files/:id
+DELETE /api/files/:id
+```
 
-历史记录不会保存 API Key，恢复历史后适合查看和导出；重新请求需要新建对比。
+前端展示：
 
-## 数据存储
+- 文件名
+- MIME 类型
+- 文件大小
+- 字符数
+- chunk 数
+- embedding 模型
+- embedding 维度
+- 创建时间
+- chunk 文本预览
+
+### 向量库状态
+
+```http
+GET /api/vector-store/status
+```
+
+用于展示：
+
+- 当前 embedding 模型
+- 文件数量
+- chunk 数量
+- 是否需要重建索引：`needsReindex`
+- 是否存在旧模型或旧维度的 chunk
+
+### 检索调试
+
+```http
+GET /api/search?q=...&topK=5&minScore=0.2
+```
+
+用于排查“为什么这次没有引用知识库”：
+
+- 命中文件名
+- chunkIndex
+- score
+- vectorScore
+- keywordScore
+- chunk 文本
+
+### 聊天
+
+```http
+POST /api/chat
+```
+
+请求示例：
+
+```json
+{
+  "provider": "ollama",
+  "model": "qwen3:8b",
+  "rag": "auto",
+  "messages": [
+    { "role": "user", "content": "根据知识库回答这个问题" }
+  ]
+}
+```
+
+返回为按行输出的 JSON 流，前端逐行解析：
+
+- `message.content`：增量文本
+- `error`：流式错误
+- `done`：结束
+
+### RAG 上下文预览
+
+```http
+POST /api/chat/context
+```
+
+请求体和 `/api/chat` 一致，但不调用模型，只返回后端准备注入的 RAG 上下文：
+
+```json
+{
+  "enabled": true,
+  "prompt": "...",
+  "results": [
+    {
+      "fileId": "...",
+      "filename": "demo.png",
+      "chunkIndex": 0,
+      "score": 0.82,
+      "vectorScore": 0.76,
+      "keywordScore": 0.91,
+      "text": "命中的片段内容..."
+    }
+  ]
+}
+```
+
+前端第一版采用“发送前预取上下文”的方案，因此 `/api/chat/context` 和 `/api/chat` 会各检索一次。小型本地知识库通常可以接受；如果后续需要严格一致，可以让后端在 `/api/chat` 流开始前返回 metadata。
+
+## 图片知识库流程
+
+当前已完成的是“图片作为知识库资料上传入库，然后聊天时通过 RAG 检索使用图片识别出来的文本”。
+
+流程：
+
+1. 前端上传 `png/jpg/jpeg/webp` 到 `/api/upload`。
+2. 后端保存原图到 `UPLOAD_DIR`。
+3. 后端调用本地视觉模型 `VISION_MODEL`，默认 `qwen3-vl:2b`。
+4. 视觉模型把图片内容识别、翻译、整理成 Markdown。
+5. Markdown 作为知识库文本进入 RAG 流程。
+6. 文本切块、embedding、写入 SQLite 向量库和全文索引。
+7. 上传接口返回 file 元数据和 chunks，前端展示 chunk 预览。
+
+当前没有单独的 parsed 文件表；识别文本存在 chunk 中。
+
+“聊天框直接带图片提问，但不入库”属于后续功能方向。
+
+## 本地数据存储
 
 浏览器本地数据分两类：
 
-- `localStorage`：保存设置项，例如 provider、模型名、主题、上下文长度、RAG 模式。
-- IndexedDB：保存会话、消息、搜索索引、多模型对比记录。
+- `localStorage`：保存 provider、模型名、主题、上下文长度、超时、RAG 模式等设置。
+- IndexedDB：保存会话、消息、搜索索引和多模型对比记录。
 
 IndexedDB 数据库名：
 
@@ -184,22 +332,32 @@ ai-chat-db
 
 ```text
 src/
-  components/        通用组件和设置面板
+  components/        通用组件、设置面板、引用资料展示、确认弹窗
   composables/       聊天、多模型对比、附件、滚动、搜索等组合逻辑
-  db/                Dexie / IndexedDB 表结构和迁移
+  db/                Dexie / IndexedDB 表结构
   search/            本地搜索索引、分词、排序、Worker 客户端
-  services/          模型适配器、知识库接口、上下文构造、导出和持久化
+  services/          模型适配器、知识库接口、上下文构造、对比导出和持久化
   stores/            设置、聊天消息、会话状态
   styles/            全局主题、聊天样式、Markdown 样式
-  types/             聊天和模型相关类型
+  types/             聊天、RAG、模型和对比相关类型
   utils/             Markdown、数学公式、错误分类等工具
-  views/             普通聊天、多模型对比、知识库页面
+  views/             聊天、多模型对比、知识库页面
 ```
+
+## 适合展示的工程点
+
+- RAG 链路可解释：不是只展示模型回答，还展示引用来源和检索分数。
+- 多模型评测闭环：并发请求、状态跟踪、耗时统计、汇总、历史和导出。
+- 本地知识库工作流：上传、进度、解析、切块、检索调试、删除。
+- 前端持久化：会话、消息、搜索索引和对比历史都落在 IndexedDB。
+- 流式交互：统一处理 Ollama NDJSON、OpenAI SSE、Claude SSE 和后端 JSON 行流。
+- Markdown 和数学公式：支持代码高亮、复制、KaTeX 行内和块级公式。
+- 主题和组件集成：接入 `@bobocn/element`，并通过主题变量同步暗色和亮色模式。
 
 ## 注意事项
 
 - API Key 当前保存在浏览器 `localStorage`，适合本地个人使用；公开部署建议改为后端代理。
-- 图片聊天附件和图片知识库入库是两条链路：当前知识库图片上传会由后端识别并进入 RAG；“图片伴随聊天提问但不入库”属于后续功能方向。
-- RAG、图片入库、文件列表和检索调试都依赖后端接口；单独运行前端时，这些功能不可用。
-- KaTeX 会把数学公式相关字体一起打包，构建产物里会出现 KaTeX 字体资源。
-- 多模型对比和聊天历史都存储在浏览器本地，清理站点数据会删除这些记录。
+- 知识库、图片入库、检索调试和 RAG 上下文预览依赖后端接口。
+- 图片入库会调用本地视觉模型，耗时明显长于普通文本上传。
+- 清理浏览器站点数据会删除本地会话、消息、搜索索引和多模型对比历史。
+- 构建产物包含 KaTeX 字体资源，属于数学公式渲染依赖。

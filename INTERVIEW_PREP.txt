@@ -1,0 +1,280 @@
+==============================================================================
+                    AI Chat 项目 - 面试讲解与问答准备
+==============================================================================
+
+一、项目一句话介绍（电梯演讲 30 秒版）
+----------------------------------------------------------------------
+这是一个多模型、多模态的 AI 对话应用，前端 Vue3 + TypeScript，支持
+Ollama/OpenAI/Claude 三家 Provider，实现了流式输出打字机效果、图片上传
+多模态对话、RAG 知识库检索增强、完整的错误处理与重试机制，后端用 Fastify
+做流式代理和 RAG Pipeline。
+
+
+二、项目讲解（面试时 3-5 分钟版，总-分-总结构）
+----------------------------------------------------------------------
+
+【总】
+这个项目是我独立开发的 AI Chat 应用，核心目标是展示前端工程 + Node 后端 +
+AI 工程三维能力。它不只是一个聊天界面，而是一个完整的 AI 应用工程实践，
+包含流式传输调度、多 Provider 适配、RAG 检索增强、统一错误处理等。
+
+【分 - 按技术亮点展开】
+
+1. 流式输出 + 打字机效果
+   - 不是简单地把 chunk 拼到 DOM 上，而是用 rAF + queue 调度机制
+   - 网络层把 chunk 推入队列，渲染层用 requestAnimationFrame 逐字消费
+   - 解耦网络速度和渲染帧率，避免网络突发时掉帧卡顿
+   - 对标 ChatGPT 的打字机体验
+
+2. 多 Provider 统一架构
+   - 抽象了统一的 generateStreamWithContext 接口
+   - Ollama 用 NDJSON 格式，OpenAI/Claude 用 SSE 格式，各自独立解析
+   - 图片消息三家格式完全不同，在各 Provider 内部做适配
+   - 新增 Provider 只需实现一个函数，不改核心逻辑
+
+3. 三函数抽象（runStream）
+   - handleSend / handleRetry / handleContinue 三个入口
+   - 提炼出 runStream 作为核心：负责创建 AbortController、调度流、状态守卫
+   - 方法论："找不变量"五步法 - 列动作 → 圈共有 → 圈差异 → 起名 → 入口只做准备
+
+4. 完整的错误处理
+   - 三层架构：Provider 层抛错 → Composable 层捕获分类 → UI 层展示恢复
+   - classifyError 统一归类（network/auth/server/timeout/unknown）
+   - 消息级错误 + Toast 双通道通知
+   - 支持重试：删除旧消息，重新发起请求
+
+5. 图片上传多模态
+   - 支持三种上传方式：按钮、粘贴、拖拽
+   - base64 内联存储，直接对接三家 API
+   - Ollama 视觉模型检测，非视觉模型弹 warning
+   - 图片 token 粗估（1000 token/张）用于上下文裁剪
+
+6. RAG 全链路
+   - 文件上传 → PDF/TXT 文本提取 → 段落切片（overlap 防边界丢失）
+   - Ollama 本地 embedding → 内存 vector store → 余弦相似度检索
+   - 检索结果注入 system prompt，增强模型回答质量
+
+【总】
+整个项目体现了我对 AI 应用工程的理解：不只是调 API，而是要处理流式传输、
+错误恢复、多模型适配、上下文管理、检索增强这些真实生产环境的问题。
+
+
+三、技术架构简述（画图时用）
+----------------------------------------------------------------------
+
+用户界面 (Vue3 + Composition API)
+    |
+    v
+Composable 层 (useChatView / useChat / useConversations)
+    |
+    v
+Service 层 (context.ts → stream.ts → providers/*)
+    |
+    v
+后端代理层 (Fastify)             前端直连
+    |                              |
+    v                              v
+Ollama API (本地)            OpenAI / Claude API
+
+数据持久化:
+- IndexedDB (Dexie) → 消息 + 会话
+- localStorage → 用户设置
+
+状态管理:
+- 模块级 ref 单例模式（非 Pinia/Vuex）
+- useChat: 消息 CRUD
+- useConversations: 会话管理
+- settings: 全局配置（provider/model/theme/apiKey）
+
+
+四、高频面试问题 & 回答
+----------------------------------------------------------------------
+
+Q1: 为什么不用 Pinia/Vuex 做状态管理？
+A: 项目规模不大，三个 store（chat/conversations/settings）之间耦合度低。
+   用模块级 ref + composable 函数实现单例共享，代码更轻量，没有额外依赖。
+   原理是 ES Module 的单例特性——模块顶层的 ref 只会初始化一次，所有
+   import 拿到的是同一个引用。如果项目变大、store 间依赖变复杂，我会
+   考虑引入 Pinia 获得 devtools 支持和更好的类型推导。
+
+Q2: 流式输出为什么要用 rAF + queue，而不是直接拼接？
+A: 网络层的 chunk 到达频率不可控，可能突发几十个 chunk 在一帧内到达。
+   如果每个 chunk 都触发 DOM 更新，会导致掉帧。队列解耦了接收和渲染：
+   - 网络回调只做 push，O(1) 操作
+   - rAF 循环按帧消费，保证 60fps 流畅度
+   - 类似生产者-消费者模型
+   这也是 ChatGPT 等产品实现打字机效果的通用思路。
+
+Q3: AbortController 的中断流程是怎么设计的？
+A: 设计了 StreamController 接口，封装三个中断点：
+   1. AbortController.abort() → 中断 fetch 网络请求
+   2. reader.cancel() → 中断 ReadableStream 读取
+   3. isAborted 标志位 → rAF 循环检查后退出
+   同时在 onDone 回调中做状态守卫：如果 isAborted 为 true，状态设为
+   'aborted' 而非 'done'。handleStop 只负责中断，不直接改消息状态，
+   避免竞态条件。
+
+Q4: 错误处理为什么分三层？
+A: Provider 层只管抛错（保持纯粹），Composable 层统一捕获并分类（集中
+   处理），UI 层根据状态渲染（展示和恢复）。好处是：
+   - 新增 Provider 不需要写错误 UI 逻辑，只管 throw
+   - classifyError 是纯函数，方便单测
+   - 消息级错误（气泡内展示）+ Toast（即时通知）双通道互补
+   - 重试功能：找到原始用户消息 → 删除失败 AI 消息 → 重新发起
+
+Q5: 三家 Provider 的图片格式不同，怎么处理的？
+A: 内部用统一的 ImageAttachment 接口（base64 + mediaType + name），
+   在各 Provider 文件内部做格式转换：
+   - Ollama: images: ["base64string"]（同级字段）
+   - OpenAI: content 从 string 变成数组，包含 image_url 对象
+   - Claude: content 数组，包含 source 对象（带 media_type）
+   没有做统一抽象，因为三家差异太大，强行统一反而增加复杂度。
+   每个 Provider 只改自己的文件，改动局部化。
+
+Q6: 为什么选 IndexedDB 而不是 localStorage？
+A: localStorage 有 5MB 限制且只能存字符串，聊天记录包含大量文本甚至
+   图片的 base64 数据，很快会超限。IndexedDB 支持结构化存储、索引查询、
+   存储上限大（通常浏览器配额的 50%+），适合消息这种需要按会话 ID 查询
+   的结构化数据。用 Dexie 封装后 API 非常简洁。
+
+Q7: 为什么图片用 base64 存储而不是 Blob URL / 对象存储？
+A: 三家 API 都要求 base64 格式，存储时就转好可以直接发送，无需二次转换。
+   消息和图片在同一条记录中，删除会话时图片自动清理，无需垃圾回收。
+   取舍是 base64 体积增大 33%，所以限制了单张 10MB。如果是生产环境
+   图片量大的场景，会考虑 OSS + URL 引用的方案。
+
+Q8: RAG 的实现思路？
+A: 完整链路：文件上传 → 文本提取（pdf-parse）→ 段落切片（overlap 防
+   边界语义丢失，超长段落按句号二次分割）→ Ollama 本地 embedding
+   （nomic-embed-text）→ 内存 vector store → 用户提问时余弦相似度
+   检索 top-K → 拼入 system prompt 作为上下文。
+   当前是内存存储，重启会丢失，后续会做持久化。
+
+Q9: 消息状态机是怎么设计的？
+A: AI 消息有 5 个状态：loading → streaming → done / aborted / error
+   - loading: 占位消息已创建，等待第一个 chunk
+   - streaming: 收到第一个 chunk 后转入
+   - done: 生成完毕，触发异步格式化（Prettier + highlight.js）
+   - aborted: 用户中断，canContinue=true，可以续写
+   - error: 出错，携带 errorMessage，可以重试
+   状态转换统一在 onDone 回调和 catch 中处理，handleStop 不直接改状态。
+
+Q10: Markdown 渲染为什么分同步和异步两套？
+A: 流式输出时需要实时渲染，用 markdown-it 同步解析（快，但代码块不格式化）。
+   生成完毕后，用异步方式调 Prettier 格式化代码块，再用 highlight.js 高亮。
+   Prettier 单个代码块要 100-500ms，流式时调用会阻塞 UI。所以 streaming
+   时用快速版，done 后再精排，用户无感知。
+
+Q11: suppressConvWatch 是什么？为什么需要它？
+A: 这是一个竞态条件的解决方案。createConversation 会设置 currentId，
+   触发 watch(currentId) 去 DB 加载消息。但此时 handleSend 刚把消息
+   写入内存还没写 DB，watch 加载到的是空数据，会把内存中的消息冲掉。
+   所以用 suppressConvWatch 标志位临时抑制 watch，等 handleSend 完成
+   后再恢复。这是 Vue 响应式 + 异步操作的典型竞态问题。
+
+Q12: 为什么需要后端代理层？
+A: 四个原因：
+   1. 安全：API Key 放后端，不暴露给前端
+   2. 统一入口：前端只需要调一个地址，切换模型在后端处理
+   3. 可观测性：后端可以加日志、计时、token 统计
+   4. RAG 集成：检索和注入在后端完成，前端不需要感知
+
+Q13: 如果让你重新做这个项目，你会改什么？
+A: 几个方向：
+   - 状态管理：如果继续变复杂会引入 Pinia，主要为了 devtools
+   - 图片存储：大规模场景会用 OSS + URL 替代 base64 内联
+   - RAG：内存 vector store 改成持久化（比如用 SQLite + 向量扩展）
+   - 测试：当前没有自动化测试，classifyError 这类纯函数应该有单测
+   - 虚拟列表：消息量大时需要虚拟滚动优化
+
+Q14: 项目中遇到的最难的 bug 是什么？
+A: 图片上传后无响应的问题。排查发现是 buildMessages 的去重逻辑导致的：
+   用户只发图片不输入文字时 content 为空，去重判断不匹配，追加了一条
+   没有图片的消息排在最后，模型只看到"请继续"三个字，完全不知道有图片。
+   根因是上下文构建逻辑没有考虑"纯图片无文字"这个边界场景。修复时
+   改写了去重逻辑：检测到图片消息时不追加额外消息，空 content 用默认
+   prompt 填充。这个 bug 教会我：消息构建层的逻辑比 UI 层更容易出隐蔽 bug。
+
+Q15: 你这个项目和 ChatGPT / 其他开源方案比，差异化在哪？
+A: 坦率说功能上比不过成熟产品，但这个项目的价值在于：
+   - 展示我对 AI 应用工程全链路的理解（不只是调 API）
+   - 多 Provider 适配的架构设计能力
+   - 流式传输、错误处理、状态管理这些生产级问题的解决方案
+   - RAG 从零实现（而非用 LangChain 等框架），说明我理解底层原理
+   面试时我不会说"我做了一个 ChatGPT"，而是说"我通过这个项目实践了
+   AI 应用工程中的核心技术问题"。
+
+
+五、可能的深挖方向 & 应对
+----------------------------------------------------------------------
+
+【Vue3 深挖】
+Q: Composition API 和 Options API 的本质区别？
+A: 逻辑组织方式不同。Options 按选项（data/methods/computed）分类，
+   相关逻辑分散。Composition 按功能聚合，一个 composable 包含相关的
+   状态+方法+生命周期。本质是从"按类型组织"到"按关注点组织"。
+
+Q: ref 和 reactive 怎么选？
+A: ref 用于基本类型和需要替换整个值的场景（如 messages.value = []），
+   reactive 用于不需要替换的对象。项目中消息列表用 ref<Message[]>
+   因为需要整体替换（切换会话时）。
+
+Q: watch 和 watchEffect 的区别？
+A: watch 显式指定依赖，惰性执行；watchEffect 自动收集依赖，立即执行。
+   项目中 watch(currentId) 用 watch 因为只关心会话 ID 变化，不需要
+   自动追踪其他依赖。
+
+【TypeScript 深挖】
+Q: Omit<Partial<Message>, 'id'> 这个类型怎么理解？
+A: Partial<Message> 让所有字段可选，Omit<..., 'id'> 再去掉 id 字段。
+   用于 updateMessage 的参数：可以更新任意字段组合，但不允许改 id。
+   这是类型安全的"部分更新"模式。
+
+Q: 为什么用 interface 而不是 type？
+A: 稳定的数据结构用 interface（如 Message、Conversation），因为
+   interface 支持声明合并和 extends，更适合描述对象 shape。
+   工具类型（联合、交叉、条件）用 type。
+
+【性能相关】
+Q: 消息很多时会不会有性能问题？
+A: 会。当前用 v-for 渲染所有消息，消息量大时 DOM 节点过多。解决方案是
+   虚拟列表（virtual scroll），只渲染可视区域的消息。聊天场景的难点是
+   消息高度不固定（文本长短、是否有图片、代码块），需要动态高度虚拟列表。
+   这是我下一步要做的优化。
+
+Q: 流式渲染时有没有做性能优化？
+A: 有三个：
+   1. rAF 队列解耦网络和渲染，避免突发 chunk 导致掉帧
+   2. 流式期间用同步 markdown-it，不调 Prettier
+   3. 流式期间不触发 DB 写入，完成后才 persist
+
+
+六、简历写法建议
+----------------------------------------------------------------------
+
+项目名称：AI Chat - 多模型多模态智能对话应用
+
+技术栈：Vue 3 + TypeScript + Vite + Dexie(IndexedDB) + Fastify + Ollama
+
+项目描述：
+独立开发的 AI 对话应用，支持 Ollama/OpenAI/Claude 三家模型 Provider，
+实现流式输出、多模态图片理解、RAG 知识库检索增强。
+
+核心职责：
+- 设计 rAF + queue 调度的流式打字机渲染方案，解耦网络接收与 UI 渲染
+- 实现多 Provider 统一架构，适配三家不同的流协议(NDJSON/SSE)和消息格式
+- 构建三层错误处理体系(Provider抛错 → Composable分类 → UI展示恢复)
+- 实现 RAG 全链路(文本切片 → 本地Embedding → 余弦相似度检索 → Prompt注入)
+- 基于 Composable 模式设计轻量状态管理，管理消息/会话/设置三域状态
+
+
+七、心态提醒
+----------------------------------------------------------------------
+- 不要说"这只是一个练手项目"，要说"这是我对 AI 应用工程的实践"
+- 面试官问到不会的，坦率说"这块我还没深入，但我的理解是..."
+- 讲 bug 修复时重点说排查过程和思路，不只是结果
+- 架构决策一定要讲 tradeoff（选 A 不选 B 的原因）
+- 如果被问"为什么不用 XXX 框架"，回答"在当前规模下自研更轻量，
+  但我了解 XXX 的优势，规模变大时会考虑引入"
+
+==============================================================================

@@ -146,10 +146,26 @@ export function useChatView() {
 
     // ── 持久化 ───────────────────────────────────────────────
 
-    async function persistMessage(msgId: string, convId: number, createdAt?: number) {
+    async function persistMessage(
+        msgId: string,
+        convId: number,
+        createdAt?: number,
+        statusOverride?: Message['status'],
+    ) {
         const msg = messages.value.find(m => m.id === msgId)
         if (!msg) return
-        const existing = await db.messages.get(msgId)
+        await persistMessageSnapshot(msg, convId, createdAt, statusOverride)
+    }
+
+    async function persistMessageSnapshot(
+        msg: Message,
+        convId: number,
+        createdAt?: number,
+        statusOverride?: Message['status'],
+    ) {
+        // 最终保存不能只依赖当前 messages 列表。
+        // 用户在回答刚结束时切换会话会替换内存列表，所以这里允许用结束瞬间的快照落库。
+        const existing = await db.messages.get(msg.id)
         await db.messages.put({
             id: msg.id,
             conversationId: convId,
@@ -157,7 +173,7 @@ export function useChatView() {
             content: msg.content,
             images: msg.images,
             files: msg.files,
-            status: msg.status,
+            status: statusOverride ?? msg.status,
             canContinue: msg.canContinue,
             errorMessage: msg.errorMessage,
             ragContext: msg.ragContext,
@@ -178,7 +194,7 @@ export function useChatView() {
 
         persistTimers.set(msgId, setTimeout(() => {
             persistTimers.delete(msgId)
-            void persistMessage(msgId, convId).catch(err => {
+            void persistMessage(msgId, convId, undefined, 'loading').catch(err => {
                 console.warn('[chat] 持久化流式消息失败', err)
             })
         }, 500))
@@ -187,6 +203,25 @@ export function useChatView() {
     async function flushMessagePersist(msgId: string, convId: number) {
         clearPersistTimer(msgId)
         await persistMessage(msgId, convId)
+    }
+
+    async function flushMessageSnapshotPersist(msg: Message, convId: number) {
+        clearPersistTimer(msg.id)
+        await persistMessageSnapshot(snapshotMessage(msg), convId)
+    }
+
+    function snapshotMessage(msg: Message): Message {
+        return {
+            ...msg,
+            images: msg.images?.map(image => ({ ...image })),
+            files: msg.files?.map(file => ({ ...file })),
+            ragContext: msg.ragContext
+                ? {
+                    ...msg.ragContext,
+                    results: msg.ragContext.results.map(result => ({ ...result })),
+                }
+                : undefined,
+        }
     }
 
     function queueSearchIndex(msg: Message, convId: number, createdAt: number, updatedAt = createdAt) {
@@ -465,9 +500,6 @@ export function useChatView() {
             // It persists the assistant message, updates the conversation timestamp, and refreshes search.
             await typewriter.waitForPendingDone()
 
-            isStreaming.value = false
-            scheduleScroll()
-
             if (needsStatusFallback) {
                 if (streamCtrl?.isAborted) {
                     updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
@@ -476,16 +508,22 @@ export function useChatView() {
                 }
             }
 
-            await flushMessagePersist(options.aiMessageId, options.convId)
+            const aiMessage = messages.value.find(msg => msg.id === options.aiMessageId)
+            if (aiMessage) {
+                await flushMessageSnapshotPersist(aiMessage, options.convId)
+            } else {
+                await flushMessagePersist(options.aiMessageId, options.convId)
+            }
             const updatedAt = Date.now()
             await db.conversations.update(options.convId, { updatedAt })
             await refreshList()
-            const aiMessage = messages.value.find(msg => msg.id === options.aiMessageId)
             if (aiMessage) {
                 queueSearchIndex(aiMessage, options.convId, updatedAt, updatedAt)
             }
             streamMessageConversations.delete(options.aiMessageId)
             streamCtrl = null
+            isStreaming.value = false
+            scheduleScroll()
         }
     }
 

@@ -7,8 +7,14 @@ import { db } from '../db'
 const messages = ref<Message[]>([])
 
 export function useChat() {
-    function normalizeRestoredMessageStatus(m: { role: Role; status: MessageStatus }) {
+    function normalizeRestoredMessageStatus(m: { role: Role; status: MessageStatus; content: string }) {
         if (m.role === 'assistant' && (m.status === 'loading' || m.status === 'streaming')) {
+            if (m.content.trim()) {
+                return {
+                    status: 'done' as MessageStatus,
+                    canContinue: undefined,
+                }
+            }
             return {
                 status: 'aborted' as MessageStatus,
                 canContinue: true,
@@ -33,6 +39,7 @@ export function useChat() {
             const restored = normalizeRestoredMessageStatus({
                 role,
                 status: m.status as MessageStatus,
+                content: m.content,
             })
 
             return {

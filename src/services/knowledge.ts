@@ -81,6 +81,20 @@ export interface BackendChatProvider {
     configured: boolean
 }
 
+export interface VectorStoreStatus {
+    currentEmbeddingModel?: string
+    fileCount?: number
+    chunkCount?: number
+    compatibleChunkCount?: number
+    incompatibleChunkCount?: number
+    needsReindex?: boolean
+    embeddingDistributions?: Array<{
+        embeddingModel: string
+        embeddingDim: number | null
+        chunkCount: number
+    }>
+}
+
 const KNOWLEDGE_UPLOAD_ENDPOINT = '/api/upload'
 const KNOWLEDGE_FILE_FIELD = 'file'
 
@@ -199,6 +213,11 @@ export async function searchKnowledge(options: KnowledgeSearchOptions): Promise<
 export async function fetchBackendChatProviders(): Promise<BackendChatProvider[]> {
     const data = await fetchJson<{ providers: BackendChatProvider[] }>('/api/providers')
     return (data.providers ?? []).filter(provider => provider.configured)
+}
+
+export async function getVectorStoreStatus(): Promise<VectorStoreStatus> {
+    const data = await fetchJson<VectorStoreStatus & { status?: VectorStoreStatus }>('/api/vector-store/status')
+    return data.status ?? data
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {

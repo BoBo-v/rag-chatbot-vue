@@ -13,7 +13,7 @@
         </div>
       </div>
       <div class="knowledge-actions">
-        <button type="button" class="kb-secondary" :disabled="loadingFiles" @click="loadFiles">
+        <button type="button" class="kb-secondary" :disabled="loadingFiles || loadingVectorStatus" @click="loadKnowledgeOverview">
           刷新
         </button>
         <button type="button" class="kb-primary" :disabled="uploading" @click="fileInputRef?.click()">
@@ -29,6 +29,20 @@
         />
       </div>
     </header>
+
+    <section class="kb-vector-status" :class="{ warning: vectorStatus?.needsReindex, error: vectorStatusError }">
+      <span class="kb-vector-status-label">向量库</span>
+      <strong>{{ vectorStatusTitle }}</strong>
+      <div class="kb-vector-status-meta">
+        <span>模型 {{ vectorStatus?.currentEmbeddingModel || '-' }}</span>
+        <span>维度 {{ vectorEmbeddingDimension ?? '-' }}</span>
+        <span>{{ formatOptionalNumber(vectorStatus?.chunkCount ?? totalChunks) }} chunks</span>
+        <span>不兼容 {{ formatOptionalNumber(incompatibleChunkCount) }}</span>
+      </div>
+      <button type="button" class="kb-vector-refresh" :disabled="loadingVectorStatus" @click="loadVectorStatus">
+        {{ loadingVectorStatus ? '检查中' : '检查状态' }}
+      </button>
+    </section>
 
     <section v-if="uploadItems.length > 0" class="kb-upload-panel" :class="{ collapsed: uploadPanelCollapsed }">
       <div class="kb-upload-panel-header">
@@ -254,6 +268,7 @@ import { useConfirm } from '../composables/useConfirm'
 import {
   deleteKnowledgeFile,
   getKnowledgeFile,
+  getVectorStoreStatus,
   listKnowledgeFiles,
   searchKnowledge,
   uploadKnowledgeFile,
@@ -261,6 +276,7 @@ import {
   type KnowledgeFileDetail,
   type KnowledgeSearchResult,
   type StoredKnowledgeFile,
+  type VectorStoreStatus,
 } from '../services/knowledge'
 
 const toast = useToast()
@@ -272,6 +288,7 @@ const selectedFileId = ref<string>('')
 const fileFilter = ref('')
 const loadingFiles = ref(false)
 const loadingDetail = ref(false)
+const loadingVectorStatus = ref(false)
 const uploading = ref(false)
 const deleting = ref(false)
 const uploadPanelCollapsed = ref(false)
@@ -301,10 +318,29 @@ const searching = ref(false)
 const hasSearched = ref(false)
 const searchError = ref('')
 const searchResults = ref<KnowledgeSearchResult[]>([])
+const vectorStatus = ref<VectorStoreStatus | null>(null)
+const vectorStatusError = ref('')
 
 const totalChunks = computed(() => files.value.reduce((sum, file) => sum + file.chunkCount, 0))
 const totalChars = computed(() => files.value.reduce((sum, file) => sum + file.charCount, 0))
 const selectedFile = computed(() => files.value.find(file => file.id === selectedFileId.value))
+const vectorEmbeddingDimension = computed(() => {
+  const status = vectorStatus.value
+  if (!status?.embeddingDistributions?.length) return undefined
+  const current = status.embeddingDistributions.find(item =>
+    item.embeddingModel === status.currentEmbeddingModel && item.embeddingDim !== null
+  )
+  return current?.embeddingDim ?? status.embeddingDistributions.find(item => item.embeddingDim !== null)?.embeddingDim
+})
+const incompatibleChunkCount = computed(() =>
+  vectorStatus.value?.incompatibleChunkCount
+)
+const vectorStatusTitle = computed(() => {
+  if (vectorStatusError.value) return vectorStatusError.value
+  if (loadingVectorStatus.value && !vectorStatus.value) return '正在检查向量库'
+  if (vectorStatus.value?.needsReindex) return '存在旧模型或旧维度 chunk，建议重建索引'
+  return '索引兼容'
+})
 const hasActiveUploads = computed(() => uploadItems.value.some(item => item.status === 'uploading'))
 const uploadQueueSummary = computed(() => {
   const total = uploadItems.value.length
@@ -334,6 +370,22 @@ async function loadFiles() {
     toast.show(error instanceof Error ? error.message : '文件列表加载失败', 'error')
   } finally {
     loadingFiles.value = false
+  }
+}
+
+async function loadKnowledgeOverview() {
+  await Promise.all([loadFiles(), loadVectorStatus()])
+}
+
+async function loadVectorStatus() {
+  loadingVectorStatus.value = true
+  vectorStatusError.value = ''
+  try {
+    vectorStatus.value = await getVectorStoreStatus()
+  } catch (error) {
+    vectorStatusError.value = error instanceof Error ? error.message : '向量库状态读取失败'
+  } finally {
+    loadingVectorStatus.value = false
   }
 }
 
@@ -406,7 +458,7 @@ async function handleUpload(e: Event) {
     }
     if (successCount > 0) {
       toast.show(`已上传 ${successCount} 个文件`, 'success')
-      await loadFiles()
+      await loadKnowledgeOverview()
     }
   } finally {
     uploading.value = false
@@ -452,7 +504,7 @@ async function deleteSelectedFile() {
     toast.show(`已删除 ${deletingName}`, 'success')
     selectedFileId.value = ''
     fileDetail.value = null
-    await loadFiles()
+    await loadKnowledgeOverview()
   } catch (error) {
     toast.show(error instanceof Error ? error.message : '删除失败', 'error')
   } finally {
@@ -502,11 +554,15 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value)
 }
 
+function formatOptionalNumber(value: number | undefined): string {
+  return value === undefined ? '-' : formatNumber(value)
+}
+
 function formatScore(value: number): string {
   return value.toFixed(3)
 }
 
-onMounted(loadFiles)
+onMounted(loadKnowledgeOverview)
 </script>
 
 <style scoped>
@@ -590,6 +646,88 @@ onMounted(loadFiles)
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.kb-vector-status {
+  position: relative;
+  z-index: 1;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 28px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(7, 7, 15, 0.36);
+  backdrop-filter: blur(18px);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+[data-theme="light"] .kb-vector-status {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.kb-vector-status.warning {
+  border-bottom-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.kb-vector-status.error {
+  border-bottom-color: rgba(248, 113, 113, 0.34);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.kb-vector-status-label {
+  flex-shrink: 0;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: #67e8f9;
+  background: rgba(20, 184, 166, 0.10);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.kb-vector-status strong {
+  min-width: 120px;
+  max-width: 360px;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-vector-status-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.kb-vector-status-meta span {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.kb-vector-refresh {
+  flex-shrink: 0;
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.kb-vector-refresh:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .kb-primary,
@@ -1062,6 +1200,10 @@ onMounted(loadFiles)
 }
 
 @media (max-width: 1180px) {
+  .kb-vector-status {
+    flex-wrap: wrap;
+  }
+
   .knowledge-layout {
     grid-template-columns: 280px minmax(0, 1fr);
   }
@@ -1084,6 +1226,22 @@ onMounted(loadFiles)
 
   .knowledge-actions {
     width: 100%;
+  }
+
+  .kb-vector-status {
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 14px;
+  }
+
+  .kb-vector-status strong {
+    max-width: calc(100vw - 120px);
+  }
+
+  .kb-vector-status-meta {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    gap: 6px 10px;
   }
 
   .kb-primary,

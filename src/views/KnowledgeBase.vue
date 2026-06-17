@@ -44,7 +44,19 @@
       </button>
     </section>
 
-    <section v-if="uploadItems.length > 0" class="kb-upload-panel" :class="{ collapsed: uploadPanelCollapsed }">
+    <nav class="kb-subnav" aria-label="知识库子页面">
+      <button
+        v-for="item in knowledgeTabs"
+        :key="item.value"
+        type="button"
+        :class="{ active: activeTab === item.value }"
+        @click="activeTab = item.value"
+      >
+        {{ item.label }}
+      </button>
+    </nav>
+
+    <section v-if="activeTab === 'manage' && uploadItems.length > 0" class="kb-upload-panel" :class="{ collapsed: uploadPanelCollapsed }">
       <div class="kb-upload-panel-header">
         <div>
           <span class="kb-eyebrow">上传队列</span>
@@ -90,7 +102,7 @@
       </div>
     </section>
 
-    <main class="knowledge-layout">
+    <main v-show="activeTab === 'manage'" class="knowledge-layout">
       <aside class="kb-panel kb-files-panel">
         <div class="kb-panel-header">
           <div>
@@ -246,6 +258,8 @@
       </section>
     </main>
 
+    <RagEvalPanel v-if="activeTab === 'eval'" />
+
     <transition-group name="toast-slide" tag="div" class="toast-container">
       <div
         v-for="t in toast.toasts.value"
@@ -265,6 +279,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useToast } from '../composables/useToast'
 import { useConfirm } from '../composables/useConfirm'
+import RagEvalPanel from './RagEvalPanel.vue'
 import {
   deleteKnowledgeFile,
   getKnowledgeFile,
@@ -293,6 +308,12 @@ const uploading = ref(false)
 const deleting = ref(false)
 const uploadPanelCollapsed = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+type KnowledgeTab = 'manage' | 'eval'
+const knowledgeTabs: { value: KnowledgeTab; label: string }[] = [
+  { value: 'manage', label: '资料管理' },
+  { value: 'eval', label: 'RAG 评测' },
+]
+const activeTab = ref<KnowledgeTab>('manage')
 type UploadItemStatus = 'uploading' | 'done' | 'failed'
 type UploadPreviewChunk = { text: string; chunkIndex: number }
 interface UploadItem {
@@ -728,6 +749,44 @@ onMounted(loadKnowledgeOverview)
 .kb-vector-refresh:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.kb-subnav {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 28px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(7, 7, 15, 0.48);
+  backdrop-filter: blur(18px);
+}
+
+[data-theme="light"] .kb-subnav {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.kb-subnav button {
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 0 12px;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.kb-subnav button:hover {
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+}
+
+.kb-subnav button.active {
+  border-color: rgba(20, 184, 166, 0.28);
+  color: var(--text-primary);
+  background: rgba(20, 184, 166, 0.12);
 }
 
 .kb-primary,
@@ -1242,6 +1301,10 @@ onMounted(loadKnowledgeOverview)
     flex-basis: 100%;
     flex-wrap: wrap;
     gap: 6px 10px;
+  }
+
+  .kb-subnav {
+    padding: 7px 14px;
   }
 
   .kb-primary,

@@ -56,6 +56,7 @@ export interface RagEvalSummary {
 export const RAG_EVAL_STORAGE_KEY = 'ai-chat-rag-eval-cases'
 export const DEFAULT_RAG_EVAL_TOP_K = 5
 export const DEFAULT_RAG_EVAL_MIN_SCORE = 0.2
+export const DEFAULT_RAG_EVAL_MATCH_MODE: RagEvalMatchMode = 'any'
 
 const MATCH_MODES: RagEvalMatchMode[] = ['auto', 'any', 'all', 'file', 'keyword']
 
@@ -65,7 +66,7 @@ export function createRagEvalCase(): RagEvalCase {
         question: '',
         expectedFiles: [],
         expectedKeywords: [],
-        matchMode: 'auto',
+        matchMode: DEFAULT_RAG_EVAL_MATCH_MODE,
         topK: DEFAULT_RAG_EVAL_TOP_K,
         minScore: DEFAULT_RAG_EVAL_MIN_SCORE,
         notes: '',
@@ -223,7 +224,7 @@ function normalizeStringList(value: unknown): string[] {
 function normalizeMatchMode(value: unknown): RagEvalMatchMode {
     return typeof value === 'string' && MATCH_MODES.includes(value as RagEvalMatchMode)
         ? value as RagEvalMatchMode
-        : 'auto'
+        : DEFAULT_RAG_EVAL_MATCH_MODE
 }
 
 export function normalizeTopK(value: unknown): number {

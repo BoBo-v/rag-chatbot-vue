@@ -92,20 +92,17 @@
               <div class="kb-upload-bar" :style="{ width: item.percent + '%' }"></div>
             </div>
           </div>
-          <details v-if="item.previewChunks.length > 0" class="kb-upload-preview">
-            <summary>预览 {{ item.previewChunks.length }} 个片段</summary>
+          <div v-if="item.previewChunks.length > 0" class="kb-upload-preview">
             <button
-              v-for="(chunk, index) in item.previewChunks"
-              :key="chunk.chunkIndex"
               type="button"
-              class="kb-upload-preview-snippet"
-              @click="openUploadPreview(item, index)"
+              class="kb-upload-preview-trigger"
+              @click="openUploadPreview(item)"
             >
-              <span>#{{ chunk.chunkIndex }}</span>
-              <em>{{ previewChunkSummary(chunk.text) }}</em>
+              <span>预览 {{ item.previewChunks.length }} 个片段</span>
+              <em>{{ previewChunkSummary(item.previewChunks[0]?.text ?? '') }}</em>
               <strong>查看</strong>
             </button>
-          </details>
+          </div>
         </article>
       </div>
     </section>
@@ -978,7 +975,7 @@ onMounted(loadKnowledgeOverview)
   display: flex;
   gap: 8px;
   max-height: 178px;
-  padding: 0 28px 12px;
+  padding: 0 28px 18px;
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -1062,23 +1059,16 @@ onMounted(loadKnowledgeOverview)
   padding-top: 8px;
 }
 
-.kb-upload-preview summary {
-  color: var(--text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.kb-upload-preview-snippet {
+.kb-upload-preview-trigger {
   width: 100%;
   min-width: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px;
-  margin-top: 6px;
-  border: 1px solid transparent;
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  padding: 4px 6px;
+  padding: 6px 7px;
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
@@ -1087,35 +1077,36 @@ onMounted(loadKnowledgeOverview)
   line-height: 1.35;
 }
 
-.kb-upload-preview-snippet:hover {
-  border-color: var(--border-subtle);
+.kb-upload-preview-trigger:hover {
   background: var(--bg-surface-3);
 }
 
-.kb-upload-preview-snippet:hover em,
-.kb-upload-preview-snippet:hover strong {
+.kb-upload-preview-trigger:hover em,
+.kb-upload-preview-trigger:hover strong {
   color: var(--text-secondary);
 }
 
-.kb-upload-preview-snippet span {
+.kb-upload-preview-trigger span {
+  flex-shrink: 0;
   color: var(--accent);
   font-weight: 700;
+  white-space: nowrap;
 }
 
-.kb-upload-preview-snippet em {
+.kb-upload-preview-trigger em {
   min-width: 0;
   overflow: hidden;
   display: block;
   font-style: normal;
-  overflow-wrap: anywhere;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.kb-upload-preview-snippet strong {
+.kb-upload-preview-trigger strong {
   color: var(--accent);
   font-size: 11px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .kb-preview-modal-backdrop {
@@ -1574,7 +1565,7 @@ onMounted(loadKnowledgeOverview)
   }
 
   .kb-upload-strip {
-    padding: 0 14px 10px;
+    padding: 0 14px 16px;
   }
 
   .kb-panel {

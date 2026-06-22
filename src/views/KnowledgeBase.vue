@@ -94,11 +94,6 @@
           </div>
           <details v-if="item.previewChunks.length > 0" class="kb-upload-preview">
             <summary>预览 {{ item.previewChunks.length }} 个片段</summary>
-            <div class="kb-upload-preview-actions">
-              <button type="button" @click="openUploadPreview(item)">
-                查看完整
-              </button>
-            </div>
             <button
               v-for="(chunk, index) in item.previewChunks"
               :key="chunk.chunkIndex"
@@ -108,6 +103,7 @@
             >
               <span>#{{ chunk.chunkIndex }}</span>
               <em>{{ previewChunkSummary(chunk.text) }}</em>
+              <strong>查看</strong>
             </button>
           </details>
         </article>
@@ -981,10 +977,10 @@ onMounted(loadKnowledgeOverview)
 .kb-upload-strip {
   display: flex;
   gap: 8px;
-  max-height: 220px;
+  max-height: 178px;
   padding: 0 28px 12px;
   overflow-x: auto;
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 .kb-upload-item {
@@ -1072,40 +1068,32 @@ onMounted(loadKnowledgeOverview)
   cursor: pointer;
 }
 
-.kb-upload-preview-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 7px;
-}
-
-.kb-upload-preview-actions button {
-  border: none;
-  padding: 0;
-  color: var(--accent);
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-}
-
 .kb-upload-preview-snippet {
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px;
-  margin-top: 7px;
-  border: none;
-  padding: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 6px;
   color: var(--text-muted);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
   text-align: left;
   font-size: 11px;
-  line-height: 1.55;
+  line-height: 1.35;
 }
 
-.kb-upload-preview-snippet:hover em {
+.kb-upload-preview-snippet:hover {
+  border-color: var(--border-subtle);
+  background: var(--bg-surface-3);
+}
+
+.kb-upload-preview-snippet:hover em,
+.kb-upload-preview-snippet:hover strong {
   color: var(--text-secondary);
 }
 
@@ -1122,6 +1110,12 @@ onMounted(loadKnowledgeOverview)
   overflow-wrap: anywhere;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.kb-upload-preview-snippet strong {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .kb-preview-modal-backdrop {

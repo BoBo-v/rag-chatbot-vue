@@ -607,7 +607,7 @@ function stepUploadPreview(step: number) {
 function previewChunkSummary(text: string): string {
   const normalized = text.replace(/\s+/g, ' ').trim()
   if (!normalized) return '空片段'
-  return normalized.length > 120 ? normalized.slice(0, 120) + '...' : normalized
+  return normalized.length > 80 ? normalized.slice(0, 80) + '...' : normalized
 }
 
 async function copyUploadPreviewChunk() {
@@ -981,10 +981,10 @@ onMounted(loadKnowledgeOverview)
 .kb-upload-strip {
   display: flex;
   gap: 8px;
-  max-height: 178px;
+  max-height: 220px;
   padding: 0 28px 12px;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
 }
 
 .kb-upload-item {
@@ -1117,12 +1117,11 @@ onMounted(loadKnowledgeOverview)
 .kb-upload-preview-snippet em {
   min-width: 0;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  display: block;
   font-style: normal;
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kb-preview-modal-backdrop {

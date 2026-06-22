@@ -64,10 +64,15 @@ export async function fetchBackendChatContext(
         results?: RagCitation[]
     }
 
+    const enabled = Boolean(data.enabled)
+    const results = enabled
+        ? (data.results ?? []).filter(item => item.text.trim().length > 0)
+        : []
+
     return {
         mode: toRagMode(runtime),
-        enabled: Boolean(data.enabled),
-        results: data.results ?? [],
+        enabled,
+        results,
     }
 }
 

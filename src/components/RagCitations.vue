@@ -15,12 +15,12 @@
       <p v-else-if="!context.enabled" class="rag-citations-empty">
         本次未启用知识库。未命中足够相关资料，已直接推理回答。
       </p>
-      <p v-else-if="context.results.length === 0" class="rag-citations-empty">
+      <p v-else-if="displayResults.length === 0" class="rag-citations-empty">
         已尝试检索知识库，但没有命中可用资料。
       </p>
 
       <ol v-else class="rag-citations-list">
-        <li v-for="item in context.results" :key="`${item.fileId}-${item.chunkIndex}`" class="rag-citation-item">
+        <li v-for="item in displayResults" :key="`${item.fileId}-${item.chunkIndex}`" class="rag-citation-item">
           <header class="rag-citation-head">
             <strong>{{ item.filename }}</strong>
             <span>chunk {{ item.chunkIndex }}</span>
@@ -45,17 +45,23 @@ const props = defineProps<{
   context: RagContextInfo
 }>()
 
+const displayResults = computed(() =>
+  props.context.enabled
+    ? props.context.results.filter(item => item.text.trim().length > 0)
+    : []
+)
+
 const summaryTitle = computed(() => {
   if (props.context.errorMessage) return '引用资料获取失败'
-  if (props.context.results.length > 0) return `引用资料 ${props.context.results.length} 条`
+  if (displayResults.value.length > 0) return `引用资料 ${displayResults.value.length} 条`
   return '引用资料'
 })
 
 const stateLabel = computed(() => {
   if (props.context.mode === 'off') return '知识库已关闭'
-  if (props.context.mode === 'force') return props.context.results.length > 0 ? '强制使用知识库' : '强制检索无命中'
+  if (props.context.mode === 'force') return displayResults.value.length > 0 ? '强制使用知识库' : '强制检索无命中'
   if (!props.context.enabled) return '未启用 RAG'
-  return props.context.results.length > 0 ? 'RAG 已启用' : '无命中'
+  return displayResults.value.length > 0 ? 'RAG 已启用' : '无命中'
 })
 
 function formatScore(value: number): string {

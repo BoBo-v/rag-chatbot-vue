@@ -107,7 +107,7 @@
               @click="openUploadPreview(item, index)"
             >
               <span>#{{ chunk.chunkIndex }}</span>
-              <em>{{ chunk.text }}</em>
+              <em>{{ previewChunkSummary(chunk.text) }}</em>
             </button>
           </details>
         </article>
@@ -602,6 +602,12 @@ function stepUploadPreview(step: number) {
   const dialog = uploadPreviewDialog.value
   if (!dialog) return
   selectUploadPreviewChunk(dialog.index + step)
+}
+
+function previewChunkSummary(text: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) return '空片段'
+  return normalized.length > 120 ? normalized.slice(0, 120) + '...' : normalized
 }
 
 async function copyUploadPreviewChunk() {

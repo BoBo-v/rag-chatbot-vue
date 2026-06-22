@@ -94,13 +94,74 @@
           </div>
           <details v-if="item.previewChunks.length > 0" class="kb-upload-preview">
             <summary>预览 {{ item.previewChunks.length }} 个片段</summary>
-            <p v-for="chunk in item.previewChunks" :key="chunk.chunkIndex">
-              <span>#{{ chunk.chunkIndex }}</span>{{ chunk.text }}
-            </p>
+            <div class="kb-upload-preview-actions">
+              <button type="button" @click="openUploadPreview(item)">
+                查看完整
+              </button>
+            </div>
+            <button
+              v-for="(chunk, index) in item.previewChunks"
+              :key="chunk.chunkIndex"
+              type="button"
+              class="kb-upload-preview-snippet"
+              @click="openUploadPreview(item, index)"
+            >
+              <span>#{{ chunk.chunkIndex }}</span>
+              <em>{{ chunk.text }}</em>
+            </button>
           </details>
         </article>
       </div>
     </section>
+
+    <div v-if="uploadPreviewDialog" class="kb-preview-modal-backdrop" @click.self="closeUploadPreview">
+      <section class="kb-preview-modal" role="dialog" aria-modal="true" aria-labelledby="kb-preview-title">
+        <header>
+          <div>
+            <span class="kb-eyebrow">上传预览</span>
+            <strong id="kb-preview-title">{{ uploadPreviewDialog.fileName }}</strong>
+          </div>
+          <button type="button" class="kb-preview-close" aria-label="关闭预览" @click="closeUploadPreview">
+            ×
+          </button>
+        </header>
+
+        <div class="kb-preview-tabs">
+          <button
+            v-for="(chunk, index) in uploadPreviewDialog.chunks"
+            :key="chunk.chunkIndex"
+            type="button"
+            :class="{ active: uploadPreviewDialog.index === index }"
+            @click="selectUploadPreviewChunk(index)"
+          >
+            #{{ chunk.chunkIndex }}
+          </button>
+        </div>
+
+        <div class="kb-preview-body">
+          <pre>{{ activeUploadPreviewChunk?.text }}</pre>
+        </div>
+
+        <footer>
+          <button type="button" class="kb-secondary" @click="copyUploadPreviewChunk">
+            复制
+          </button>
+          <div>
+            <button type="button" class="kb-secondary" :disabled="uploadPreviewDialog.index === 0" @click="stepUploadPreview(-1)">
+              上一段
+            </button>
+            <button
+              type="button"
+              class="kb-secondary"
+              :disabled="uploadPreviewDialog.index >= uploadPreviewDialog.chunks.length - 1"
+              @click="stepUploadPreview(1)"
+            >
+              下一段
+            </button>
+          </div>
+        </footer>
+      </section>
+    </div>
 
     <main v-show="activeTab === 'manage'" class="knowledge-layout">
       <aside class="kb-panel kb-files-panel">
@@ -326,6 +387,11 @@ interface UploadItem {
   previewChunks: UploadPreviewChunk[]
 }
 const uploadItems = ref<UploadItem[]>([])
+const uploadPreviewDialog = ref<{
+  fileName: string
+  chunks: UploadPreviewChunk[]
+  index: number
+} | null>(null)
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const PREVIEW_CHUNK_LIMIT = 3
@@ -375,6 +441,10 @@ const filteredFiles = computed(() => {
   const keyword = fileFilter.value.trim().toLowerCase()
   if (!keyword) return files.value
   return files.value.filter(file => file.filename.toLowerCase().includes(keyword))
+})
+const activeUploadPreviewChunk = computed(() => {
+  const dialog = uploadPreviewDialog.value
+  return dialog?.chunks[dialog.index]
 })
 
 async function loadFiles() {
@@ -506,6 +576,43 @@ function isImageFile(file: File): boolean {
 
 function clearFinishedUploads() {
   uploadItems.value = uploadItems.value.filter(item => item.status === 'uploading')
+  if (uploadPreviewDialog.value) closeUploadPreview()
+}
+
+function openUploadPreview(item: UploadItem, index = 0) {
+  if (item.previewChunks.length === 0) return
+  uploadPreviewDialog.value = {
+    fileName: item.name,
+    chunks: item.previewChunks,
+    index: clampNumber(index, 0, item.previewChunks.length - 1),
+  }
+}
+
+function closeUploadPreview() {
+  uploadPreviewDialog.value = null
+}
+
+function selectUploadPreviewChunk(index: number) {
+  const dialog = uploadPreviewDialog.value
+  if (!dialog) return
+  dialog.index = clampNumber(index, 0, dialog.chunks.length - 1)
+}
+
+function stepUploadPreview(step: number) {
+  const dialog = uploadPreviewDialog.value
+  if (!dialog) return
+  selectUploadPreviewChunk(dialog.index + step)
+}
+
+async function copyUploadPreviewChunk() {
+  const chunk = activeUploadPreviewChunk.value
+  if (!chunk) return
+  try {
+    await navigator.clipboard.writeText(chunk.text)
+    toast.show('已复制片段文本', 'success')
+  } catch {
+    toast.show('复制失败', 'error')
+  }
 }
 
 async function deleteSelectedFile() {
@@ -959,20 +1066,165 @@ onMounted(loadKnowledgeOverview)
   cursor: pointer;
 }
 
-.kb-upload-preview p {
-  max-height: 82px;
-  overflow: hidden;
+.kb-upload-preview-actions {
+  display: flex;
+  justify-content: flex-end;
   margin-top: 7px;
+}
+
+.kb-upload-preview-actions button {
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.kb-upload-preview-snippet {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  margin-top: 7px;
+  border: none;
+  padding: 0;
   color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
   font-size: 11px;
   line-height: 1.55;
+}
+
+.kb-upload-preview-snippet:hover em {
+  color: var(--text-secondary);
+}
+
+.kb-upload-preview-snippet span {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.kb-upload-preview-snippet em {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-style: normal;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
-.kb-upload-preview p span {
-  margin-right: 6px;
-  color: var(--accent);
-  font-weight: 700;
+.kb-preview-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(6px);
+}
+
+.kb-preview-modal {
+  width: min(860px, 100%);
+  max-height: min(720px, calc(100vh - 48px));
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+}
+
+.kb-preview-modal header,
+.kb-preview-modal footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.kb-preview-modal header strong {
+  display: block;
+  max-width: min(620px, 70vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.kb-preview-close {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.kb-preview-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+}
+
+.kb-preview-tabs button {
+  flex-shrink: 0;
+  height: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  padding: 0 10px;
+  color: var(--text-muted);
+  background: var(--bg-surface-2);
+  cursor: pointer;
+}
+
+.kb-preview-tabs button.active {
+  border-color: rgba(20, 184, 166, 0.34);
+  color: var(--text-primary);
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.kb-preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.kb-preview-body pre {
+  margin: 0;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.kb-preview-modal footer {
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: none;
+}
+
+.kb-preview-modal footer > div {
+  display: flex;
+  gap: 8px;
 }
 
 .kb-panel {

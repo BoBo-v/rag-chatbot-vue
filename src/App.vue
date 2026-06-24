@@ -19,15 +19,15 @@ type DragState = {
 
 const mode = ref<AppMode>('chat')
 const modes: { value: AppMode; label: string }[] = [
-  { value: 'chat', label: '\u666e\u901a\u804a\u5929' },
-  { value: 'compare', label: '\u591a\u6a21\u578b\u5bf9\u6bd4' },
-  { value: 'knowledge', label: '\u77e5\u8bc6\u5e93' },
+  { value: 'chat', label: '普通聊天' },
+  { value: 'compare', label: '多模型对比' },
+  { value: 'knowledge', label: '知识库' },
 ]
 
 const SWITCH_MARGIN = 8
 const SWITCH_STORAGE_KEY = 'ai-chat-mode-switch-position'
-const APP_MODE_LABEL = '\u5e94\u7528\u6a21\u5f0f'
-const DRAG_HANDLE_LABEL = '\u62d6\u52a8\u5207\u6362\u6309\u94ae\uff0c\u53cc\u51fb\u91cd\u7f6e\u4f4d\u7f6e'
+const APP_MODE_LABEL = '应用模式'
+const DRAG_HANDLE_LABEL = '拖动切换按钮，双击重置位置'
 const switchRef = ref<HTMLElement | null>(null)
 const switchPosition = ref<SwitchPosition>({ x: 18, y: 68 })
 const isSwitchDragging = ref(false)

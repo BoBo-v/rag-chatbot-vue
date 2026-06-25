@@ -147,6 +147,11 @@
             </label>
           </div>
 
+          <label class="rag-eval-checkbox">
+            <input v-model="selectedCase.expectedNoResults" type="checkbox" />
+            <span>期望无检索结果</span>
+          </label>
+
           <label>
             <span>备注</span>
             <input v-model="selectedCase.notes" type="text" placeholder="可选，用来说明这个用例验证什么" />
@@ -368,6 +373,7 @@ function exportReport() {
 }
 
 function describeExpectations(testCase: RagEvalCase): string {
+  if (testCase.expectedNoResults) return `期望无结果 · ${testCase.matchMode}`
   const files = testCase.expectedFiles.length
   const keywords = testCase.expectedKeywords.length
   if (files === 0 && keywords === 0) return '未设置期望'
@@ -679,6 +685,20 @@ function formatOptionalScore(value: number | undefined): string {
   background: var(--bg-surface-2);
   font: inherit;
   font-size: 13px;
+}
+
+.rag-eval-editor .rag-eval-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rag-eval-editor .rag-eval-checkbox input {
+  width: auto;
+}
+
+.rag-eval-editor .rag-eval-checkbox > span {
+  margin: 0;
 }
 
 .rag-eval-editor textarea {

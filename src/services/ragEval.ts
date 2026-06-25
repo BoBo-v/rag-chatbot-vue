@@ -9,6 +9,7 @@ export interface RagEvalCase {
     expectedFiles: string[]
     expectedKeywords: string[]
     matchMode: RagEvalMatchMode
+    expectedNoResults?: boolean
     topK?: number
     minScore?: number
     fileId?: string
@@ -55,7 +56,7 @@ export interface RagEvalSummary {
 
 export const RAG_EVAL_STORAGE_KEY = 'ai-chat-rag-eval-cases'
 export const DEFAULT_RAG_EVAL_TOP_K = 5
-export const DEFAULT_RAG_EVAL_MIN_SCORE = 0.2
+export const DEFAULT_RAG_EVAL_MIN_SCORE = 0.55
 export const DEFAULT_RAG_EVAL_MATCH_MODE: RagEvalMatchMode = 'any'
 
 const MATCH_MODES: RagEvalMatchMode[] = ['auto', 'any', 'all', 'file', 'keyword']
@@ -87,7 +88,7 @@ export function evaluateRagSearchResults(
     const resultMatches = results.map((result, index) => {
         const fileMatch = matchExpectedFiles(result.filename, testCase.expectedFiles)
         const keywordMatch = matchExpectedKeywords(result.text, testCase.expectedKeywords)
-        const passed = isResultPassed({
+        const passed = testCase.expectedNoResults ? false : isResultPassed({
             mode: testCase.matchMode,
             hasFiles: testCase.expectedFiles.length > 0,
             hasKeywords: testCase.expectedKeywords.length > 0,
@@ -107,7 +108,9 @@ export function evaluateRagSearchResults(
     const firstPassed = resultMatches.find(item => item.passed)
     const bestScore = results[0]?.score
     const noExpectations = testCase.expectedFiles.length === 0 && testCase.expectedKeywords.length === 0
-    const passed = Boolean(firstPassed) && !noExpectations
+    const passed = testCase.expectedNoResults
+        ? results.length === 0
+        : Boolean(firstPassed) && !noExpectations
 
     return {
         caseId: testCase.id,
@@ -119,6 +122,7 @@ export function evaluateRagSearchResults(
         expectedRank: firstPassed?.rank,
         failureReason: getFailureReason({
             noExpectations,
+            expectedNoResults: Boolean(testCase.expectedNoResults),
             results,
             firstPassed,
             bestScore,
@@ -201,6 +205,7 @@ function normalizeRagEvalCase(value: unknown, index: number): RagEvalCase {
         expectedFiles: normalizeStringList(raw.expectedFiles),
         expectedKeywords: normalizeStringList(raw.expectedKeywords),
         matchMode: normalizeMatchMode(raw.matchMode),
+        expectedNoResults: raw.expectedNoResults === true,
         topK: normalizeTopK(raw.topK),
         minScore: normalizeMinScore(raw.minScore),
         fileId: typeof raw.fileId === 'string' && raw.fileId.trim() ? raw.fileId.trim() : undefined,
@@ -289,11 +294,15 @@ function getAutoMode(hasFiles: boolean, hasKeywords: boolean): RagEvalMatchMode 
 
 function getFailureReason(options: {
     noExpectations: boolean
+    expectedNoResults: boolean
     results: KnowledgeSearchResult[]
     firstPassed?: RagEvalResultMatch
     bestScore?: number
     minScore: number
 }): string {
+    if (options.expectedNoResults) {
+        return options.results.length === 0 ? '' : '期望无结果，但检索到了内容'
+    }
     if (options.noExpectations) return '缺少期望文件或关键词'
     if (options.firstPassed) return ''
     if (options.results.length === 0) return '没有任何检索结果'

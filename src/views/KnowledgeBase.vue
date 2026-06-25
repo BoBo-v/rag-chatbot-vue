@@ -392,7 +392,7 @@ const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
 
 const query = ref('')
 const topK = ref(5)
-const minScore = ref(0.35)
+const minScore = ref(0.55)
 const limitToSelectedFile = ref(false)
 const searching = ref(false)
 const hasSearched = ref(false)

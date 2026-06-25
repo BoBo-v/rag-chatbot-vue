@@ -219,7 +219,7 @@ GET /api/vector-store/status
 ### 检索调试
 
 ```http
-GET /api/search?q=...&topK=5&minScore=0.2
+GET /api/search?q=...&topK=5&minScore=0.55
 ```
 
 用于排查“为什么这次没有引用知识库”：
@@ -230,6 +230,8 @@ GET /api/search?q=...&topK=5&minScore=0.2
 - vectorScore
 - keywordScore
 - chunk 文本
+
+RAG Eval 可导入示例测试集：`public/examples/rag-eval-cases.frontend-ai.json`。
 
 ### 聊天
 

@@ -1,0 +1,292 @@
+[
+  {
+    "id": "frontend-ai-related-001",
+    "question": "前端 AI 架构设计中如何划分模型调用、上下文管理和 UI 层职责？",
+    "expectedFiles": ["section-5-frontend-ai-architecture-design.md"],
+    "expectedKeywords": ["架构", "上下文", "模型"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证前端 AI 架构设计资料可被检索。"
+  },
+  {
+    "id": "frontend-ai-related-002",
+    "question": "前端 AI 应用为什么需要把 prompt、上下文和工具调用做边界隔离？",
+    "expectedFiles": ["section-5-frontend-ai-architecture-design.md"],
+    "expectedKeywords": ["prompt", "上下文", "工具"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证架构边界与调用链内容。"
+  },
+  {
+    "id": "frontend-ai-related-003",
+    "question": "AI 聊天前端应该如何设计消息流、会话状态和错误恢复？",
+    "expectedFiles": ["section-5-frontend-ai-architecture-design.md"],
+    "expectedKeywords": ["消息", "会话", "错误"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证聊天架构和状态恢复内容。"
+  },
+  {
+    "id": "frontend-ai-related-004",
+    "question": "前端 AI 架构里如何支持多模型切换和模型能力差异？",
+    "expectedFiles": ["section-5-frontend-ai-architecture-design.md"],
+    "expectedKeywords": ["多模型", "模型", "能力"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证多模型架构内容。"
+  },
+  {
+    "id": "frontend-ai-related-005",
+    "question": "前端 AI 功能实践中如何处理流式输出和用户中断？",
+    "expectedFiles": ["section-6-ai-features-frontend-practice.md"],
+    "expectedKeywords": ["流式", "中断", "输出"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证流式交互实践。"
+  },
+  {
+    "id": "frontend-ai-related-006",
+    "question": "AI 功能落地时如何做加载态、空态和失败态设计？",
+    "expectedFiles": ["section-6-ai-features-frontend-practice.md"],
+    "expectedKeywords": ["加载", "空态", "失败"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证用户体验状态设计。"
+  },
+  {
+    "id": "frontend-ai-related-007",
+    "question": "前端接入 AI 能力时怎样避免重复请求和竞态问题？",
+    "expectedFiles": ["section-6-ai-features-frontend-practice.md"],
+    "expectedKeywords": ["重复", "请求", "竞态"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证请求控制实践。"
+  },
+  {
+    "id": "frontend-ai-related-008",
+    "question": "AI 功能实践里如何展示引用资料和生成结果的来源？",
+    "expectedFiles": ["section-6-ai-features-frontend-practice.md"],
+    "expectedKeywords": ["引用", "来源", "资料"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证引用展示和结果来源。"
+  },
+  {
+    "id": "frontend-ai-related-009",
+    "question": "前端 AI 工程化工具链中如何组织类型、接口和 SDK 封装？",
+    "expectedFiles": ["section-7-ai-engineering-frontend-toolchain.md"],
+    "expectedKeywords": ["类型", "接口", "SDK"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证工程化封装内容。"
+  },
+  {
+    "id": "frontend-ai-related-010",
+    "question": "AI 前端工具链如何做环境变量、模型配置和本地调试？",
+    "expectedFiles": ["section-7-ai-engineering-frontend-toolchain.md"],
+    "expectedKeywords": ["环境变量", "配置", "调试"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证工具链配置内容。"
+  },
+  {
+    "id": "frontend-ai-related-011",
+    "question": "前端 AI 项目如何用测试和 mock 保证生成式功能稳定？",
+    "expectedFiles": ["section-7-ai-engineering-frontend-toolchain.md"],
+    "expectedKeywords": ["测试", "mock", "稳定"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证测试和模拟数据内容。"
+  },
+  {
+    "id": "frontend-ai-related-012",
+    "question": "AI 工程化前端如何处理日志、监控和问题排查？",
+    "expectedFiles": ["section-7-ai-engineering-frontend-toolchain.md"],
+    "expectedKeywords": ["日志", "监控", "排查"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证可观测性内容。"
+  },
+  {
+    "id": "frontend-ai-related-013",
+    "question": "大模型前端集成时如何处理 API 调用、鉴权和错误提示？",
+    "expectedFiles": ["section-8-large-model-frontend-integration.md"],
+    "expectedKeywords": ["API", "鉴权", "错误"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证大模型 API 集成。"
+  },
+  {
+    "id": "frontend-ai-related-014",
+    "question": "前端集成大模型时怎样处理 token、上下文长度和截断？",
+    "expectedFiles": ["section-8-large-model-frontend-integration.md"],
+    "expectedKeywords": ["token", "上下文", "截断"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证上下文和 token 管理。"
+  },
+  {
+    "id": "frontend-ai-related-015",
+    "question": "大模型前端集成如何支持流式响应和增量渲染？",
+    "expectedFiles": ["section-8-large-model-frontend-integration.md"],
+    "expectedKeywords": ["流式", "响应", "渲染"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证流式响应集成。"
+  },
+  {
+    "id": "frontend-ai-related-016",
+    "question": "前端状态管理与数据流题目中如何理解 store、action 和派生状态？",
+    "expectedFiles": ["03-前端状态管理与数据流-第1-21题.md"],
+    "expectedKeywords": ["状态管理", "store", "数据流"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证状态管理题库内容。"
+  },
+  {
+    "id": "frontend-ai-related-017",
+    "question": "前端数据流相关题目里如何解释单向数据流和组件通信？",
+    "expectedFiles": ["03-前端状态管理与数据流-第1-21题.md"],
+    "expectedKeywords": ["单向数据流", "组件通信", "状态"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证数据流基础概念。"
+  },
+  {
+    "id": "frontend-ai-related-018",
+    "question": "状态管理题库中如何说明缓存、异步请求和状态同步？",
+    "expectedFiles": ["03-前端状态管理与数据流-第1-21题.md"],
+    "expectedKeywords": ["缓存", "异步", "同步"],
+    "matchMode": "any",
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "相关用例：验证异步状态管理内容。"
+  },
+  {
+    "id": "frontend-ai-unrelated-001",
+    "question": "清朝乾隆年间某次边疆战役的兵力部署细节是什么？",
+    "expectedFiles": [],
+    "expectedKeywords": [],
+    "matchMode": "any",
+    "expectedNoResults": true,
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "无关用例：期望知识库不返回历史战役资料。"
+  },
+  {
+    "id": "frontend-ai-unrelated-002",
+    "question": "请列出心脏搭桥手术术后用药剂量方案。",
+    "expectedFiles": [],
+    "expectedKeywords": [],
+    "matchMode": "any",
+    "expectedNoResults": true,
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "无关用例：期望不命中医学资料。"
+  },
+  {
+    "id": "frontend-ai-unrelated-003",
+    "question": "比特币下周价格会涨到多少美元？",
+    "expectedFiles": [],
+    "expectedKeywords": [],
+    "matchMode": "any",
+    "expectedNoResults": true,
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "无关用例：期望不命中金融预测资料。"
+  },
+  {
+    "id": "frontend-ai-unrelated-004",
+    "question": "如何给汽车发动机更换火花塞并调整点火正时？",
+    "expectedFiles": [],
+    "expectedKeywords": [],
+    "matchMode": "any",
+    "expectedNoResults": true,
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "无关用例：期望不命中汽车维修资料。"
+  },
+  {
+    "id": "frontend-ai-unrelated-005",
+    "question": "意大利面红酱的传统烹饪步骤有哪些？",
+    "expectedFiles": [],
+    "expectedKeywords": [],
+    "matchMode": "any",
+    "expectedNoResults": true,
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "无关用例：期望不命中烹饪资料。"
+  },
+  {
+    "id": "frontend-ai-unrelated-006",
+    "question": "太阳系八大行星的轨道周期分别是多少？",
+    "expectedFiles": [],
+    "expectedKeywords": [],
+    "matchMode": "any",
+    "expectedNoResults": true,
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "无关用例：期望不命中天文学资料。"
+  },
+  {
+    "id": "frontend-ai-unrelated-007",
+    "question": "民法典中关于房屋租赁押金返还的条款如何规定？",
+    "expectedFiles": [],
+    "expectedKeywords": [],
+    "matchMode": "any",
+    "expectedNoResults": true,
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "无关用例：期望不命中法律条文资料。"
+  },
+  {
+    "id": "frontend-ai-unrelated-008",
+    "question": "健身增肌阶段每天应该摄入多少克蛋白质？",
+    "expectedFiles": [],
+    "expectedKeywords": [],
+    "matchMode": "any",
+    "expectedNoResults": true,
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "无关用例：期望不命中健身营养资料。"
+  },
+  {
+    "id": "frontend-ai-unrelated-009",
+    "question": "钢琴即兴伴奏中属七和弦如何转位？",
+    "expectedFiles": [],
+    "expectedKeywords": [],
+    "matchMode": "any",
+    "expectedNoResults": true,
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "无关用例：期望不命中音乐理论资料。"
+  },
+  {
+    "id": "frontend-ai-unrelated-010",
+    "question": "如何配置 Kubernetes Ingress 的 TLS 证书自动续期？",
+    "expectedFiles": [],
+    "expectedKeywords": [],
+    "matchMode": "any",
+    "expectedNoResults": true,
+    "topK": 5,
+    "minScore": 0.55,
+    "notes": "无关用例：期望不命中云原生运维资料。"
+  }
+]

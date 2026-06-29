@@ -20,7 +20,7 @@ export async function claudeStream(
         runtime.maxContextTokens
     )
 
-    const system = allMsgs.find(m => m.role === 'system')?.content ?? runtime.systemPrompt
+    const system = allMsgs.find(m => m.role === 'system')?.content || runtime.systemPrompt.trim() || undefined
     const chatMessages = allMsgs
         .filter(m => m.role !== 'system')
         .map(m => {
@@ -55,7 +55,7 @@ export async function claudeStream(
         },
         body: JSON.stringify({
             model: runtime.model,
-            system,
+            ...(system ? { system } : {}),
             messages: chatMessages,
             stream: true,
             max_tokens: 4096,

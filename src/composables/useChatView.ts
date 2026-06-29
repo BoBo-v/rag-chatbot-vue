@@ -353,6 +353,7 @@ export function useChatView() {
         queueSearchIndex(userMessage, convId, userCreatedAt)
 
         const aiMsg = createAssistantMessage()
+        await scrollToBottom()
         streamMessageConversations.set(aiMsg.id, convId)
         await persistMessage(aiMsg.id, convId)
         await runStream({ aiMessageId: aiMsg.id, prompt: promptText, convId })

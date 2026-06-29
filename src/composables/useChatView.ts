@@ -171,12 +171,17 @@ export function useChatView() {
             conversationId: convId,
             role: msg.role,
             content: msg.content,
-            images: msg.images,
-            files: msg.files,
+            images: msg.images?.map(image => ({ ...image })),
+            files: msg.files?.map(file => ({ ...file })),
             status: statusOverride ?? msg.status,
             canContinue: msg.canContinue,
             errorMessage: msg.errorMessage,
-            ragContext: msg.ragContext,
+            ragContext: msg.ragContext
+                ? {
+                    ...msg.ragContext,
+                    results: msg.ragContext.results.map(result => ({ ...result })),
+                }
+                : undefined,
             createdAt: createdAt ?? existing?.createdAt ?? Date.now(),
         })
     }
@@ -393,8 +398,8 @@ export function useChatView() {
         typewriter.restoreAbortedOutput(messageId)
         const contextMessages: Message[] = messages.value.map(item =>
             item.id === msg.id
-                ? { ...item, status: 'aborted', canContinue: true }
-                : item
+                ? { ...snapshotMessage(item), status: 'aborted', canContinue: true }
+                : snapshotMessage(item)
         )
         updateMessage(msg.id, { status: 'loading', canContinue: false })
         streamMessageConversations.set(messageId, currentId.value)
@@ -531,6 +536,7 @@ export function useChatView() {
 
     onMounted(async () => {
         // Page startup: attach scroll listener, load conversations, warm up search index, then open latest conversation.
+        await nextTick()
         attachScrollListener()
         await loadAll()
         void searchService.ensureIndex().catch(err => {

@@ -1,6 +1,6 @@
 import type { Message } from '../../types/chat'
 import type { ModelRuntimeConfig } from '../../types/model'
-import { buildMessages } from '../context'
+import { buildMessages, type ChatMessage } from '../context'
 import { readOllamaNdjsonStream } from './ollama'
 import type { RagCitation, RagContextInfo } from '../../types/chat'
 
@@ -31,16 +31,30 @@ function buildBackendChatBody(
         runtime.systemPrompt,
         runtime.maxContextTokens,
     )
+    const sanitizedMessages = sanitizeBackendMessages(chatMessages)
 
     return {
         provider: runtime.backendProvider ?? 'ollama',
         model: runtime.backendModel || runtime.model,
-        messages: chatMessages.map(message => ({
+        messages: sanitizedMessages.map(message => ({
             role: message.role,
             content: message.content,
         })),
         rag: toBackendRagValue(runtime),
     }
+}
+
+function sanitizeBackendMessages(messages: ChatMessage[]): ChatMessage[] {
+    const sanitized = messages
+        .map(message => ({
+            ...message,
+            content: message.content.trim(),
+        }))
+        .filter(message => message.content.length > 0)
+
+    if (sanitized.length > 0) return sanitized
+
+    return [{ role: 'user', content: '请继续' }]
 }
 
 export async function fetchBackendChatContext(

@@ -6,6 +6,7 @@ export function useChatScroll() {
 
     let userAtBottom = true
     let isScrolling = false
+    let attachedElement: HTMLDivElement | null = null
 
     function isAtBottom(): boolean {
         const el = containerRef.value
@@ -55,11 +56,17 @@ export function useChatScroll() {
     }
 
     function attachScrollListener(): void {
-        containerRef.value?.addEventListener('scroll', handleScroll)
+        const el = containerRef.value
+        if (!el || attachedElement === el) return
+        attachedElement?.removeEventListener('scroll', handleScroll)
+        attachedElement = el
+        attachedElement.addEventListener('scroll', handleScroll)
+        userAtBottom = isAtBottom()
     }
 
     function detachScrollListener(): void {
-        containerRef.value?.removeEventListener('scroll', handleScroll)
+        attachedElement?.removeEventListener('scroll', handleScroll)
+        attachedElement = null
     }
 
     return {

@@ -34,14 +34,13 @@ export function buildMessages(
     maxContextTokens: number
 ): ChatMessage[] {
     const userMsg = userText.trim() || '请继续'
-    const normalizedSystemPrompt = systemPrompt.trim()
 
     const finished = messages.filter(
         m => m.status === 'done' || m.status === 'aborted' || m.status === 'error'
     )
 
     const unlimited = maxContextTokens >= 1100000
-    const budget = unlimited ? Infinity : maxContextTokens - estimateTokens(normalizedSystemPrompt) - estimateTokens(userMsg)
+    const budget = unlimited ? Infinity : maxContextTokens - estimateTokens(systemPrompt) - estimateTokens(userMsg)
     const selected: ChatMessage[] = []
     let used = 0
     // 倒序遍历：从最新消息开始选，保证模型优先看到最近上下文。
@@ -60,7 +59,6 @@ export function buildMessages(
             const fileBlocks = m.files.map(f => `<file name="${f.name}">\n${f.content}\n</file>`).join('\n\n')
             content = fileBlocks + (content ? '\n\n' + content : '')
         }
-        if (!content.trim() && !m.images?.length) continue
         const chatMsg: ChatMessage = { role: m.role, content }
         if (m.images?.length) {
             chatMsg.images = m.images.map(img => ({ base64: img.base64, mediaType: img.mediaType }))
@@ -76,21 +74,22 @@ export function buildMessages(
             if (!lastSelected.content) {
                 lastSelected.content = userMsg
             }
-            return withSystemPrompt(selected, normalizedSystemPrompt)
+            return [
+                { role: 'system', content: systemPrompt },
+                ...selected,
+            ]
         }
         if (lastSelected.content === userMsg) {
-            return withSystemPrompt(selected, normalizedSystemPrompt)
+            return [
+                { role: 'system', content: systemPrompt },
+                ...selected,
+            ]
         }
     }
 
-    return withSystemPrompt([
+    return [
+        { role: 'system', content: systemPrompt },
         ...selected,
         { role: 'user' as const, content: userMsg },
-    ], normalizedSystemPrompt)
-}
-
-function withSystemPrompt(messages: ChatMessage[], systemPrompt: string): ChatMessage[] {
-    return systemPrompt
-        ? [{ role: 'system', content: systemPrompt }, ...messages]
-        : messages
+    ]
 }

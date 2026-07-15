@@ -48,6 +48,8 @@ export interface RagEvalSummary {
     passRate: number
     top1HitRate: number
     topKHitRate: number
+    negativeRejectionRate: number
+    falseRecallRate: number
     averageBestScore?: number
     averageExpectedRank?: number
     noResultCount: number
@@ -57,7 +59,7 @@ export interface RagEvalSummary {
 export const RAG_EVAL_STORAGE_KEY = 'ai-chat-rag-eval-cases'
 export const DEFAULT_RAG_EVAL_TOP_K = 5
 export const DEFAULT_RAG_EVAL_MIN_SCORE = 0.55
-export const DEFAULT_RAG_EVAL_MATCH_MODE: RagEvalMatchMode = 'any'
+export const DEFAULT_RAG_EVAL_MATCH_MODE: RagEvalMatchMode = 'auto'
 
 const MATCH_MODES: RagEvalMatchMode[] = ['auto', 'any', 'all', 'file', 'keyword']
 
@@ -68,6 +70,7 @@ export function createRagEvalCase(): RagEvalCase {
         expectedFiles: [],
         expectedKeywords: [],
         matchMode: DEFAULT_RAG_EVAL_MATCH_MODE,
+        expectedNoResults: false,
         topK: DEFAULT_RAG_EVAL_TOP_K,
         minScore: DEFAULT_RAG_EVAL_MIN_SCORE,
         notes: '',
@@ -150,17 +153,26 @@ export function summarizeRagEvalResults(
     cases: RagEvalCase[],
     resultMap: Record<string, RagEvalRunResult | undefined>
 ): RagEvalSummary {
-    const completedResults = cases
-        .map(testCase => resultMap[testCase.id])
-        .filter((result): result is RagEvalRunResult => {
-            if (!result) return false
-            return result.status !== 'idle' && result.status !== 'running'
+    const completedEntries = cases
+        .map(testCase => ({ testCase, result: resultMap[testCase.id] }))
+        .filter((entry): entry is { testCase: RagEvalCase; result: RagEvalRunResult } => {
+            if (!entry.result) return false
+            return entry.result.status !== 'idle' && entry.result.status !== 'running'
         })
+    const completedResults = completedEntries.map(entry => entry.result)
+    const positiveResults = completedEntries
+        .filter(entry => !entry.testCase.expectedNoResults)
+        .map(entry => entry.result)
+    const negativeResults = completedEntries
+        .filter(entry => entry.testCase.expectedNoResults)
+        .map(entry => entry.result)
     const scoreResults = completedResults.filter(result => result.bestScore !== undefined)
     const rankResults = completedResults.filter(result => result.expectedRank !== undefined)
     const passed = completedResults.filter(result => result.passed).length
-    const top1Hits = completedResults.filter(result => result.top1Hit).length
-    const topKHits = completedResults.filter(result => result.topKHit).length
+    const top1Hits = positiveResults.filter(result => result.top1Hit).length
+    const topKHits = positiveResults.filter(result => result.topKHit).length
+    const negativeRejections = negativeResults.filter(result => result.passed).length
+    const falseRecalls = negativeResults.filter(result => result.results.length > 0).length
 
     return {
         total: cases.length,
@@ -168,8 +180,10 @@ export function summarizeRagEvalResults(
         passed,
         failed: completedResults.length - passed,
         passRate: rate(passed, completedResults.length),
-        top1HitRate: rate(top1Hits, completedResults.length),
-        topKHitRate: rate(topKHits, completedResults.length),
+        top1HitRate: rate(top1Hits, positiveResults.length),
+        topKHitRate: rate(topKHits, positiveResults.length),
+        negativeRejectionRate: rate(negativeRejections, negativeResults.length),
+        falseRecallRate: rate(falseRecalls, negativeResults.length),
         averageBestScore: average(scoreResults.map(result => result.bestScore as number)),
         averageExpectedRank: average(rankResults.map(result => result.expectedRank as number)),
         noResultCount: completedResults.filter(result => result.results.length === 0).length,

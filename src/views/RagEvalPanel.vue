@@ -73,12 +73,20 @@
           <strong>{{ formatPercent(summary.passRate) }}</strong>
         </div>
         <div>
-          <span>Top1 命中</span>
+          <span>相关问题 Top1</span>
           <strong>{{ formatPercent(summary.top1HitRate) }}</strong>
         </div>
         <div>
-          <span>TopK 命中</span>
+          <span>相关问题 TopK</span>
           <strong>{{ formatPercent(summary.topKHitRate) }}</strong>
+        </div>
+        <div>
+          <span>无关问题拒绝率</span>
+          <strong>{{ formatPercent(summary.negativeRejectionRate) }}</strong>
+        </div>
+        <div>
+          <span>误召回率</span>
+          <strong>{{ formatPercent(summary.falseRecallRate) }}</strong>
         </div>
         <div>
           <span>平均最高分</span>

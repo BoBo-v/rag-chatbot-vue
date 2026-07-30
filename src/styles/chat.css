@@ -2696,7 +2696,7 @@ datalist option {
     .chat-shell .sidebar {
         left: min(-320px, calc(-100vw + 40px));
         top: 0;
-        bottom: 0;
+        bottom: calc(62px + env(safe-area-inset-bottom));
         width: min(300px, calc(100vw - 40px));
         z-index: var(--z-overlay);
         box-shadow: var(--shadow-lg);
@@ -2706,6 +2706,7 @@ datalist option {
     .chat-shell .sidebar.open { left: 0; }
 
     .chat-shell .sidebar-overlay {
+        bottom: calc(62px + env(safe-area-inset-bottom));
         z-index: calc(var(--z-overlay) - 1);
     }
 

@@ -1,10 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN" data-theme="dark" data-theme-preference="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ai-chat</title>
+    <meta name="theme-color" content="#09080f" />
+    <title>AI Chat</title>
+    <script>
+      ;(() => {
+        const fallbackTheme = 'dark'
+        try {
+          const saved = JSON.parse(localStorage.getItem('ai-chat-settings') || '{}')
+          const preference = ['dark', 'light', 'system'].includes(saved.theme)
+            ? saved.theme
+            : fallbackTheme
+          const resolved = preference === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : preference
+          document.documentElement.dataset.theme = resolved
+          document.documentElement.dataset.themePreference = preference
+        } catch {
+          document.documentElement.dataset.theme = fallbackTheme
+          document.documentElement.dataset.themePreference = fallbackTheme
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

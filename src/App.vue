@@ -46,6 +46,9 @@ function applyTheme(theme: string) {
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme
   document.documentElement.setAttribute('data-theme', resolved)
+  document.documentElement.setAttribute('data-theme-preference', theme)
+  document.querySelector('meta[name="theme-color"]')
+    ?.setAttribute('content', resolved === 'dark' ? '#09080f' : '#f7f5fb')
 }
 
 function getDefaultSwitchPosition(): SwitchPosition {

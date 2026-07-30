@@ -1,194 +1,265 @@
-/* ═══════════════════════════════════════════════
-   tokens.css  —  主题颜色变量
-   切换方式：在 <html> 上设置 data-theme="dark"|"light"
-   ═══════════════════════════════════════════════ */
+/*
+ * Chat UI design tokens
+ * primitive -> semantic theme -> component aliases
+ */
 
-/* ── 暗色主题（默认） ─────────────────────────── */
+:root {
+  /* Primitive palette */
+  --violet-50: #f5f3ff;
+  --violet-100: #ede9fe;
+  --violet-300: #c4b5fd;
+  --violet-400: #a78bfa;
+  --violet-500: #8b5cf6;
+  --violet-600: #7c3aed;
+  --violet-700: #6d28d9;
+  --cyan-400: #22d3ee;
+  --cyan-600: #0891b2;
+  --emerald-400: #34d399;
+  --emerald-600: #059669;
+  --amber-400: #fbbf24;
+  --amber-600: #d97706;
+  --rose-400: #fb7185;
+  --rose-600: #dc2626;
+
+  /* Typography */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-size-1: 11px;
+  --font-size-2: 12px;
+  --font-size-3: 14px;
+  --font-size-4: 16px;
+  --font-size-5: 18px;
+  --font-size-6: 24px;
+
+  /* Spacing and shape */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* Motion and stacking */
+  --motion-fast: 140ms;
+  --motion-base: 200ms;
+  --motion-slow: 280ms;
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --z-base: 0;
+  --z-sticky: 20;
+  --z-navigation: 40;
+  --z-overlay: 80;
+  --z-modal: 100;
+  --z-toast: 120;
+}
+
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
 
-  /* 背景层次 */
-  --bg-base:            #07070f;
-  --bg-canvas:          #07070f;
-  --bg-surface:         rgba(255, 255, 255, 0.07);
-  --bg-surface-2:       rgba(255, 255, 255, 0.05);
-  --bg-surface-3:       rgba(255, 255, 255, 0.04);
-  --bg-elevated:        #13131f;
-  --bg-sidebar:         rgba(7, 7, 15, 0.75);
-  --bg-topbar:          rgba(7, 7, 15, 0.55);
-  --bg-code:            #1e1e1e;
-  --bg-code-header:     #2a2a3a;
-  --bg-input:           rgba(255, 255, 255, 0.05);
-  --bg-overlay:         rgba(0, 0, 0, 0.60);
-  --bg-sidebar-overlay: rgba(0, 0, 0, 0.45);
+  /* Semantic surfaces */
+  --bg-base: #09080f;
+  --bg-canvas: #09080f;
+  --bg-surface: #111019;
+  --bg-surface-2: #171220;
+  --bg-surface-3: #1d1729;
+  --bg-elevated: #171220;
+  --bg-sidebar: rgba(13, 11, 20, 0.96);
+  --bg-topbar: rgba(9, 8, 15, 0.88);
+  --bg-code: #0d0c13;
+  --bg-code-header: #17131f;
+  --bg-input: #12101a;
+  --bg-overlay: rgba(4, 3, 8, 0.72);
+  --bg-sidebar-overlay: rgba(4, 3, 8, 0.58);
 
-  /* 文字层次 */
-  --text-primary:       #e4e4e7;
-  --text-secondary:     rgba(255, 255, 255, 0.45);
-  --text-muted:         rgba(255, 255, 255, 0.25);
-  --text-faint:         rgba(255, 255, 255, 0.16);
-  --text-placeholder:   rgba(255, 255, 255, 0.18);
-  --text-code:          #abb2bf;
-  --text-sidebar-title: rgba(255, 255, 255, 0.28);
-  --text-status:        rgba(255, 255, 255, 0.32);
-  --text-status-dot:    rgba(255, 255, 255, 0.18);
+  /* Semantic content */
+  --text-primary: #f4f1fa;
+  --text-secondary: #b8b1c5;
+  --text-muted: #81798f;
+  --text-faint: #5e5769;
+  --text-placeholder: #6f677c;
+  --text-code: #d7d0e2;
+  --text-sidebar-title: #8d849a;
+  --text-status: #9e96aa;
+  --text-status-dot: #746b80;
 
-  /* 边框 & 分割线 */
-  --border:             rgba(255, 255, 255, 0.10);
-  --border-subtle:      rgba(255, 255, 255, 0.07);
-  --border-faint:       rgba(255, 255, 255, 0.06);
-  --scrollbar-thumb:    rgba(255, 255, 255, 0.08);
+  /* Semantic borders */
+  --border: rgba(196, 181, 253, 0.20);
+  --border-subtle: rgba(196, 181, 253, 0.13);
+  --border-faint: rgba(196, 181, 253, 0.08);
+  --border-strong: rgba(167, 139, 250, 0.38);
+  --grid-line: rgba(167, 139, 250, 0.045);
+  --scrollbar-thumb: rgba(167, 139, 250, 0.22);
 
-  /* 强调色（紫） */
-  --accent:             #a78bfa;
-  --accent-deep:        #7c3aed;
-  --accent-deeper:      #6d28d9;
-  --accent-bg:          rgba(124, 58, 237, 0.18);
-  --accent-border:      rgba(167, 139, 250, 0.35);
-  --accent-glow:        rgba(124, 58, 237, 0.45);
-  --accent-text:        #c4b5fd;
+  /* Semantic brand and data colors */
+  --accent: var(--violet-400);
+  --accent-deep: var(--violet-500);
+  --accent-deeper: var(--violet-600);
+  --accent-bg: rgba(139, 92, 246, 0.16);
+  --accent-border: rgba(167, 139, 250, 0.36);
+  --accent-glow: rgba(139, 92, 246, 0.28);
+  --accent-text: #c9b9ff;
+  --data-accent: var(--cyan-400);
+  --data-accent-bg: rgba(34, 211, 238, 0.10);
+  --data-accent-border: rgba(34, 211, 238, 0.28);
+  --success: var(--emerald-400);
+  --success-bg: rgba(52, 211, 153, 0.12);
+  --success-border: rgba(52, 211, 153, 0.28);
+  --warning: var(--amber-400);
+  --warning-bg: rgba(251, 191, 36, 0.12);
+  --warning-border: rgba(251, 191, 36, 0.28);
+  --danger: var(--rose-400);
+  --danger-bg: rgba(251, 113, 133, 0.12);
+  --danger-border: rgba(251, 113, 133, 0.28);
+  --focus-ring: 0 0 0 3px rgba(167, 139, 250, 0.24);
 
-  /* 动态背景光晕 */
-  --orb-opacity:        0.9;
-  --orb-3-opacity:      0.35;
-  --orb-4-opacity:      0.28;
-  --noise-opacity:      0.35;
+  /* Semantic elevation */
+  --shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.22);
+  --shadow-md: 0 18px 48px rgba(0, 0, 0, 0.34);
+  --shadow-lg: 0 28px 80px rgba(0, 0, 0, 0.46);
+  --shadow-accent: 0 0 28px rgba(139, 92, 246, 0.18);
 
-  /* 消息气泡 */
-  --bubble-ai-bg:       rgba(255, 255, 255, 0.07);
-  --bubble-ai-border:   rgba(255, 255, 255, 0.10);
-  --bubble-ai-color:    #e4e4e7;
-  --bubble-ai-shadow:   0 4px 22px rgba(0, 0, 0, 0.30);
-  --bubble-user-shadow: rgba(109, 40, 217, 0.45);
-
-  /* 代码块 */
-  --code-lang-color:    rgba(255, 255, 255, 0.35);
-  --code-copy-color:    rgba(255, 255, 255, 0.40);
-  --code-copy-bg:       rgba(255, 255, 255, 0.06);
-  --code-copy-border:   rgba(255, 255, 255, 0.10);
-
-  /* 设置面板 */
-  --settings-bg:        #13131f;
-  --settings-input-bg:  rgba(255, 255, 255, 0.05);
-  --settings-select-bg: #1a1a2e;
+  /* Legacy visual controls, kept as aliases while pages migrate */
+  --orb-opacity: 0;
+  --orb-3-opacity: 0;
+  --orb-4-opacity: 0;
+  --noise-opacity: 0.12;
 }
 
-/* ── 亮色主题 ─────────────────────────────────── */
 [data-theme="light"] {
   color-scheme: light;
 
-  /* 背景层次 */
-  --bg-base:            #f5f4ff;
-  --bg-canvas:          #f5f4ff;
-  --bg-surface:         #ffffff;          /* 实色白，让气泡/卡片有明确层次 */
-  --bg-surface-2:       rgba(0, 0, 0, 0.04);
-  --bg-surface-3:       rgba(0, 0, 0, 0.03);
-  --bg-elevated:        #ffffff;
-  --bg-sidebar:         #eeecff;          /* 侧边栏：比页面稍深的淡紫，清晰区分 */
-  --bg-topbar:          rgba(245, 244, 255, 0.90);
-  --bg-code:            #f6f8fa;
-  --bg-code-header:     #eaeef2;
-  --bg-input:           #ffffff;
-  --bg-overlay:         rgba(0, 0, 0, 0.35);
-  --bg-sidebar-overlay: rgba(0, 0, 0, 0.30);
+  --bg-base: #f7f5fb;
+  --bg-canvas: #f7f5fb;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f1ecfa;
+  --bg-surface-3: #ebe4f6;
+  --bg-elevated: #ffffff;
+  --bg-sidebar: rgba(248, 246, 252, 0.97);
+  --bg-topbar: rgba(247, 245, 251, 0.90);
+  --bg-code: #f6f3fa;
+  --bg-code-header: #eee9f4;
+  --bg-input: #ffffff;
+  --bg-overlay: rgba(29, 23, 40, 0.42);
+  --bg-sidebar-overlay: rgba(29, 23, 40, 0.32);
 
-  /* 文字层次 */
-  --text-primary:       #1a1a2e;
-  --text-secondary:     rgba(0, 0, 0, 0.55);
-  --text-muted:         rgba(0, 0, 0, 0.38);
-  --text-faint:         rgba(0, 0, 0, 0.25);
-  --text-placeholder:   rgba(0, 0, 0, 0.30);
-  --text-code:          #24292e;
-  --text-sidebar-title: rgba(0, 0, 0, 0.40);
-  --text-status:        rgba(0, 0, 0, 0.40);
-  --text-status-dot:    rgba(0, 0, 0, 0.20);
+  --text-primary: #1d1728;
+  --text-secondary: #5e566a;
+  --text-muted: #7e748b;
+  --text-faint: #a39aaa;
+  --text-placeholder: #8f859b;
+  --text-code: #2d2638;
+  --text-sidebar-title: #746b80;
+  --text-status: #6f657c;
+  --text-status-dot: #9e94aa;
 
-  /* 边框 & 分割线
-     策略：统一使用一套透明度，避免深浅不一
-     - 主要分隔用 --border（如侧边栏、顶栏）
-     - 卡片/输入框用 --border-subtle
-     - 几乎不可见的用 --border-faint              */
-  --border:             rgba(0, 0, 0, 0.12);
-  --border-subtle:      rgba(0, 0, 0, 0.08);
-  --border-faint:       rgba(0, 0, 0, 0.05);
-  --scrollbar-thumb:    rgba(0, 0, 0, 0.12);
+  --border: #d8d0e4;
+  --border-subtle: #e3dcea;
+  --border-faint: #ece7f1;
+  --border-strong: #b7a6d0;
+  --grid-line: rgba(109, 40, 217, 0.045);
+  --scrollbar-thumb: rgba(109, 40, 217, 0.22);
 
-  /* 强调色（亮色下稍深） */
-  --accent:             #7c3aed;
-  --accent-deep:        #6d28d9;
-  --accent-deeper:      #5b21b6;
-  --accent-bg:          rgba(124, 58, 237, 0.08);
-  --accent-border:      rgba(124, 58, 237, 0.28);
-  --accent-glow:        rgba(124, 58, 237, 0.25);
-  --accent-text:        #7c3aed;
+  --accent: var(--violet-600);
+  --accent-deep: var(--violet-600);
+  --accent-deeper: var(--violet-700);
+  --accent-bg: rgba(124, 58, 237, 0.09);
+  --accent-border: rgba(124, 58, 237, 0.26);
+  --accent-glow: rgba(124, 58, 237, 0.16);
+  --accent-text: #6d28d9;
+  --data-accent: var(--cyan-600);
+  --data-accent-bg: rgba(8, 145, 178, 0.09);
+  --data-accent-border: rgba(8, 145, 178, 0.24);
+  --success: var(--emerald-600);
+  --success-bg: rgba(5, 150, 105, 0.09);
+  --success-border: rgba(5, 150, 105, 0.24);
+  --warning: var(--amber-600);
+  --warning-bg: rgba(217, 119, 6, 0.09);
+  --warning-border: rgba(217, 119, 6, 0.24);
+  --danger: var(--rose-600);
+  --danger-bg: rgba(220, 38, 38, 0.08);
+  --danger-border: rgba(220, 38, 38, 0.22);
+  --focus-ring: 0 0 0 3px rgba(124, 58, 237, 0.16);
 
-  /* 动态背景光晕（亮色下极淡） */
-  --orb-opacity:        0.18;
-  --orb-3-opacity:      0.08;
-  --orb-4-opacity:      0.06;
-  --noise-opacity:      0.10;
+  --shadow-sm: 0 8px 24px rgba(49, 35, 70, 0.08);
+  --shadow-md: 0 18px 48px rgba(49, 35, 70, 0.12);
+  --shadow-lg: 0 28px 80px rgba(49, 35, 70, 0.16);
+  --shadow-accent: 0 0 24px rgba(124, 58, 237, 0.10);
 
-  /* 消息气泡
-     亮色用白色实体背景 + 阴影代替半透明 + 细边框，
-     0 0 0 1px 模拟一条极细的轮廓线，比 border 更均匀 */
-  --bubble-ai-bg:       #ffffff;
-  --bubble-ai-border:   transparent;
-  --bubble-ai-color:    #1a1a2e;
-  --bubble-ai-shadow:   0 2px 10px rgba(0, 0, 0, 0.07), 0 0 0 1px rgba(0, 0, 0, 0.07);
-  --bubble-user-shadow: rgba(109, 40, 217, 0.28);
-
-  /* 代码块工具栏 */
-  --code-lang-color:    rgba(0, 0, 0, 0.38);
-  --code-copy-color:    rgba(0, 0, 0, 0.45);
-  --code-copy-bg:       rgba(0, 0, 0, 0.05);
-  --code-copy-border:   rgba(0, 0, 0, 0.10);
-
-  /* 设置面板 */
-  --settings-bg:        #ffffff;
-  --settings-input-bg:  rgba(0, 0, 0, 0.04);
-  --settings-select-bg: #f5f5f7;
+  --orb-opacity: 0;
+  --orb-3-opacity: 0;
+  --orb-4-opacity: 0;
+  --noise-opacity: 0.06;
 }
 
-/* @bobocn/element 主题桥接
-   组件库内部使用 --vk-* 变量；这里统一映射到本项目主题 token，
-   确保 Modal / Button 等组件跟随 html[data-theme] 自动切换。 */
+/* Component aliases */
+:root,
+[data-theme="dark"],
+[data-theme="light"] {
+  --bubble-ai-bg: var(--bg-surface);
+  --bubble-ai-border: var(--border-subtle);
+  --bubble-ai-color: var(--text-primary);
+  --bubble-ai-shadow: var(--shadow-sm);
+  --bubble-user-shadow: var(--shadow-accent);
+
+  --code-lang-color: var(--text-muted);
+  --code-copy-color: var(--text-secondary);
+  --code-copy-bg: var(--bg-surface-2);
+  --code-copy-border: var(--border-subtle);
+
+  --settings-bg: var(--bg-elevated);
+  --settings-input-bg: var(--bg-input);
+  --settings-select-bg: var(--bg-surface-2);
+
+  --social-bg: var(--bg-surface-2);
+  --shadow: var(--shadow-sm);
+  --sans: var(--font-sans);
+  --heading: var(--font-sans);
+  --mono: var(--font-mono);
+}
+
+/* @bobocn/element theme bridge */
 :root,
 [data-theme="dark"],
 [data-theme="light"] {
   --vk-color-white: #ffffff;
   --vk-color-primary: var(--accent);
   --vk-color-primary-dark-2: var(--accent-deep);
-  --vk-color-primary-light-3: color-mix(in srgb, var(--accent) 72%, white);
-  --vk-color-primary-light-5: color-mix(in srgb, var(--accent) 50%, transparent);
-  --vk-color-primary-light-7: color-mix(in srgb, var(--accent) 32%, transparent);
-  --vk-color-primary-light-8: color-mix(in srgb, var(--accent) 22%, transparent);
+  --vk-color-primary-light-3: var(--violet-300);
+  --vk-color-primary-light-5: var(--accent-border);
+  --vk-color-primary-light-7: var(--accent-bg);
+  --vk-color-primary-light-8: var(--accent-bg);
   --vk-color-primary-light-9: var(--accent-bg);
 
-  --vk-color-success: #22c55e;
-  --vk-color-success-dark-2: #16a34a;
-  --vk-color-success-light-3: #4ade80;
-  --vk-color-success-light-5: rgba(34, 197, 94, 0.42);
-  --vk-color-success-light-8: rgba(34, 197, 94, 0.18);
-  --vk-color-success-light-9: rgba(34, 197, 94, 0.10);
-  --vk-color-warning: #f59e0b;
-  --vk-color-warning-dark-2: #d97706;
-  --vk-color-warning-light-3: #fbbf24;
-  --vk-color-warning-light-5: rgba(245, 158, 11, 0.42);
-  --vk-color-warning-light-8: rgba(245, 158, 11, 0.18);
-  --vk-color-warning-light-9: rgba(245, 158, 11, 0.10);
-  --vk-color-danger: #ef4444;
-  --vk-color-danger-dark-2: #dc2626;
-  --vk-color-danger-light-3: #f87171;
-  --vk-color-danger-light-5: rgba(239, 68, 68, 0.42);
-  --vk-color-danger-light-8: rgba(239, 68, 68, 0.18);
-  --vk-color-danger-light-9: rgba(239, 68, 68, 0.10);
+  --vk-color-success: var(--success);
+  --vk-color-success-dark-2: var(--emerald-600);
+  --vk-color-success-light-3: var(--emerald-400);
+  --vk-color-success-light-5: var(--success-border);
+  --vk-color-success-light-8: var(--success-bg);
+  --vk-color-success-light-9: var(--success-bg);
+  --vk-color-warning: var(--warning);
+  --vk-color-warning-dark-2: var(--amber-600);
+  --vk-color-warning-light-3: var(--amber-400);
+  --vk-color-warning-light-5: var(--warning-border);
+  --vk-color-warning-light-8: var(--warning-bg);
+  --vk-color-warning-light-9: var(--warning-bg);
+  --vk-color-danger: var(--danger);
+  --vk-color-danger-dark-2: var(--rose-600);
+  --vk-color-danger-light-3: var(--rose-400);
+  --vk-color-danger-light-5: var(--danger-border);
+  --vk-color-danger-light-8: var(--danger-bg);
+  --vk-color-danger-light-9: var(--danger-bg);
   --vk-color-info: var(--text-secondary);
   --vk-color-info-dark-2: var(--text-muted);
-  --vk-color-info-light-3: color-mix(in srgb, var(--text-secondary) 55%, transparent);
-  --vk-color-info-light-5: color-mix(in srgb, var(--text-secondary) 35%, transparent);
-  --vk-color-info-light-8: color-mix(in srgb, var(--text-secondary) 18%, transparent);
-  --vk-color-info-light-9: color-mix(in srgb, var(--text-secondary) 10%, transparent);
+  --vk-color-info-light-3: var(--text-muted);
+  --vk-color-info-light-5: var(--border);
+  --vk-color-info-light-8: var(--border-subtle);
+  --vk-color-info-light-9: var(--border-faint);
 
   --vk-bg-color-overlay: var(--bg-elevated);
   --vk-fill-color-blank: var(--bg-elevated);
@@ -207,20 +278,20 @@
   --vk-border-style: solid;
   --vk-border: var(--vk-border-width) var(--vk-border-style) var(--vk-border-color);
 
-  --vk-border-radius-base: 8px;
-  --vk-border-radius-round: 999px;
+  --vk-border-radius-base: var(--radius-md);
+  --vk-border-radius-round: var(--radius-pill);
   --vk-border-radius-circle: 50%;
-  --vk-font-size-base: 14px;
+  --vk-font-size-base: var(--font-size-3);
   --vk-font-weight-primary: 500;
-  --vk-component-size: 32px;
-  --vk-component-size-large: 40px;
-  --vk-component-size-small: 24px;
+  --vk-component-size: 36px;
+  --vk-component-size-large: 44px;
+  --vk-component-size-small: 28px;
   --vk-disabled-bg-color: var(--bg-surface-3);
   --vk-disabled-border-color: var(--border-faint);
   --vk-disabled-text-color: var(--text-faint);
-  --vk-box-shadow-light: 0 18px 50px rgba(0, 0, 0, 0.28);
-  --vk-transition-duration: 0.2s;
-  --vk-transition-duration-fast: 0.16s;
+  --vk-box-shadow-light: var(--shadow-md);
+  --vk-transition-duration: var(--motion-base);
+  --vk-transition-duration-fast: var(--motion-fast);
   --vk-transition-box-shadow: box-shadow var(--vk-transition-duration-fast);
 
   --vk-modal-bg-color: var(--bg-elevated);
@@ -228,22 +299,23 @@
   --vk-modal-body-text-color: var(--text-secondary);
   --vk-modal-close-color: var(--text-muted);
   --vk-modal-close-hover-color: var(--accent);
-  --vk-modal-border-radius: 8px;
+  --vk-modal-border-radius: var(--radius-md);
 }
 
-/* 组件库遮罩默认写死为黑色透明，这里接入应用主题变量。 */
 .vk-overlay {
   background-color: var(--bg-overlay);
+  backdrop-filter: blur(8px);
 }
 
 .vk-modal {
-  --vk-modal-bg-color: var(--bg-elevated);
-  --vk-modal-header-text-color: var(--text-primary);
-  --vk-modal-body-text-color: var(--text-secondary);
-  --vk-modal-close-color: var(--text-muted);
-  --vk-modal-close-hover-color: var(--accent);
-  --vk-modal-border-radius: 8px;
-
   border: 1px solid var(--border);
-  box-shadow: var(--vk-box-shadow-light);
+  box-shadow: var(--shadow-lg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 1ms;
+    --motion-base: 1ms;
+    --motion-slow: 1ms;
+  }
 }

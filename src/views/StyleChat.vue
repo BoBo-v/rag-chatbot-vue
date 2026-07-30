@@ -1,5 +1,5 @@
 <template>
-  <div class="app-shell">
+  <div class="chat-shell">
 
     <!-- ── 动态背景 ── -->
     <div class="bg-canvas">
@@ -14,15 +14,17 @@
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
         <span class="sidebar-title">对话列表</span>
-        <button class="new-chat-btn" title="新对话" @click="handleNewConversation">＋</button>
+        <button class="new-chat-btn" type="button" title="新对话" aria-label="新建对话" @click="handleNewConversation">
+          <Plus :size="17" aria-hidden="true" />
+        </button>
       </div>
       <div class="sidebar-body">
         <button class="new-chat-big-btn" @click="handleNewConversation">
-          <span class="new-chat-icon">✎</span>
+          <MessageSquarePlus class="new-chat-icon" :size="17" aria-hidden="true" />
           新建对话
         </button>
         <div class="sidebar-search">
-          <span class="sidebar-search-icon">⌕</span>
+          <Search class="sidebar-search-icon" :size="16" aria-hidden="true" />
           <input
               v-model="conversationSearchDraft"
               class="sidebar-search-input"
@@ -37,7 +39,7 @@
               aria-label="清空搜索"
               @click="conversationSearchDraft = ''"
           >
-            ×
+            <X :size="14" aria-hidden="true" />
           </button>
         </div>
 
@@ -84,7 +86,9 @@
                 @click="handleSelectConversation(conv.id)"
             >
               <span class="conv-title">{{ conv.title }}</span>
-              <button class="conv-del" title="删除" @click.stop="handleDeleteConversation(conv.id)">×</button>
+              <button class="conv-del" type="button" title="删除" aria-label="删除对话" @click.stop="handleDeleteConversation(conv.id)">
+                <Trash2 :size="14" aria-hidden="true" />
+              </button>
             </div>
           </template>
           <div v-if="conversations.length === 0" class="conv-empty">暂无对话记录</div>
@@ -101,9 +105,11 @@
       <!-- ── 顶栏 ── -->
       <header class="topbar">
         <div class="topbar-left">
-          <button class="menu-btn" @click="sidebarOpen = !sidebarOpen">☰</button>
+          <button class="menu-btn" type="button" aria-label="打开会话列表" @click="sidebarOpen = !sidebarOpen">
+            <Menu :size="19" aria-hidden="true" />
+          </button>
           <div class="topbar-logo">
-            <span class="logo-dot"></span>
+            <img class="logo-mark" src="/favicon.svg" alt="" aria-hidden="true" />
             <span class="logo-text">AI Chat</span>
             <span v-if="currentSettings.showModelInTopbar" class="topbar-model">{{ currentModelName }}</span>
           </div>
@@ -113,7 +119,9 @@
             <span class="status-dot"></span>
             <span>{{ isStreaming ? 'Thinking...' : 'Ready' }}</span>
           </div>
-          <button class="settings-btn" title="设置" @click="settingsOpen = true">⚙</button>
+          <button class="settings-btn" type="button" title="设置" aria-label="打开聊天设置" @click="settingsOpen = true">
+            <Settings2 :size="17" aria-hidden="true" />
+          </button>
         </div>
       </header>
 
@@ -123,7 +131,7 @@
 
           <!-- 空状态 -->
           <div v-if="messages.length === 0" class="empty-state">
-            <div class="empty-icon">✦</div>
+            <div class="empty-icon"><Sparkles :size="28" aria-hidden="true" /></div>
             <p>发送消息开始对话</p>
           </div>
 
@@ -137,7 +145,7 @@
             <div
                 v-if="msg.role === 'assistant'"
                 class="msg-avatar ai-avatar"
-            >A</div>
+            ><img src="/favicon.svg" alt="AI" /></div>
             <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">U</div>
             <div class="msg-col">
               <div
@@ -151,7 +159,7 @@ class="msg-bubble"
               >
                 <div v-if="msg.files?.length" class="msg-files">
                   <div v-for="(file, idx) in msg.files" :key="idx" class="msg-file-chip">
-                    <span class="file-icon">📄</span>
+                    <FileText class="file-icon" :size="14" aria-hidden="true" />
                     <span class="file-name">{{ file.name }}</span>
                     <span class="file-size">{{ formatFileSize(file.size) }}</span>
                   </div>
@@ -221,10 +229,12 @@ v-for="(img, idx) in msg.images" :key="idx"
         <!-- 文件预览 -->
         <div v-if="pendingFiles.length > 0" class="file-preview-bar">
           <div v-for="(file, idx) in pendingFiles" :key="idx" class="file-preview-item">
-            <span class="file-icon">📄</span>
+            <FileText class="file-icon" :size="14" aria-hidden="true" />
             <span class="file-name">{{ file.name }}</span>
             <span class="file-size">{{ formatFileSize(file.size) }}</span>
-            <button class="file-remove-btn" @click="removeFile(idx)">×</button>
+            <button class="file-remove-btn" type="button" aria-label="移除文件" @click="removeFile(idx)">
+              <X :size="12" aria-hidden="true" />
+            </button>
           </div>
         </div>
         <div v-if="isKnowledgeUploading" class="knowledge-upload-progress">
@@ -240,7 +250,9 @@ v-for="(img, idx) in msg.images" :key="idx"
         <div v-if="pendingImages.length > 0" class="image-preview-bar">
           <div v-for="(img, idx) in pendingImages" :key="idx" class="image-preview-item">
             <img :src="`data:${img.mediaType};base64,${img.base64}`" :alt="img.name" />
-            <button class="image-remove-btn" @click="removeImage(idx)">×</button>
+            <button class="image-remove-btn" type="button" aria-label="移除图片" @click="removeImage(idx)">
+              <X :size="12" aria-hidden="true" />
+            </button>
           </div>
         </div>
         <div
@@ -286,20 +298,10 @@ class="input-box" :class="{ disabled: isStreaming }"
           <div class="input-toolbar">
             <div class="toolbar-left">
               <button class="tool-btn" :disabled="isStreaming" title="上传图片" @click="imageInputRef?.click()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                  <polyline points="21 15 16 10 5 21"/>
-                </svg>
+                <ImageIcon :size="18" aria-hidden="true" />
               </button>
               <button class="tool-btn" :disabled="isStreaming" title="上传文件" @click="fileInputRef?.click()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="16" y1="13" x2="8" y2="13"/>
-                  <line x1="16" y1="17" x2="8" y2="17"/>
-                  <polyline points="10 9 9 9 8 9"/>
-                </svg>
+                <FileText :size="18" aria-hidden="true" />
               </button>
               <button
                   class="tool-btn knowledge-upload-btn"
@@ -309,12 +311,7 @@ class="input-box" :class="{ disabled: isStreaming }"
                   @click="knowledgeInputRef?.click()"
               >
                 <span v-if="isKnowledgeUploading" class="upload-spinner"></span>
-                <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                  <path d="M12 13V7"/>
-                  <path d="m9 10 3-3 3 3"/>
-                </svg>
+                <BookUp2 v-else :size="18" aria-hidden="true" />
               </button>
               <button
 v-if="speechSupported"
@@ -323,23 +320,20 @@ v-if="speechSupported"
                       :disabled="isStreaming"
                       :title="isListening ? '停止语音输入' : '语音输入'"
                       @click="toggleVoice">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                  <line x1="12" y1="19" x2="12" y2="23"/>
-                  <line x1="8" y1="23" x2="16" y2="23"/>
-                </svg>
+                <Mic :size="18" aria-hidden="true" />
               </button>
             </div>
             <div class="toolbar-right">
-              <button v-if="isStreaming" class="stop-btn" @click="handleStop">■</button>
+              <button v-if="isStreaming" class="stop-btn" type="button" aria-label="停止生成" @click="handleStop">
+                <Square :size="15" :fill="'currentColor'" aria-hidden="true" />
+              </button>
               <button
                   v-else
                   class="send-btn"
                   :class="{ ready: inputValue.trim() || pendingImages.length > 0 || pendingFiles.length > 0 }"
                   :disabled="!inputValue.trim() && pendingImages.length === 0 && pendingFiles.length === 0"
                   @click="handleSend"
-              >↑</button>
+              ><Send :size="17" aria-hidden="true" /></button>
             </div>
           </div>
         </div>
@@ -382,6 +376,22 @@ v-if="speechSupported"
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import {
+  BookUp2,
+  FileText,
+  Image as ImageIcon,
+  Menu,
+  MessageSquarePlus,
+  Mic,
+  Plus,
+  Search,
+  Send,
+  Settings2,
+  Sparkles,
+  Square,
+  Trash2,
+  X,
+} from 'lucide-vue-next'
 import { useChatView } from '../composables/useChatView'
 import { useSpeechRecognition } from '../composables/useSpeechRecognition'
 import { useConversationSearch } from '../composables/useConversationSearch'

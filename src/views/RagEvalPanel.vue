@@ -7,18 +7,22 @@
           <strong>测试集</strong>
         </div>
         <button type="button" class="rag-eval-primary" :disabled="isRunning" @click="addCase">
+          <Plus :size="15" aria-hidden="true" />
           添加
         </button>
       </div>
 
       <div class="rag-eval-import-row">
         <button type="button" class="rag-eval-secondary" :disabled="isRunning" @click="importInputRef?.click()">
+          <Upload :size="15" aria-hidden="true" />
           导入 JSON
         </button>
         <button type="button" class="rag-eval-secondary" :disabled="cases.length === 0" @click="exportCases">
+          <Download :size="15" aria-hidden="true" />
           导出测试集
         </button>
         <button type="button" class="rag-eval-secondary" :disabled="!hasCompletedResults" @click="exportReport">
+          <FileDown :size="15" aria-hidden="true" />
           导出报告
         </button>
         <input ref="importInputRef" type="file" accept="application/json,.json" hidden @change="importCases" />
@@ -55,9 +59,11 @@
         </div>
         <div class="rag-eval-run-actions">
           <button type="button" class="rag-eval-secondary" :disabled="isRunning || !selectedCase" @click="runSelected">
+            <Play :size="14" aria-hidden="true" />
             运行当前
           </button>
           <button type="button" class="rag-eval-primary" :disabled="isRunning || runnableCases.length === 0" @click="runAll">
+            <Play :size="14" aria-hidden="true" />
             {{ isRunning ? '运行中...' : '运行全部' }}
           </button>
         </div>
@@ -231,6 +237,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { Download, FileDown, Play, Plus, Upload } from 'lucide-vue-next'
 import { useToast } from '../composables/useToast'
 import { searchKnowledge } from '../services/knowledge'
 import {
@@ -870,6 +877,252 @@ function formatOptionalScore(value: number | undefined): string {
   .rag-eval-two-cols,
   .rag-eval-controls {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Violet console visual layer */
+.rag-eval-shell {
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 1px;
+  overflow: hidden;
+  background: var(--border-subtle);
+  font-family: var(--font-sans);
+}
+
+.rag-eval-sidebar,
+.rag-eval-main,
+.rag-eval-editor,
+.rag-eval-results,
+:global([data-theme="light"]) .rag-eval-sidebar,
+:global([data-theme="light"]) .rag-eval-main,
+:global([data-theme="light"]) .rag-eval-editor,
+:global([data-theme="light"]) .rag-eval-results {
+  min-width: 0;
+  background: var(--bg-elevated);
+}
+
+.rag-eval-toolbar,
+.rag-eval-runbar,
+.rag-eval-results-header,
+.rag-eval-editor-header {
+  min-height: 56px;
+  border-color: var(--border-subtle);
+}
+
+.rag-eval-eyebrow,
+.rag-eval-case-index,
+.rag-eval-case-state,
+.rag-eval-score-row,
+.rag-eval-result-stats {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+
+.rag-eval-primary,
+.rag-eval-secondary,
+.rag-eval-danger {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+}
+
+.rag-eval-primary {
+  border: 1px solid var(--accent-border);
+  color: #ffffff;
+  background: var(--accent-deep);
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.rag-eval-primary:hover:not(:disabled) { background: var(--accent-deeper); }
+
+.rag-eval-secondary {
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+}
+
+.rag-eval-secondary:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+  background: var(--accent-bg);
+}
+
+.rag-eval-danger {
+  border-color: var(--danger-border);
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.rag-eval-import-row {
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom-color: var(--border-subtle);
+}
+
+.rag-eval-case-list { padding: 10px; }
+
+.rag-eval-case-item {
+  min-height: 58px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+.rag-eval-case-item:hover { background: var(--bg-surface-2); }
+
+.rag-eval-case-item.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.rag-eval-case-item.passed {
+  border-color: var(--success-border);
+}
+
+.rag-eval-case-item.failed {
+  border-color: var(--danger-border);
+}
+
+.rag-eval-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  padding: 1px;
+  border-color: var(--border-subtle);
+  background: var(--border-subtle);
+}
+
+.rag-eval-summary > div {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-surface-2);
+}
+
+.rag-eval-summary strong {
+  color: var(--data-accent);
+  font-family: var(--font-mono);
+}
+
+.rag-eval-workspace {
+  gap: 1px;
+  background: var(--border-subtle);
+}
+
+.rag-eval-editor,
+.rag-eval-results {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.rag-eval-editor textarea,
+.rag-eval-editor input,
+.rag-eval-editor select {
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  background: var(--bg-input);
+}
+
+.rag-eval-editor textarea:focus,
+.rag-eval-editor input:focus,
+.rag-eval-editor select:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.rag-eval-result-badge {
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+}
+
+.rag-eval-hit {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+}
+
+.rag-eval-hit.matched {
+  border-color: var(--data-accent-border);
+  background: var(--data-accent-bg);
+}
+
+.rag-eval-score-row { color: var(--data-accent); }
+
+@media (max-width: 1180px) {
+  .rag-eval-shell {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .rag-eval-sidebar { min-height: 300px; }
+
+  .rag-eval-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .rag-eval-shell {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .rag-eval-sidebar,
+  .rag-eval-main {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .rag-eval-toolbar,
+  .rag-eval-runbar {
+    flex: 0 0 auto;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .rag-eval-runbar {
+    align-items: stretch;
+  }
+
+  .rag-eval-run-actions,
+  .rag-eval-import-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .rag-eval-import-row .rag-eval-secondary:last-of-type {
+    grid-column: 1 / -1;
+  }
+
+  .rag-eval-primary,
+  .rag-eval-secondary,
+  .rag-eval-danger {
+    min-height: 44px;
+    min-width: 0;
+  }
+
+  .rag-eval-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rag-eval-workspace,
+  .rag-eval-two-cols,
+  .rag-eval-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rag-eval-editor,
+  .rag-eval-results {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 }
 </style>

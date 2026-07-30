@@ -6,7 +6,7 @@
 
     <header class="knowledge-header">
       <div class="knowledge-title">
-        <span class="knowledge-mark">K</span>
+        <span class="knowledge-mark"><img src="/favicon.svg" alt="AI Chat" /></span>
         <div>
           <h1>知识库</h1>
           <p>{{ files.length }} 个文件 · {{ totalChunks }} 个片段 · {{ formatNumber(totalChars) }} 字</p>
@@ -14,9 +14,11 @@
       </div>
       <div class="knowledge-actions">
         <button type="button" class="kb-secondary" :disabled="loadingFiles || loadingVectorStatus" @click="loadKnowledgeOverview">
+          <RefreshCw :size="15" aria-hidden="true" />
           刷新
         </button>
         <button type="button" class="kb-primary" :disabled="uploading" @click="fileInputRef?.click()">
+          <Upload :size="15" aria-hidden="true" />
           {{ uploading ? '上传中...' : '上传资料' }}
         </button>
         <input
@@ -115,7 +117,7 @@
             <strong id="kb-preview-title">{{ uploadPreviewDialog.fileName }}</strong>
           </div>
           <button type="button" class="kb-preview-close" aria-label="关闭预览" @click="closeUploadPreview">
-            ×
+            <X :size="16" aria-hidden="true" />
           </button>
         </header>
 
@@ -167,7 +169,7 @@
         </div>
 
         <div class="kb-filter">
-          <span>⌕</span>
+          <Search :size="16" aria-hidden="true" />
           <input v-model="fileFilter" type="search" placeholder="搜索文件..." />
         </div>
 
@@ -331,6 +333,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { RefreshCw, Search, Upload, X } from 'lucide-vue-next'
 import { useToast } from '../composables/useToast'
 import { useConfirm } from '../composables/useConfirm'
 import RagEvalPanel from './RagEvalPanel.vue'
@@ -1575,5 +1578,334 @@ onMounted(loadKnowledgeOverview)
   .kb-stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* Violet console visual layer */
+.knowledge-shell {
+  overflow: hidden;
+  background-color: var(--bg-canvas);
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  font-family: var(--font-sans);
+}
+
+.knowledge-bg,
+.knowledge-noise { display: none; }
+
+.knowledge-header {
+  height: 64px;
+  min-height: 64px;
+  padding: 0 18px;
+  border-bottom-color: var(--border-subtle);
+  background: var(--bg-topbar);
+  backdrop-filter: blur(14px);
+}
+
+.knowledge-title { gap: 10px; }
+
+.knowledge-mark {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  color: inherit;
+  background: var(--accent-bg);
+  box-shadow: var(--shadow-accent);
+}
+
+.knowledge-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.knowledge-title h1 {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.knowledge-title p {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.knowledge-actions { gap: 6px; }
+
+.kb-primary,
+.kb-secondary,
+.kb-danger {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+}
+
+.kb-primary {
+  border: 1px solid var(--accent-border);
+  color: #ffffff;
+  background: var(--accent-deep);
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.kb-primary:hover:not(:disabled) { background: var(--accent-deeper); }
+
+.kb-secondary {
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+}
+
+.kb-secondary:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+  background: var(--accent-bg);
+}
+
+.kb-danger {
+  border-color: var(--danger-border);
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.kb-vector-status {
+  min-height: 38px;
+  padding: 5px 18px;
+  border-bottom-color: var(--border-subtle);
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  backdrop-filter: none;
+  font-family: var(--font-mono);
+}
+
+[data-theme="light"] .kb-vector-status { background: var(--bg-surface); }
+
+.kb-vector-status-label {
+  border-color: var(--data-accent-border);
+  border-radius: var(--radius-pill);
+  color: var(--data-accent);
+  background: var(--data-accent-bg);
+}
+
+.kb-vector-refresh { color: var(--data-accent); }
+
+.kb-subnav {
+  min-height: 42px;
+  padding: 5px 18px;
+  border-bottom-color: var(--border-subtle);
+  background: var(--bg-topbar);
+  backdrop-filter: blur(10px);
+}
+
+[data-theme="light"] .kb-subnav { background: var(--bg-topbar); }
+
+.kb-subnav button {
+  min-height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+.kb-subnav button.active {
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+  background: var(--accent-bg);
+}
+
+.kb-upload-panel,
+[data-theme="light"] .kb-upload-panel {
+  border-bottom-color: var(--border-subtle);
+  background: var(--bg-elevated);
+  backdrop-filter: none;
+}
+
+.kb-upload-item {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-2);
+}
+
+.kb-upload-bar { background: var(--data-accent); }
+
+.knowledge-layout {
+  grid-template-columns: 280px minmax(0, 1fr) 360px;
+  gap: 1px;
+  background: var(--border-subtle);
+}
+
+.kb-panel,
+[data-theme="light"] .kb-panel {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-elevated);
+  box-shadow: none;
+}
+
+.kb-panel-header {
+  min-height: 54px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.kb-eyebrow,
+.kb-status,
+.kb-file-meta,
+.kb-file-date,
+.kb-score-row {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+
+.kb-filter {
+  min-height: 40px;
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: var(--bg-input);
+}
+
+.kb-filter:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.kb-file-item {
+  min-height: 54px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.kb-file-item:hover { background: var(--bg-surface-2); }
+
+.kb-file-item.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.kb-stats-grid > div,
+.kb-chunk,
+.kb-result {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+}
+
+.kb-search-form textarea,
+.kb-controls input,
+.kb-preview-body {
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  background: var(--bg-input);
+}
+
+.kb-search-form textarea:focus,
+.kb-controls input:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.kb-result header > span,
+.kb-score-row { color: var(--data-accent); }
+
+.kb-preview-modal {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+}
+
+@media (max-width: 1180px) {
+  .knowledge-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .kb-search-panel {
+    grid-column: 1 / -1;
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 760px) {
+  .knowledge-header {
+    height: auto;
+    min-height: 104px;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .knowledge-title { width: 100%; }
+
+  .knowledge-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kb-primary,
+  .kb-secondary,
+  .kb-danger {
+    min-height: 44px;
+  }
+
+  .kb-vector-status {
+    max-height: 94px;
+    gap: 6px;
+    padding: 7px 12px;
+    overflow-y: auto;
+  }
+
+  .kb-vector-status strong {
+    max-width: calc(100% - 100px);
+  }
+
+  .kb-vector-status-meta {
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .kb-subnav {
+    padding: 5px 10px;
+    overflow-x: auto;
+  }
+
+  .kb-subnav button {
+    min-height: 40px;
+    flex: 0 0 auto;
+  }
+
+  .knowledge-layout {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .kb-panel {
+    width: 100%;
+    min-height: 340px;
+    max-width: 100%;
+  }
+
+  .kb-search-panel { grid-column: auto; }
+
+  .kb-upload-panel-header,
+  .kb-upload-strip {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .kb-controls {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kb-checkbox { grid-column: 1 / -1; }
 }
 </style>

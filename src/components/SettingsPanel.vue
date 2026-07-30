@@ -1,12 +1,14 @@
 <template>
   <Teleport to="body">
     <div class="settings-overlay" @click.self="$emit('close')">
-      <div class="settings-panel">
+      <div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
 
         <!-- 标题栏 -->
         <div class="settings-header">
-          <span class="settings-title">设置</span>
-          <button class="settings-close" @click="$emit('close')">✕</button>
+          <span id="settings-title" class="settings-title">设置</span>
+          <button type="button" class="settings-close" aria-label="关闭设置" @click="$emit('close')">
+            <X :size="18" aria-hidden="true" />
+          </button>
         </div>
 
         <div class="settings-body">
@@ -18,11 +20,16 @@
               <button
                 v-for="t in themes"
                 :key="t.value"
+                type="button"
                 class="theme-btn"
                 :class="{ active: settings.theme === t.value }"
+                :aria-pressed="settings.theme === t.value"
                 @click="settings.theme = t.value"
               >
-                {{ t.icon }} {{ t.label }}
+                <Moon v-if="t.value === 'dark'" :size="16" aria-hidden="true" />
+                <Sun v-else-if="t.value === 'light'" :size="16" aria-hidden="true" />
+                <Monitor v-else :size="16" aria-hidden="true" />
+                {{ t.label }}
               </button>
             </div>
             <span class="settings-hint">更改立即生效，无需保存</span>
@@ -39,6 +46,7 @@
                 class="rag-mode-btn"
                 :class="{ active: draft.transport === mode.value }"
                 type="button"
+                :aria-pressed="draft.transport === mode.value"
                 @click="draft.transport = mode.value"
               >
                 {{ mode.label }}
@@ -50,7 +58,8 @@
           <div v-if="draft.transport === 'backend'" class="settings-group">
             <div class="settings-label-row">
               <label class="settings-label">后端代理模型</label>
-              <button class="btn-refresh" :class="{ loading: loadingBackendProviders }" @click="loadBackendProviders">
+              <button type="button" class="btn-refresh" :class="{ loading: loadingBackendProviders }" @click="loadBackendProviders">
+                <RefreshCw :size="13" :class="{ spinning: loadingBackendProviders }" aria-hidden="true" />
                 {{ loadingBackendProviders ? '获取中...' : '刷新厂商' }}
               </button>
             </div>
@@ -86,6 +95,7 @@
                 :class="{ active: draft.ragMode === mode.value }"
                 :disabled="draft.transport !== 'backend'"
                 type="button"
+                :aria-pressed="draft.ragMode === mode.value"
                 @click="draft.ragMode = mode.value"
               >
                 {{ mode.label }}
@@ -103,11 +113,15 @@
             <button
               v-for="p in providers"
               :key="p.value"
+              type="button"
               class="provider-tab"
               :class="{ active: draft.provider === p.value }"
+              :aria-pressed="draft.provider === p.value"
               @click="draft.provider = p.value"
             >
-              <span class="tab-icon">{{ p.icon }}</span>
+              <Bot v-if="p.value === 'ollama'" class="tab-icon" :size="16" aria-hidden="true" />
+              <Waypoints v-else-if="p.value === 'openai'" class="tab-icon" :size="16" aria-hidden="true" />
+              <Sparkles v-else class="tab-icon" :size="16" aria-hidden="true" />
               {{ p.label }}
             </button>
           </div>
@@ -123,7 +137,8 @@ v-model="draft.ollama.url" class="settings-input"
             <div class="settings-group">
               <div class="settings-label-row">
                 <label class="settings-label">模型</label>
-                <button class="btn-refresh" :class="{ loading: loadingModels }" @click="loadModels">
+                <button type="button" class="btn-refresh" :class="{ loading: loadingModels }" @click="loadModels">
+                  <RefreshCw :size="13" :class="{ spinning: loadingModels }" aria-hidden="true" />
                   {{ loadingModels ? '获取中...' : '刷新列表' }}
                 </button>
               </div>
@@ -156,7 +171,8 @@ v-model="draft.openai.baseUrl" class="settings-input"
             <div class="settings-group">
               <div class="settings-label-row">
                 <label class="settings-label">模型</label>
-                <button class="btn-refresh" :class="{ loading: loadingModels }" @click="loadModels">
+                <button type="button" class="btn-refresh" :class="{ loading: loadingModels }" @click="loadModels">
+                  <RefreshCw :size="13" :class="{ spinning: loadingModels }" aria-hidden="true" />
                   {{ loadingModels ? '获取中...' : '刷新列表' }}
                 </button>
               </div>
@@ -233,8 +249,10 @@ v-model="draft.systemPrompt"
             <div class="context-presets">
               <button
 v-for="(tier, idx) in contextTiers" :key="tier.label"
+                type="button"
                 class="context-preset-btn"
                 :class="{ active: activeTierIndex === idx }"
+                :aria-pressed="activeTierIndex === idx"
                 @click="selectTier(idx)"
               >{{ tier.label }}</button>
             </div>
@@ -252,8 +270,11 @@ v-if="activeTier.max !== UNLIMITED"
         </div>
 
         <div class="settings-footer">
-          <button class="btn-cancel" @click="$emit('close')">取消</button>
-          <button class="btn-save" @click="save">保存</button>
+          <button type="button" class="btn-cancel" @click="$emit('close')">取消</button>
+          <button type="button" class="btn-save" @click="save">
+            <Save :size="15" aria-hidden="true" />
+            保存
+          </button>
         </div>
 
       </div>
@@ -263,6 +284,7 @@ v-if="activeTier.max !== UNLIMITED"
 
 <script setup lang="ts">
 import { reactive, ref, watch, computed } from 'vue'
+import { Bot, Monitor, Moon, RefreshCw, Save, Sparkles, Sun, Waypoints, X } from 'lucide-vue-next'
 import { settings } from '../stores/settings'
 import { fetchModels } from '../services/stream'
 import { getClaudeModels } from '../services/providers/claude'
@@ -296,16 +318,16 @@ function findTierIndex(value: number): number {
   return 0
 }
 
-const themes: { value: ThemeType; label: string; icon: string }[] = [
-  { value: 'dark',   label: '暗色', icon: '🌙' },
-  { value: 'light',  label: '亮色', icon: '☀️' },
-  { value: 'system', label: '跟随系统', icon: '💻' },
+const themes: { value: ThemeType; label: string }[] = [
+  { value: 'dark',   label: '暗色' },
+  { value: 'light',  label: '亮色' },
+  { value: 'system', label: '跟随系统' },
 ]
 
-const providers: { value: ProviderType; label: string; icon: string }[] = [
-  { value: 'ollama',  label: 'Ollama',       icon: '🦙' },
-  { value: 'openai',  label: 'OpenAI 兼容',   icon: '⚡' },
-  { value: 'claude',  label: 'Claude',        icon: '✦' },
+const providers: { value: ProviderType; label: string }[] = [
+  { value: 'ollama',  label: 'Ollama' },
+  { value: 'openai',  label: 'OpenAI 兼容' },
+  { value: 'claude',  label: 'Claude' },
 ]
 
 const connectionModes: { value: TransportMode; label: string; hint: string }[] = [

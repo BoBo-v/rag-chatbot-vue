@@ -187,8 +187,8 @@
             <div v-if="pendingImages.length" class="image-preview-row">
               <div v-for="(img, index) in pendingImages" :key="img.name + index" class="image-preview-item">
                 <img :src="`data:${img.mediaType};base64,${img.base64}`" :alt="img.name" />
-                <button type="button" class="attachment-remove" :disabled="isRunning" @click="removeImage(index)">
-                  ×
+                <button type="button" class="attachment-remove" :disabled="isRunning" aria-label="移除图片" @click="removeImage(index)">
+                  <X :size="13" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -196,8 +196,8 @@
               <div v-for="(file, index) in pendingFiles" :key="file.name + file.size" class="file-preview-item">
                 <span class="file-name">{{ file.name }}</span>
                 <span class="file-size">{{ formatFileSize(file.size) }}</span>
-                <button type="button" class="attachment-remove" :disabled="isRunning" @click="removeFile(index)">
-                  ×
+                <button type="button" class="attachment-remove" :disabled="isRunning" aria-label="移除文件" @click="removeFile(index)">
+                  <X :size="13" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -406,7 +406,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Braces, FileDown, History, Plus, Square } from 'lucide-vue-next'
+import { Braces, FileDown, History, Plus, Square, X } from 'lucide-vue-next'
 import CompareHistoryView from './CompareHistoryView.vue'
 import ComparisonRunCard from '../components/ComparisonRunCard.vue'
 import { useAttachments } from '../composables/useAttachments'

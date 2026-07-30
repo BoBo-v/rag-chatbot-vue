@@ -334,3 +334,130 @@
 [data-theme="light"] .hljs-tag          { color: #22863a; }
 [data-theme="light"] .hljs-tag .hljs-name { color: #22863a; }
 [data-theme="light"] .hljs-tag .hljs-attr { color: #005cc5; }
+
+/* Restrained violet console refinement */
+.markdown-body {
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+}
+
+.markdown-body p { margin: 0 0 10px; }
+.markdown-body p:last-child { margin-bottom: 0; }
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+    letter-spacing: 0;
+}
+
+.markdown-body h1 { font-size: 1.35em; }
+.markdown-body h2 { font-size: 1.22em; }
+.markdown-body h3 { font-size: 1.12em; }
+
+.markdown-body code:not(pre code) {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    padding: 2px 5px;
+    color: var(--accent-text);
+    background: var(--accent-bg);
+    font-family: var(--font-mono);
+}
+
+.markdown-body pre {
+    max-width: 100%;
+    margin: 12px 0;
+    padding: 14px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-code);
+    white-space: pre;
+    word-break: normal;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.markdown-body pre code {
+    min-width: max-content;
+    color: var(--text-code);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.65;
+    white-space: pre;
+    word-break: normal;
+}
+
+.code-block-wrapper {
+    max-width: 100%;
+    margin: 12px 0;
+    border-color: var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-code);
+}
+
+.code-block-header {
+    min-height: 36px;
+    padding: 6px 10px;
+    background: var(--bg-code-header);
+}
+
+.code-lang {
+    color: var(--data-accent);
+    font-family: var(--font-mono);
+    letter-spacing: 0;
+}
+
+.code-copy-btn {
+    min-height: 28px;
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    background: var(--bg-surface-2);
+}
+
+.code-copy-btn:focus-visible,
+.markdown-body a:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.code-copy-btn.copied {
+    border-color: var(--success-border);
+    color: var(--success);
+    background: var(--success-bg);
+}
+
+.markdown-body blockquote {
+    border-left-color: var(--accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: var(--accent-bg);
+}
+
+.markdown-body table {
+    max-width: 100%;
+    border-radius: var(--radius-sm);
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.markdown-body th {
+    color: var(--text-primary);
+    background: var(--bg-surface-2);
+}
+
+.markdown-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-sm);
+}
+
+@media (max-width: 600px) {
+    .markdown-body pre { padding: 12px; }
+    .markdown-body pre code { font-size: 12.5px; }
+    .code-copy-btn { min-height: 36px; }
+}

@@ -1,6 +1,8 @@
 <template>
   <details class="rag-citations">
     <summary class="rag-citations-summary">
+      <ChevronRight class="rag-citations-chevron" :size="15" aria-hidden="true" />
+      <Database :size="15" aria-hidden="true" />
       <span class="rag-citations-title">{{ summaryTitle }}</span>
       <span class="rag-citations-state">{{ stateLabel }}</span>
     </summary>
@@ -39,6 +41,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ChevronRight, Database } from 'lucide-vue-next'
 import type { RagContextInfo } from '../types/chat'
 
 const props = defineProps<{

@@ -10,7 +10,10 @@
     @cancel="resolveConfirm(false)"
   >
     <div class="confirm-content">
-      <span class="confirm-icon" :class="{ danger: confirmState.danger }">!</span>
+      <span class="confirm-icon" :class="{ danger: confirmState.danger }" aria-hidden="true">
+        <TriangleAlert v-if="confirmState.danger" :size="17" />
+        <CircleAlert v-else :size="17" />
+      </span>
       <p class="confirm-message">{{ confirmState.message }}</p>
     </div>
     <template #footer>
@@ -28,6 +31,7 @@
 
 <script setup lang="ts">
 import { Button, Modal } from '@bobocn/element/vue'
+import { CircleAlert, TriangleAlert } from 'lucide-vue-next'
 import { useConfirm } from '../composables/useConfirm'
 
 const { confirmState, resolveConfirm } = useConfirm()

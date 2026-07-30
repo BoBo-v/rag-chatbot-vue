@@ -354,9 +354,15 @@ v-if="speechSupported"
           :key="t.id"
           class="toast-item"
           :class="t.type"
+          :role="t.type === 'error' ? 'alert' : 'status'"
+          aria-live="polite"
           @click="toast.dismiss(t.id)"
       >
-        <span class="toast-icon">{{ t.type === 'error' ? '✕' : t.type === 'warning' ? '!' : '✓' }}</span>
+        <span class="toast-icon" aria-hidden="true">
+          <CircleAlert v-if="t.type === 'error'" :size="16" />
+          <TriangleAlert v-else-if="t.type === 'warning'" :size="16" />
+          <CircleCheck v-else :size="16" />
+        </span>
         <span class="toast-msg">{{ t.message }}</span>
       </div>
     </transition-group>
@@ -378,6 +384,8 @@ v-if="speechSupported"
 import { ref, watch } from 'vue'
 import {
   BookUp2,
+  CircleAlert,
+  CircleCheck,
   FileText,
   Image as ImageIcon,
   Menu,
@@ -390,6 +398,7 @@ import {
   Sparkles,
   Square,
   Trash2,
+  TriangleAlert,
   X,
 } from 'lucide-vue-next'
 import { useChatView } from '../composables/useChatView'

@@ -319,12 +319,18 @@
     <transition-group name="toast-slide" tag="div" class="toast-container">
       <div
         v-for="t in toast.toasts.value"
-        :key="t.id"
-        class="toast-item"
-        :class="t.type"
-        @click="toast.dismiss(t.id)"
+          :key="t.id"
+          class="toast-item"
+          :class="t.type"
+          :role="t.type === 'error' ? 'alert' : 'status'"
+          aria-live="polite"
+          @click="toast.dismiss(t.id)"
       >
-        <span class="toast-icon">{{ t.type === 'error' ? '✕' : t.type === 'warning' ? '!' : '✓' }}</span>
+        <span class="toast-icon" aria-hidden="true">
+          <CircleAlert v-if="t.type === 'error'" :size="16" />
+          <TriangleAlert v-else-if="t.type === 'warning'" :size="16" />
+          <CircleCheck v-else :size="16" />
+        </span>
         <span class="toast-msg">{{ t.message }}</span>
       </div>
     </transition-group>
@@ -333,7 +339,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RefreshCw, Search, Upload, X } from 'lucide-vue-next'
+import { CircleAlert, CircleCheck, RefreshCw, Search, TriangleAlert, Upload, X } from 'lucide-vue-next'
 import { useToast } from '../composables/useToast'
 import { useConfirm } from '../composables/useConfirm'
 import RagEvalPanel from './RagEvalPanel.vue'

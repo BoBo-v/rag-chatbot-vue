@@ -2408,7 +2408,14 @@ datalist option {
 .chat-shell .conv-item:hover,
 .chat-shell .search-result-item:hover {
     transform: none;
-    background: var(--bg-surface-2);
+    border-color: var(--border);
+    border-left-color: var(--accent-border);
+    background: color-mix(in srgb, var(--bg-surface-2) 82%, var(--accent-bg));
+}
+
+.chat-shell .conv-item:hover .conv-title,
+.chat-shell .search-result-item:hover .search-result-title {
+    color: var(--text-primary);
 }
 
 .chat-shell .conv-item.active,
@@ -2418,7 +2425,26 @@ datalist option {
     background: var(--accent-bg);
 }
 
-.chat-shell .conv-del { width: 30px; height: 30px; }
+.chat-shell .conv-item.active .conv-title,
+.chat-shell .search-result-item.active .search-result-title {
+    color: var(--accent-text);
+}
+
+.chat-shell .conv-del {
+    display: flex;
+    width: 30px;
+    height: 30px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.chat-shell .conv-item:hover .conv-del,
+.chat-shell .conv-item.active .conv-del,
+.chat-shell .conv-item:focus-within .conv-del {
+    opacity: 1;
+    pointer-events: auto;
+}
 
 .chat-shell .main-content {
     min-width: 0;
@@ -2565,11 +2591,12 @@ datalist option {
 }
 
 .chat-shell .msg-bubble.assistant {
-    border: 1px solid transparent;
-    border-radius: 0;
-    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md) var(--radius-md) var(--radius-md) var(--radius-xs);
+    color: var(--bubble-ai-color);
+    background: color-mix(in srgb, var(--bubble-ai-bg) 94%, var(--accent-bg));
     backdrop-filter: none;
-    box-shadow: none;
+    box-shadow: var(--bubble-ai-shadow);
 }
 
 .chat-shell .msg-content {

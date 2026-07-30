@@ -15,6 +15,7 @@
           :class="{ active: historySidebarOpen }"
           @click="toggleHistorySidebar"
         >
+          <History :size="15" aria-hidden="true" />
           对比历史
         </button>
         <button
@@ -23,6 +24,7 @@
           :disabled="isRunning"
           @click="newComparison"
         >
+          <Plus :size="15" aria-hidden="true" />
           新对比
         </button>
         <button
@@ -31,6 +33,7 @@
           :disabled="!currentSession"
           @click="exportMarkdown"
         >
+          <FileDown :size="15" aria-hidden="true" />
           导出 MD
         </button>
         <button
@@ -39,6 +42,7 @@
           :disabled="!currentSession"
           @click="exportJson"
         >
+          <Braces :size="15" aria-hidden="true" />
           导出 JSON
         </button>
         <button
@@ -47,6 +51,7 @@
           :disabled="!isRunning"
           @click="stopAll"
         >
+          <Square :size="13" :fill="'currentColor'" aria-hidden="true" />
           停止全部
         </button>
       </div>
@@ -401,6 +406,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { Braces, FileDown, History, Plus, Square } from 'lucide-vue-next'
 import CompareHistoryView from './CompareHistoryView.vue'
 import ComparisonRunCard from '../components/ComparisonRunCard.vue'
 import { useAttachments } from '../composables/useAttachments'
@@ -2080,6 +2086,387 @@ textarea:disabled {
   .code-diff-row {
     grid-template-columns: 40px minmax(240px, 1fr) 40px minmax(240px, 1fr);
     min-width: 640px;
+  }
+}
+
+/* Violet console visual layer */
+.compare-shell {
+  --compare-bg: var(--bg-canvas);
+  --compare-panel: var(--bg-elevated);
+  --compare-panel-strong: var(--bg-surface);
+  --compare-soft: var(--bg-surface-2);
+  --compare-input: var(--bg-input);
+  --compare-line: var(--border-subtle);
+  --compare-line-strong: var(--border);
+  --compare-text: var(--text-primary);
+  --compare-muted: var(--text-secondary);
+  --compare-faint: var(--text-muted);
+  --compare-primary: var(--accent-deep);
+  --compare-primary-strong: var(--accent-text);
+  --compare-primary-soft: var(--accent-bg);
+  --compare-scroll-track: transparent;
+  --compare-scroll-thumb: var(--scrollbar-thumb);
+  --compare-success-text: var(--success);
+  --compare-success-bg: var(--success-bg);
+  --compare-success-border: var(--success-border);
+  --compare-error-text: var(--danger);
+  --compare-error-bg: var(--danger-bg);
+  --compare-error-border: var(--danger-border);
+  --compare-warning-text: var(--warning);
+  --compare-warning-bg: var(--warning-bg);
+  --compare-warning-border: var(--warning-border);
+  --compare-shadow: var(--shadow-sm);
+  overflow: hidden;
+  background-color: var(--bg-canvas);
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  font-family: var(--font-sans);
+}
+
+:global([data-theme="light"]) .compare-shell {
+  --compare-bg: var(--bg-canvas);
+  --compare-panel: var(--bg-elevated);
+  --compare-panel-strong: var(--bg-surface);
+  --compare-soft: var(--bg-surface-2);
+  --compare-input: var(--bg-input);
+  --compare-line: var(--border-subtle);
+  --compare-line-strong: var(--border);
+  --compare-text: var(--text-primary);
+  --compare-muted: var(--text-secondary);
+  --compare-faint: var(--text-muted);
+  --compare-primary: var(--accent-deep);
+  --compare-primary-strong: var(--accent-text);
+  --compare-primary-soft: var(--accent-bg);
+  --compare-scroll-track: transparent;
+  --compare-scroll-thumb: var(--scrollbar-thumb);
+  --compare-success-text: var(--success);
+  --compare-success-bg: var(--success-bg);
+  --compare-success-border: var(--success-border);
+  --compare-error-text: var(--danger);
+  --compare-error-bg: var(--danger-bg);
+  --compare-error-border: var(--danger-border);
+  --compare-warning-text: var(--warning);
+  --compare-warning-bg: var(--warning-bg);
+  --compare-warning-border: var(--warning-border);
+  --compare-shadow: var(--shadow-sm);
+}
+
+.compare-header {
+  height: 64px;
+  min-height: 64px;
+  padding: 0 18px;
+  border-bottom-color: var(--border-subtle);
+  background: var(--bg-topbar);
+  backdrop-filter: blur(14px);
+}
+
+.compare-title { gap: 10px; }
+
+.compare-title h1 {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.compare-title p {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.logo-dot {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  background: var(--accent-bg);
+  box-shadow: var(--shadow-accent);
+}
+
+.header-actions {
+  gap: 6px;
+  padding-right: 0;
+}
+
+.header-actions .compare-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.compare-main {
+  width: min(1500px, calc(100% - 32px));
+  grid-template-columns: 276px minmax(0, 1fr) 316px;
+  gap: 12px;
+  margin: 16px auto;
+}
+
+.compare-main.history-collapsed {
+  grid-template-columns: minmax(0, 1fr) 316px;
+}
+
+.comparison-workspace,
+.summary-panel,
+.code-compare-panel {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+.history-mode-banner,
+.stats-strip {
+  border-bottom-color: var(--border-subtle);
+  background: var(--bg-surface-2);
+}
+
+.stat-chip,
+.model-chip,
+.snapshot-status {
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.compare-setup {
+  padding: 16px 18px;
+  border-bottom-color: var(--border-subtle);
+  background: transparent;
+}
+
+.prompt-input,
+.field-input,
+.summary-select,
+.summary-model,
+.code-language-select,
+.code-block-select {
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  background: var(--bg-input);
+}
+
+.prompt-input:focus,
+.field-input:focus,
+.summary-select:focus,
+.summary-model:focus,
+.code-language-select:focus,
+.code-block-select:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.runtime-editor,
+.runtime-snapshot-card {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-2);
+  box-shadow: none;
+}
+
+.runtime-editor:nth-child(1),
+.runtime-editor:nth-child(2) {
+  border-top-color: var(--accent-border);
+}
+
+.compare-primary,
+.compare-secondary,
+.small-btn {
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+}
+
+.compare-primary {
+  border: 1px solid var(--accent-border);
+  color: #ffffff;
+  background: var(--accent-deep);
+  box-shadow: 0 0 18px var(--accent-glow);
+}
+
+.compare-primary:hover:not(:disabled) {
+  background: var(--accent-deeper);
+}
+
+.compare-secondary,
+.small-btn {
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+}
+
+.compare-secondary:hover:not(:disabled),
+.small-btn:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+  background: var(--accent-bg);
+}
+
+.run-grid {
+  gap: 12px;
+  padding: 14px 18px 18px;
+}
+
+.code-diff-table {
+  max-width: 100%;
+  overflow-x: auto;
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 1180px) {
+  .compare-shell { overflow: hidden; }
+
+  .compare-main {
+    width: calc(100% - 24px);
+    grid-template-columns: 244px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    margin: 12px auto;
+  }
+
+  .compare-main.history-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .comparison-sidebar,
+  .comparison-workspace {
+    min-height: min(620px, calc(100dvh - 100px));
+  }
+}
+
+@media (max-width: 820px) {
+  .compare-shell { overflow: hidden; }
+
+  .compare-header {
+    height: auto;
+    min-height: 0;
+    gap: 8px;
+    padding: 9px 10px 8px;
+  }
+
+  .header-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .header-actions .compare-secondary {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 38px;
+  }
+
+  .compare-main,
+  .compare-main.history-collapsed {
+    width: 100%;
+    height: 0;
+    min-height: 0;
+    flex: 1 1 0;
+    margin: 0;
+    padding: 10px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    gap: 10px;
+    overflow-y: auto;
+  }
+
+  .comparison-sidebar { min-height: 300px; }
+
+  .comparison-workspace {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 560px;
+    overflow: visible;
+  }
+
+  .comparison-inspector { grid-column: auto; }
+
+  .compare-setup,
+  .run-grid,
+  .code-compare-panel,
+  .summary-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .prompt-panel,
+  .prompt-input,
+  .runtime-grid,
+  .runtime-editor,
+  .runtime-snapshot-grid,
+  .runtime-snapshot-card,
+  .compare-actions,
+  .summary-toolbar,
+  .summary-actions {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .runtime-grid,
+  .runtime-snapshot-grid,
+  .run-grid,
+  .code-compare-grid,
+  .summary-toolbar,
+  .summary-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .compare-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compare-primary,
+  .compare-secondary,
+  .small-btn {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 560px) {
+  .compare-title p { max-width: 240px; }
+
+  .header-actions,
+  .compare-actions,
+  .summary-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .compare-actions .compare-primary,
+  .compare-actions .compare-secondary,
+  .summary-actions .compare-primary,
+  .summary-actions .compare-secondary {
+    width: auto;
+    min-width: 118px;
+    flex: 0 0 auto;
+  }
+
+  .comparison-workspace,
+  .summary-panel {
+    border-radius: var(--radius-md);
+  }
+
+  .runtime-editor,
+  .runtime-snapshot-card {
+    padding: 12px;
+  }
+
+  .code-diff-row {
+    grid-template-columns: 38px minmax(220px, 1fr) 38px minmax(220px, 1fr);
+    min-width: 560px;
   }
 }
 </style>

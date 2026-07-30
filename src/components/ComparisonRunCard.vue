@@ -312,4 +312,61 @@ const showRetry = computed(() => props.showRetry ?? true)
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* Shared violet console tokens */
+.comparison-run-card,
+:global([data-theme="light"]) .comparison-run-card {
+  --run-line: var(--border-subtle);
+  --run-line-strong: var(--border);
+  --run-panel: var(--bg-elevated);
+  --run-soft: var(--bg-surface-2);
+  --run-text: var(--text-primary);
+  --run-muted: var(--text-secondary);
+  --run-primary: var(--accent-text);
+  --run-primary-soft: var(--accent-bg);
+  --run-scroll-track: transparent;
+  --run-scroll-thumb: var(--scrollbar-thumb);
+  --run-success-text: var(--success);
+  --run-success-bg: var(--success-bg);
+  --run-success-border: var(--success-border);
+  --run-error-text: var(--danger);
+  --run-error-bg: var(--danger-bg);
+  --run-error-border: var(--danger-border);
+  --run-warning-text: var(--warning);
+  --run-warning-bg: var(--warning-bg);
+  --run-warning-border: var(--warning-border);
+  min-height: 340px;
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.run-card-header { padding: 13px 14px; }
+
+.provider-badge,
+.status-pill {
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+}
+
+.run-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.run-action {
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+}
+
+.run-action.primary {
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+  background: var(--accent-bg);
+}
+
+@media (max-width: 820px) {
+  .comparison-run-card { min-height: 300px; }
+  .run-action { min-height: 44px; }
+}
 </style>

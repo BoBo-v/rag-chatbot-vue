@@ -427,4 +427,85 @@ function formatDate(timestamp: number): string {
     justify-content: flex-start;
   }
 }
+
+/* Shared violet console tokens */
+.compare-history-view,
+:global([data-theme="light"]) .compare-history-view {
+  --history-line: var(--border-subtle);
+  --history-line-strong: var(--border);
+  --history-text: var(--text-primary);
+  --history-muted: var(--text-secondary);
+  --history-soft: var(--bg-surface-2);
+  --history-panel: var(--bg-elevated);
+  --history-input: var(--bg-input);
+  --history-primary: var(--accent-text);
+  --history-primary-deep: var(--accent-deep);
+  --history-primary-soft: var(--accent-bg);
+  --history-scroll-track: transparent;
+  --history-scroll-thumb: var(--scrollbar-thumb);
+  --history-danger-text: var(--danger);
+  --history-danger-bg: var(--danger-bg);
+  --history-danger-border: var(--danger-border);
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+.history-header { padding: 14px; }
+
+.history-header h2 {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.history-header p,
+.history-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.history-primary,
+.history-secondary,
+.history-danger,
+.history-filter-tab {
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+}
+
+.history-primary {
+  border-color: var(--accent-border);
+  color: #ffffff;
+  background: var(--accent-deep);
+  box-shadow: none;
+}
+
+.history-search {
+  height: 40px;
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+.history-search:focus { box-shadow: var(--focus-ring); }
+
+.history-item {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+}
+
+.history-item.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+@media (max-width: 820px) {
+  .history-primary,
+  .history-secondary,
+  .history-danger,
+  .history-filter-tab {
+    min-height: 44px;
+  }
+}
 </style>

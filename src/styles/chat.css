@@ -3196,7 +3196,10 @@ datalist option {
 }
 
 .vk-modal__header { border-bottom: 1px solid var(--border-subtle); }
-.vk-modal__footer { border-top: 1px solid var(--border-subtle); }
+.vk-modal__footer {
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+}
 
 @media (max-width: 600px) {
     .settings-panel,

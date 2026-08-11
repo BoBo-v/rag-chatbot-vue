@@ -145,6 +145,7 @@ export async function streamAgentRun(
         await parser.push(decoder.decode())
         await parser.finish()
     } catch (error) {
+        await reader.cancel().catch(() => undefined)
         throw normalizeNetworkError(error, options.signal)
     } finally {
         reader.releaseLock()

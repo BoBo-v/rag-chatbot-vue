@@ -1,7 +1,11 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 const openAIProxyPrefix = '/__ai_proxy/openai'
+
+function getBackendTarget(mode: string): string {
+    return loadEnv(mode, process.cwd(), '').VITE_BACKEND_TARGET?.trim() || 'http://127.0.0.1:3001'
+}
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -12,7 +16,7 @@ export default defineConfig(({ mode }) => ({
         host: '0.0.0.0',
         proxy: {
             '/api': {
-                target: 'http://127.0.0.1:3001',
+                target: getBackendTarget(mode),
                 changeOrigin: true,
             },
         },

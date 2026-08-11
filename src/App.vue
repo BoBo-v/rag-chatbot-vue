@@ -89,7 +89,7 @@ watch(() => settings.theme, applyTheme)
       <section v-show="mode === 'chat'" class="mode-page" aria-label="聊天工作区">
         <StyleChat />
       </section>
-      <section v-show="mode === 'agent'" class="mode-page" aria-label="Agent 工作区">
+      <section v-if="mode === 'agent'" class="mode-page" aria-label="Agent 工作区">
         <AgentWorkspace />
       </section>
       <section v-show="mode === 'compare'" class="mode-page" aria-label="模型对比工作区">

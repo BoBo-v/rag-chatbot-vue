@@ -28,6 +28,7 @@
           <span class="agent-key-input">
             <KeyRound :size="15" aria-hidden="true" />
             <input
+              ref="accessKeyInput"
               v-model="accessKey"
               :type="showAccessKey ? 'text' : 'password'"
               maxlength="512"
@@ -68,7 +69,7 @@
       </button>
     </div>
 
-    <div class="agent-main">
+    <div class="agent-main" :class="{ 'is-activity-collapsed': activityCollapsed }">
       <section class="agent-conversation" aria-label="Agent 对话">
         <div ref="messageFeed" class="agent-message-feed" aria-live="polite">
           <div v-if="messages.length === 0 && !agent.isRunning.value" class="agent-empty">
@@ -111,16 +112,24 @@
             <CircleX :size="18" aria-hidden="true" />
             <div>
               <strong>{{ agent.errorCode.value || 'AGENT_FAILED' }}</strong>
-              <p>{{ agent.errorMessage.value }}</p>
+              <p>{{ displayErrorMessage }}</p>
             </div>
+            <button type="button" :disabled="!canRetry" @click="retryLastTask">
+              <RotateCcw :size="15" aria-hidden="true" />
+              重新运行
+            </button>
           </article>
 
           <article v-else-if="agent.status.value === 'cancelled'" class="agent-run-message is-cancelled" role="status">
             <CircleStop :size="18" aria-hidden="true" />
             <div>
               <strong>运行已取消</strong>
-              <p>{{ agent.errorMessage.value || '本次运行已停止，可以重新提交任务。' }}</p>
+              <p>{{ displayErrorMessage }}</p>
             </div>
+            <button type="button" :disabled="!canRetry" @click="retryLastTask">
+              <RotateCcw :size="15" aria-hidden="true" />
+              重新运行
+            </button>
           </article>
         </div>
 
@@ -159,13 +168,25 @@
         </form>
       </section>
 
-      <aside class="agent-activity" aria-label="Agent 执行过程">
+      <aside class="agent-activity" :class="{ 'is-collapsed': activityCollapsed }" aria-label="Agent 执行过程">
         <header class="agent-activity-header">
           <div>
             <span class="agent-eyebrow">Execution</span>
             <strong>执行过程</strong>
           </div>
-          <span v-if="agent.currentStep.value > 0" class="agent-step">Step {{ agent.currentStep.value }}/3</span>
+          <div class="agent-activity-actions">
+            <span v-if="agent.currentStep.value > 0" class="agent-step">Step {{ agent.currentStep.value }}/3</span>
+            <button
+              type="button"
+              class="agent-activity-toggle"
+              title="展开或收起执行过程"
+              :aria-expanded="!activityCollapsed"
+              aria-label="展开或收起执行过程"
+              @click="activityCollapsed = !activityCollapsed"
+            >
+              <ChevronDown :size="17" :class="{ rotated: !activityCollapsed }" aria-hidden="true" />
+            </button>
+          </div>
         </header>
 
         <div class="agent-activity-list">
@@ -214,6 +235,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   Activity,
   Bot,
+  ChevronDown,
   CircleStop,
   CircleX,
   Eye,
@@ -222,6 +244,7 @@ import {
   LoaderCircle,
   Play,
   RefreshCw,
+  RotateCcw,
   Trash2,
   TriangleAlert,
   UserRound,
@@ -235,6 +258,7 @@ import {
   type AgentEvent,
   type AgentProviderId,
   type AgentProviderInfo,
+  type AgentRunRequest,
   type AgentUsage,
 } from '../services/agent'
 import { renderMarkdown } from '../utils/markdown'
@@ -259,10 +283,13 @@ const providersLoading = ref(false)
 const providerError = ref('')
 const selectedModelKey = ref('')
 const accessKey = ref(loadAgentAccessKey())
+const accessKeyInput = ref<HTMLInputElement | null>(null)
 const showAccessKey = ref(false)
+const activityCollapsed = ref(false)
 const prompt = ref('')
 const messages = ref<WorkspaceMessage[]>([])
 const messageFeed = ref<HTMLElement | null>(null)
+const lastRequest = ref<AgentRunRequest | null>(null)
 let nextMessageId = 1
 let providerController: AbortController | null = null
 
@@ -277,7 +304,9 @@ const modelOptions = computed<AgentModelOption[]>(() => providers.value.flatMap(
 
 const selectedModel = computed(() => modelOptions.value.find(option => option.key === selectedModelKey.value) ?? null)
 const canSubmit = computed(() => Boolean(prompt.value.trim() && selectedModel.value && !providersLoading.value))
+const canRetry = computed(() => Boolean(lastRequest.value && !agent.isRunning.value))
 const activityEvents = computed(() => agent.events.value.filter(event => event.type !== 'heartbeat'))
+const displayErrorMessage = computed(() => describeAgentError(agent.errorCode.value, agent.errorMessage.value))
 
 const statusLabel = computed(() => ({
   idle: '就绪',
@@ -310,7 +339,10 @@ watch(modelOptions, options => {
 }, { immediate: true })
 watch(() => [agent.events.value.length, messages.value.length], scrollToLatest)
 
-onMounted(loadProviders)
+onMounted(() => {
+  activityCollapsed.value = window.matchMedia('(max-width: 820px)').matches
+  void loadProviders()
+})
 onBeforeUnmount(() => providerController?.abort())
 
 async function loadProviders(): Promise<void> {
@@ -336,14 +368,25 @@ async function submitTask(): Promise<void> {
   const runtime = selectedModel.value
   if (!task || !runtime || agent.isRunning.value) return
 
-  messages.value.push({ id: nextMessageId++, role: 'user', content: task })
-  prompt.value = ''
-  await agent.run({
+  const request: AgentRunRequest = {
     agentProfile: 'calculator-v0',
     provider: runtime.provider,
     model: runtime.model,
     messages: [{ role: 'user', content: task }],
-  }, accessKey.value)
+  }
+  lastRequest.value = request
+  messages.value.push({ id: nextMessageId++, role: 'user', content: task })
+  prompt.value = ''
+  await executeRequest(request)
+}
+
+async function retryLastTask(): Promise<void> {
+  if (!lastRequest.value || agent.isRunning.value) return
+  await executeRequest(lastRequest.value)
+}
+
+async function executeRequest(request: AgentRunRequest): Promise<void> {
+  await agent.run(request, accessKey.value)
 
   if (agent.status.value === 'completed' && agent.answer.value.trim()) {
     messages.value.push({
@@ -352,11 +395,16 @@ async function submitTask(): Promise<void> {
       content: agent.answer.value,
       renderedContent: renderMarkdown(agent.answer.value),
     })
+  } else if (agent.errorCode.value === 'AGENT_UNAUTHORIZED') {
+    showAccessKey.value = true
+    await nextTick()
+    accessKeyInput.value?.focus()
   }
 }
 
 function clearWorkspace(): void {
   messages.value = []
+  lastRequest.value = null
   agent.reset()
 }
 
@@ -434,6 +482,30 @@ function readText(value: unknown, fallback = '-'): string {
 function readNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
+
+function describeAgentError(code: string, fallback: string): string {
+  const messages: Record<string, string> = {
+    AGENT_UNAUTHORIZED: 'Agent 密钥不正确或尚未配置。',
+    AGENT_LOOPBACK_REQUIRED: '当前 Agent 只允许从后端所在主机访问。',
+    AGENT_QUEUE_FULL: '模型等待队列已满，请稍后重新运行。',
+    AGENT_QUEUE_TIMEOUT: '等待模型执行超时，请稍后重新运行。',
+    AGENT_TIMEOUT: 'Agent 整次运行超时，模型和工具调用已停止。',
+    MODEL_TIMEOUT: '模型调用超时，请检查 Ollama 运行状态后重试。',
+    TOOL_TIMEOUT: '工具执行超时，本次 Agent 运行已停止。',
+    MODEL_PROVIDER_FAILED: '模型服务调用失败，请检查 Ollama 服务和模型状态。',
+    MODEL_RESPONSE_INVALID: '模型返回的工具调用格式不符合 Agent 协议。',
+    TOOL_ARGUMENTS_INVALID: '模型生成的工具参数未通过后端校验。',
+    TOOL_EXECUTION_FAILED: '后端工具执行失败，本次运行已停止。',
+    AGENT_LIMIT_EXCEEDED: '本次运行已达到模型或工具调用上限。',
+    AGENT_STREAM_INCOMPLETE: 'Agent 连接在返回最终状态前已断开。',
+    AGENT_PROTOCOL_ERROR: 'Agent 事件流不符合前端协议校验。',
+    AGENT_PROTOCOL_VERSION_UNSUPPORTED: '前后端 Agent 事件协议版本不兼容。',
+    AGENT_NETWORK_ERROR: '无法连接 Agent 接口，请检查后端服务。',
+    NOT_FOUND: 'Agent 接口尚未开放，请检查后端 AGENT_ENABLED 和访问模式。',
+    CLIENT_ABORTED: '本次运行已停止，可以重新运行同一任务。',
+  }
+  return messages[code] ?? (fallback || 'Agent 运行失败。')
+}
 </script>
 
 <style scoped>
@@ -443,9 +515,13 @@ function readNumber(value: unknown): number {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   color: var(--text-primary);
   background: var(--bg-canvas);
+}
+
+.agent-workspace:has(> .agent-notice) {
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .agent-toolbar {
@@ -789,6 +865,26 @@ textarea:disabled {
   font-size: 13px;
 }
 
+.agent-run-message > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.agent-run-message > button {
+  min-height: 30px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+}
+
 .agent-composer {
   display: flex;
   align-items: flex-end;
@@ -879,6 +975,32 @@ textarea:disabled {
 
 .agent-activity-header strong {
   font-size: 14px;
+}
+
+.agent-activity-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.agent-activity-toggle {
+  width: 32px;
+  height: 32px;
+  display: none;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: var(--bg-surface-2);
+  cursor: pointer;
+}
+
+.agent-activity-toggle svg {
+  transition: transform var(--motion-fast) ease;
+}
+
+.agent-activity-toggle svg.rotated {
+  transform: rotate(180deg);
 }
 
 .agent-step {
@@ -1073,6 +1195,10 @@ textarea:disabled {
     grid-template-rows: minmax(0, 1fr) minmax(180px, 32vh);
   }
 
+  .agent-main.is-activity-collapsed {
+    grid-template-rows: minmax(0, 1fr) 55px;
+  }
+
   .agent-activity {
     border-top: 1px solid var(--border-subtle);
     border-left: 0;
@@ -1080,6 +1206,19 @@ textarea:disabled {
 
   .agent-activity-header {
     min-height: 54px;
+  }
+
+  .agent-activity-toggle {
+    display: grid;
+  }
+
+  .agent-activity.is-collapsed {
+    grid-template-rows: auto;
+  }
+
+  .agent-activity.is-collapsed .agent-activity-list,
+  .agent-activity.is-collapsed .agent-run-meta {
+    display: none;
   }
 }
 

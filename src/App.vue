@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
-import { Columns2, Database, MessageSquare, Settings2 } from 'lucide-vue-next'
+import { Bot, Columns2, Database, MessageSquare, Settings2 } from 'lucide-vue-next'
 import StyleChat from './views/StyleChat.vue'
 import CompareChat from './views/CompareChat.vue'
 import KnowledgeBase from './views/KnowledgeBase.vue'
+import AgentWorkspace from './views/AgentWorkspace.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import { settings, type ThemeType } from './stores/settings'
 
-type AppMode = 'chat' | 'compare' | 'knowledge'
+type AppMode = 'chat' | 'agent' | 'compare' | 'knowledge'
 
 const mode = ref<AppMode>('chat')
 const settingsOpen = ref(false)
 const modes: { value: AppMode; label: string; icon: Component }[] = [
   { value: 'chat', label: '聊天', icon: MessageSquare },
+  { value: 'agent', label: 'Agent', icon: Bot },
   { value: 'compare', label: '模型对比', icon: Columns2 },
   { value: 'knowledge', label: '知识库', icon: Database },
 ]
@@ -86,6 +88,9 @@ watch(() => settings.theme, applyTheme)
     <main class="app-stage">
       <section v-show="mode === 'chat'" class="mode-page" aria-label="聊天工作区">
         <StyleChat />
+      </section>
+      <section v-show="mode === 'agent'" class="mode-page" aria-label="Agent 工作区">
+        <AgentWorkspace />
       </section>
       <section v-show="mode === 'compare'" class="mode-page" aria-label="模型对比工作区">
         <CompareChat />
@@ -254,7 +259,7 @@ watch(() => settings.theme, applyTheme)
     position: relative;
     z-index: var(--z-navigation);
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     padding: 5px 6px calc(5px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--border-subtle);
     background: var(--bg-sidebar);

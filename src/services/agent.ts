@@ -2,7 +2,7 @@ export const AGENT_EVENT_VERSION = 1 as const
 export const AGENT_ACCESS_KEY_STORAGE_KEY = 'ai-chat.agent-access-key'
 
 export type AgentProviderId = 'ollama'
-export type AgentProfileId = 'calculator-v0'
+export type AgentProfileId = 'calculator-v0' | 'tools-v0'
 export type AgentRequestRole = 'user' | 'assistant'
 export type AgentTerminalEventType = 'agent_completed' | 'agent_failed' | 'agent_cancelled'
 

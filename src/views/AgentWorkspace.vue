@@ -369,7 +369,7 @@ async function submitTask(): Promise<void> {
   if (!task || !runtime || agent.isRunning.value) return
 
   const request: AgentRunRequest = {
-    agentProfile: 'calculator-v0',
+    agentProfile: 'tools-v0',
     provider: runtime.provider,
     model: runtime.model,
     messages: [{ role: 'user', content: task }],

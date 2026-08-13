@@ -203,6 +203,10 @@
                 <time :datetime="event.timestamp">{{ formatEventTime(event.timestamp) }}</time>
               </div>
               <p>{{ eventDetail(event) }}</p>
+              <div v-if="toolResult(event)" class="agent-tool-result">
+                <span>工具返回结果</span>
+                <pre>{{ toolResult(event) }}</pre>
+              </div>
             </div>
           </article>
         </div>
@@ -460,6 +464,10 @@ function eventTone(event: AgentEvent): string {
   if (event.type === 'agent_completed' || event.type === 'assistant_message' || event.type === 'tool_completed') return 'is-success'
   if (event.type === 'agent_cancelled') return 'is-muted'
   return 'is-active'
+}
+
+function toolResult(event: AgentEvent): string {
+  return event.type === 'tool_completed' ? readText(event.data.result, '') : ''
 }
 
 function formatEventTime(value: string): string {
@@ -1110,6 +1118,35 @@ textarea:disabled {
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.45;
+}
+
+.agent-tool-result {
+  min-width: 0;
+  margin-top: 8px;
+}
+
+.agent-tool-result > span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.agent-tool-result pre {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .agent-run-meta {

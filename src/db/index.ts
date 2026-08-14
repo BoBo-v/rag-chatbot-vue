@@ -122,6 +122,24 @@ export interface DBComparisonRun {
     sourceRunIds?: string[]
 }
 
+export interface DBAgentSession {
+    id: string
+    title: string
+    provider: string
+    model: string
+    agentProfile: string
+    createdAt: number
+    updatedAt: number
+}
+
+export interface DBAgentMessage {
+    id: string
+    sessionId: string
+    role: 'user' | 'assistant'
+    content: string
+    createdAt: number
+}
+
 class ChatDB extends Dexie {
     conversations!: Table<DBConversation, number>
     messages!: Table<DBMessage, string>
@@ -133,6 +151,8 @@ class ChatDB extends Dexie {
     searchMeta!: Table<DBSearchMeta, string>
     comparisonSessions!: Table<DBComparisonSession, string>
     comparisonRuns!: Table<DBComparisonRun, string>
+    agentSessions!: Table<DBAgentSession, string>
+    agentMessages!: Table<DBAgentMessage, string>
 
     constructor() {
         super('ai-chat-db')
@@ -167,6 +187,20 @@ class ChatDB extends Dexie {
             searchMeta: 'key',
             comparisonSessions: 'id, conversationId, updatedAt, createdAt',
             comparisonRuns: 'id, sessionId, status, startedAt, finishedAt'
+        })
+        this.version(5).stores({
+            conversations: '++id, updatedAt',
+            messages: 'id, conversationId',
+            searchDocs: '++docId, &messageId, conversationId, updatedAt, createdAt, role',
+            searchTerms: '[term+docId], term, docId',
+            searchTermStats: 'term',
+            searchTags: '[tag+docId], tag, docId',
+            recentSearches: '++id, query, usedAt',
+            searchMeta: 'key',
+            comparisonSessions: 'id, conversationId, updatedAt, createdAt',
+            comparisonRuns: 'id, sessionId, status, startedAt, finishedAt',
+            agentSessions: 'id, updatedAt, createdAt',
+            agentMessages: 'id, sessionId, createdAt'
         })
     }
 }

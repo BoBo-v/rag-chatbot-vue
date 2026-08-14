@@ -281,6 +281,10 @@ interface WorkspaceMessage {
   renderedContent?: string
 }
 
+const AGENT_CONTEXT_MAX_MESSAGES = 20
+const AGENT_CONTEXT_MESSAGE_MAX_CHARS = 8000
+const AGENT_CONTEXT_TOTAL_MAX_CHARS = 30_000
+
 const agent = useAgentRun()
 const providers = ref<AgentProviderInfo[]>([])
 const providersLoading = ref(false)
@@ -376,12 +380,44 @@ async function submitTask(): Promise<void> {
     agentProfile: 'tools-v0',
     provider: runtime.provider,
     model: runtime.model,
-    messages: [{ role: 'user', content: task }],
+    messages: buildAgentContextMessages(task),
   }
   lastRequest.value = request
   messages.value.push({ id: nextMessageId++, role: 'user', content: task })
   prompt.value = ''
   await executeRequest(request)
+}
+
+function buildAgentContextMessages(task: string): AgentRunRequest['messages'] {
+  const candidates: AgentRunRequest['messages'] = [
+    ...messages.value.map(message => ({
+      role: message.role,
+      content: truncateAgentContextContent(message.content),
+    })),
+    { role: 'user', content: task },
+  ]
+  const selected: AgentRunRequest['messages'] = []
+  let totalChars = 0
+
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    const message = candidates[index]
+    if (!message || selected.length >= AGENT_CONTEXT_MAX_MESSAGES) break
+    if (totalChars + message.content.length > AGENT_CONTEXT_TOTAL_MAX_CHARS) break
+    selected.unshift(message)
+    totalChars += message.content.length
+  }
+
+  if (selected.length > 1 && selected[0]?.role === 'assistant') selected.shift()
+  return selected
+}
+
+function truncateAgentContextContent(content: string): string {
+  if (content.length <= AGENT_CONTEXT_MESSAGE_MAX_CHARS) return content
+
+  const marker = '\n\n[中间内容已截断]\n\n'
+  const retainedChars = AGENT_CONTEXT_MESSAGE_MAX_CHARS - marker.length
+  const headChars = Math.ceil(retainedChars / 2)
+  return `${content.slice(0, headChars)}${marker}${content.slice(-Math.floor(retainedChars / 2))}`
 }
 
 async function retryLastTask(): Promise<void> {

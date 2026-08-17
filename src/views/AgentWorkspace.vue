@@ -50,6 +50,17 @@
         <button
           type="button"
           class="agent-icon-button"
+          title="显示或隐藏会话记录"
+          aria-label="显示或隐藏会话记录"
+          :aria-expanded="!historyCollapsed"
+          @click="historyCollapsed = !historyCollapsed"
+        >
+          <PanelLeft :size="17" aria-hidden="true" />
+        </button>
+
+        <button
+          type="button"
+          class="agent-icon-button"
           title="清空运行记录"
           aria-label="清空运行记录"
           :disabled="agent.isRunning.value || messages.length === 0"
@@ -69,7 +80,73 @@
       </button>
     </div>
 
-    <div class="agent-main" :class="{ 'is-activity-collapsed': activityCollapsed }">
+    <div
+      class="agent-main"
+      :class="{
+        'is-activity-collapsed': activityCollapsed,
+        'is-history-collapsed': historyCollapsed,
+      }"
+    >
+      <aside class="agent-history" aria-label="Agent 会话记录">
+        <header class="agent-history-header">
+          <div>
+            <span class="agent-eyebrow">History</span>
+            <strong>会话记录</strong>
+          </div>
+          <button
+            type="button"
+            title="新建 Agent 会话"
+            aria-label="新建 Agent 会话"
+            :disabled="agent.isRunning.value"
+            @click="clearWorkspace"
+          >
+            <Plus :size="17" aria-hidden="true" />
+          </button>
+        </header>
+
+        <div v-if="historyLoading" class="agent-history-state">
+          <LoaderCircle :size="18" class="spinning" aria-hidden="true" />
+          <span>加载中</span>
+        </div>
+        <div v-else-if="historyError" class="agent-history-state is-error" role="status">
+          <TriangleAlert :size="18" aria-hidden="true" />
+          <span>{{ historyError }}</span>
+          <button type="button" @click="restoreAgentHistory">重试</button>
+        </div>
+        <div v-else-if="sessions.length === 0" class="agent-history-state">
+          <MessageSquare :size="20" aria-hidden="true" />
+          <span>暂无会话记录</span>
+        </div>
+        <div v-else class="agent-history-list">
+          <article
+            v-for="session in sessions"
+            :key="session.id"
+            class="agent-history-item"
+            :class="{ active: activeSessionId === session.id }"
+          >
+            <button
+              type="button"
+              class="agent-history-select"
+              :disabled="agent.isRunning.value"
+              @click="selectAgentSession(session.id)"
+            >
+              <strong>{{ session.title }}</strong>
+              <span>{{ formatAgentSessionMeta(session) }}</span>
+            </button>
+            <button
+              type="button"
+              class="agent-history-delete"
+              title="删除会话"
+              aria-label="删除会话"
+              :disabled="agent.isRunning.value"
+              @click="removeAgentSession(session)"
+            >
+              <Trash2 :size="14" aria-hidden="true" />
+            </button>
+          </article>
+        </div>
+      </aside>
+
       <section class="agent-conversation" aria-label="Agent 对话">
         <div ref="messageFeed" class="agent-message-feed" aria-live="polite">
           <div v-if="messages.length === 0 && !agent.isRunning.value" class="agent-empty">
@@ -246,7 +323,10 @@ import {
   EyeOff,
   KeyRound,
   LoaderCircle,
+  MessageSquare,
+  PanelLeft,
   Play,
+  Plus,
   RefreshCw,
   RotateCcw,
   Trash2,
@@ -254,6 +334,17 @@ import {
   UserRound,
 } from 'lucide-vue-next'
 import { useAgentRun } from '../composables/useAgentRun'
+import { useConfirm } from '../composables/useConfirm'
+import {
+  appendAgentMessage,
+  createAgentSession,
+  deleteAgentSession,
+  listAgentSessions,
+  loadAgentSession,
+  type AgentSessionListItem,
+  type AgentSessionRuntime,
+  type AgentStoredMessage,
+} from '../services/agentPersistence'
 import {
   AgentClientError,
   fetchAgentProviders,
@@ -275,10 +366,11 @@ interface AgentModelOption {
 }
 
 interface WorkspaceMessage {
-  id: number
+  id: string
   role: 'user' | 'assistant'
   content: string
   renderedContent?: string
+  createdAt: number
 }
 
 const AGENT_CONTEXT_MAX_MESSAGES = 20
@@ -286,6 +378,7 @@ const AGENT_CONTEXT_MESSAGE_MAX_CHARS = 8000
 const AGENT_CONTEXT_TOTAL_MAX_CHARS = 30_000
 
 const agent = useAgentRun()
+const { confirm } = useConfirm()
 const providers = ref<AgentProviderInfo[]>([])
 const providersLoading = ref(false)
 const providerError = ref('')
@@ -294,11 +387,16 @@ const accessKey = ref(loadAgentAccessKey())
 const accessKeyInput = ref<HTMLInputElement | null>(null)
 const showAccessKey = ref(false)
 const activityCollapsed = ref(false)
+const historyCollapsed = ref(false)
 const prompt = ref('')
 const messages = ref<WorkspaceMessage[]>([])
+const sessions = ref<AgentSessionListItem[]>([])
+const activeSessionId = ref<string | null>(null)
+const historyLoading = ref(false)
+const historyError = ref('')
 const messageFeed = ref<HTMLElement | null>(null)
 const lastRequest = ref<AgentRunRequest | null>(null)
-let nextMessageId = 1
+const pendingModelKey = ref('')
 let providerController: AbortController | null = null
 
 const modelOptions = computed<AgentModelOption[]>(() => providers.value.flatMap(provider =>
@@ -311,7 +409,12 @@ const modelOptions = computed<AgentModelOption[]>(() => providers.value.flatMap(
 ))
 
 const selectedModel = computed(() => modelOptions.value.find(option => option.key === selectedModelKey.value) ?? null)
-const canSubmit = computed(() => Boolean(prompt.value.trim() && selectedModel.value && !providersLoading.value))
+const canSubmit = computed(() => Boolean(
+  prompt.value.trim()
+  && selectedModel.value
+  && !providersLoading.value
+  && !historyLoading.value
+))
 const canRetry = computed(() => Boolean(lastRequest.value && !agent.isRunning.value))
 const activityEvents = computed(() => agent.events.value.filter(event => event.type !== 'heartbeat'))
 const displayErrorMessage = computed(() => describeAgentError(agent.errorCode.value, agent.errorMessage.value))
@@ -341,6 +444,11 @@ const activeStatusText = computed(() => {
 
 watch(accessKey, saveAgentAccessKey)
 watch(modelOptions, options => {
+  if (pendingModelKey.value && options.some(option => option.key === pendingModelKey.value)) {
+    selectedModelKey.value = pendingModelKey.value
+    pendingModelKey.value = ''
+    return
+  }
   if (!options.some(option => option.key === selectedModelKey.value)) {
     selectedModelKey.value = options[0]?.key ?? ''
   }
@@ -349,7 +457,9 @@ watch(() => [agent.events.value.length, messages.value.length], scrollToLatest)
 
 onMounted(() => {
   activityCollapsed.value = window.matchMedia('(max-width: 820px)').matches
+  historyCollapsed.value = window.matchMedia('(max-width: 1180px)').matches
   void loadProviders()
+  void restoreAgentHistory()
 })
 onBeforeUnmount(() => providerController?.abort())
 
@@ -383,8 +493,15 @@ async function submitTask(): Promise<void> {
     messages: buildAgentContextMessages(task),
   }
   lastRequest.value = request
-  messages.value.push({ id: nextMessageId++, role: 'user', content: task })
+  const userMessage: WorkspaceMessage = {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content: task,
+    createdAt: Date.now(),
+  }
+  messages.value.push(userMessage)
   prompt.value = ''
+  await persistAgentUserMessage(request, userMessage)
   await executeRequest(request)
 }
 
@@ -429,12 +546,15 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
   await agent.run(request, accessKey.value)
 
   if (agent.status.value === 'completed' && agent.answer.value.trim()) {
-    messages.value.push({
-      id: nextMessageId++,
+    const assistantMessage: WorkspaceMessage = {
+      id: crypto.randomUUID(),
       role: 'assistant',
       content: agent.answer.value,
       renderedContent: renderMarkdown(agent.answer.value),
-    })
+      createdAt: Date.now(),
+    }
+    messages.value.push(assistantMessage)
+    await persistAgentAssistantMessage(request, assistantMessage)
   } else if (agent.errorCode.value === 'AGENT_UNAUTHORIZED') {
     showAccessKey.value = true
     await nextTick()
@@ -443,9 +563,165 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
 }
 
 function clearWorkspace(): void {
+  if (agent.isRunning.value) return
+  activeSessionId.value = null
   messages.value = []
   lastRequest.value = null
+  prompt.value = ''
   agent.reset()
+}
+
+async function restoreAgentHistory(): Promise<void> {
+  historyLoading.value = true
+  historyError.value = ''
+  try {
+    sessions.value = await listAgentSessions()
+    const latestSession = sessions.value[0]
+    if (latestSession) await openAgentSession(latestSession.id)
+  } catch (error) {
+    historyError.value = '无法读取本地会话记录'
+    console.warn('[agent] 读取会话记录失败', error)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function selectAgentSession(sessionId: string): Promise<void> {
+  if (agent.isRunning.value || sessionId === activeSessionId.value) return
+  historyLoading.value = true
+  historyError.value = ''
+  try {
+    await openAgentSession(sessionId)
+  } catch (error) {
+    historyError.value = '无法加载所选会话'
+    console.warn('[agent] 加载会话失败', error)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function openAgentSession(sessionId: string): Promise<void> {
+  const session = await loadAgentSession(sessionId)
+  if (!session) {
+    await refreshAgentSessionList()
+    return
+  }
+
+  activeSessionId.value = session.id
+  messages.value = session.messages.map(message => ({
+    ...message,
+    renderedContent: message.role === 'assistant' ? renderMarkdown(message.content) : undefined,
+  }))
+  lastRequest.value = null
+  prompt.value = ''
+  agent.reset()
+  applyAgentSessionRuntime(session)
+  if (window.matchMedia('(max-width: 1050px)').matches) historyCollapsed.value = true
+  scrollToLatest()
+}
+
+async function removeAgentSession(session: AgentSessionListItem): Promise<void> {
+  if (agent.isRunning.value) return
+  const confirmed = await confirm({
+    title: '删除 Agent 会话',
+    message: `确定删除“${session.title}”吗？删除后无法恢复。`,
+    confirmText: '删除',
+    danger: true,
+  })
+  if (!confirmed) return
+
+  try {
+    await deleteAgentSession(session.id)
+    const deletingActiveSession = activeSessionId.value === session.id
+    await refreshAgentSessionList()
+    if (deletingActiveSession) {
+      clearWorkspace()
+      const nextSession = sessions.value[0]
+      if (nextSession) await openAgentSession(nextSession.id)
+    }
+  } catch (error) {
+    historyError.value = '删除本地会话失败'
+    console.warn('[agent] 删除会话失败', error)
+  }
+}
+
+async function persistAgentUserMessage(
+  request: AgentRunRequest,
+  message: WorkspaceMessage
+): Promise<void> {
+  const runtime = toAgentSessionRuntime(request)
+  try {
+    if (activeSessionId.value) {
+      await appendAgentMessage(activeSessionId.value, runtime, toAgentStoredMessage(message))
+    } else {
+      const session = await createAgentSession(runtime, toAgentStoredMessage(message))
+      activeSessionId.value = session.id
+    }
+    await refreshAgentSessionList()
+  } catch (error) {
+    historyError.value = '本地会话保存失败'
+    console.warn('[agent] 保存用户消息失败', error)
+  }
+}
+
+async function persistAgentAssistantMessage(
+  request: AgentRunRequest,
+  message: WorkspaceMessage
+): Promise<void> {
+  if (!activeSessionId.value) return
+  try {
+    await appendAgentMessage(
+      activeSessionId.value,
+      toAgentSessionRuntime(request),
+      toAgentStoredMessage(message)
+    )
+    await refreshAgentSessionList()
+  } catch (error) {
+    historyError.value = 'Agent 回答保存失败'
+    console.warn('[agent] 保存回答失败', error)
+  }
+}
+
+async function refreshAgentSessionList(): Promise<void> {
+  sessions.value = await listAgentSessions()
+  historyError.value = ''
+}
+
+function applyAgentSessionRuntime(session: AgentSessionListItem): void {
+  const modelKey = `${session.provider}:${session.model}`
+  if (modelOptions.value.some(option => option.key === modelKey)) {
+    selectedModelKey.value = modelKey
+    pendingModelKey.value = ''
+  } else {
+    pendingModelKey.value = modelKey
+  }
+}
+
+function toAgentSessionRuntime(request: AgentRunRequest): AgentSessionRuntime {
+  return {
+    agentProfile: request.agentProfile,
+    provider: request.provider,
+    model: request.model,
+  }
+}
+
+function toAgentStoredMessage(message: WorkspaceMessage): AgentStoredMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    createdAt: message.createdAt,
+  }
+}
+
+function formatAgentSessionMeta(session: AgentSessionListItem): string {
+  const updatedAt = new Date(session.updatedAt).toLocaleString([], {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `${updatedAt} · ${session.messageCount} 条消息`
 }
 
 function handlePromptKeydown(event: KeyboardEvent): void {
@@ -762,11 +1038,172 @@ textarea:disabled {
   cursor: pointer;
 }
 
+.agent-history {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-sidebar);
+}
+
+.agent-history-header {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.agent-history-header strong {
+  font-size: 14px;
+}
+
+.agent-history-header > button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+  cursor: pointer;
+}
+
+.agent-history-header > button:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+  background: var(--accent-bg);
+}
+
+.agent-history-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.agent-history-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: center;
+  margin-bottom: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.agent-history-item:hover {
+  border-color: var(--border-subtle);
+  background: var(--bg-surface-2);
+}
+
+.agent-history-item.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.agent-history-select,
+.agent-history-delete {
+  min-width: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.agent-history-select {
+  display: block;
+  padding: 9px 7px 9px 9px;
+  text-align: left;
+}
+
+.agent-history-select strong,
+.agent-history-select span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-history-select strong {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agent-history-item.active .agent-history-select strong {
+  color: var(--text-primary);
+}
+
+.agent-history-select span {
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 9px;
+}
+
+.agent-history-delete {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  opacity: 0;
+}
+
+.agent-history-item:hover .agent-history-delete,
+.agent-history-item.active .agent-history-delete,
+.agent-history-delete:focus-visible {
+  opacity: 1;
+}
+
+.agent-history-delete:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.agent-history-state {
+  min-height: 160px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-align: center;
+}
+
+.agent-history-state.is-error {
+  color: var(--danger);
+}
+
+.agent-history-state > button {
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
 .agent-main {
   min-width: 0;
   min-height: 0;
   display: grid;
+  grid-template-columns: minmax(210px, 240px) minmax(0, 1fr) minmax(290px, 340px);
+}
+
+.agent-main.is-history-collapsed {
   grid-template-columns: minmax(0, 1fr) minmax(290px, 340px);
+}
+
+.agent-main.is-history-collapsed .agent-history {
+  display: none;
 }
 
 .agent-conversation,
@@ -1243,7 +1680,18 @@ textarea:disabled {
   }
 
   .agent-main {
+    position: relative;
     grid-template-columns: minmax(0, 1fr) 290px;
+  }
+
+  .agent-history {
+    position: absolute;
+    z-index: var(--z-navigation);
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(280px, calc(100% - 48px));
+    box-shadow: 12px 0 28px rgba(0, 0, 0, 0.18);
   }
 }
 
@@ -1255,7 +1703,7 @@ textarea:disabled {
 
   .agent-controls {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 38px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 38px 38px;
   }
 
   .agent-model-field select,
@@ -1263,7 +1711,8 @@ textarea:disabled {
     width: 100%;
   }
 
-  .agent-main {
+  .agent-main,
+  .agent-main.is-history-collapsed {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) minmax(180px, 32vh);
   }
@@ -1305,7 +1754,7 @@ textarea:disabled {
   }
 
   .agent-controls {
-    grid-template-columns: minmax(0, 1fr) 38px;
+    grid-template-columns: minmax(0, 1fr) 38px 38px;
   }
 
   .agent-model-field {

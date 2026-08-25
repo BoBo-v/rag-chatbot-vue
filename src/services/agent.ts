@@ -26,6 +26,8 @@ export interface AgentRunRequest {
     agentProfile: AgentProfileId
     provider: AgentProviderId
     model: string
+    agentSessionId?: string
+    agentTurnId?: string
     messages: AgentRequestMessage[]
 }
 

@@ -490,6 +490,7 @@ async function submitTask(): Promise<void> {
     agentProfile: 'tools-v0',
     provider: runtime.provider,
     model: runtime.model,
+    agentTurnId: crypto.randomUUID(),
     messages: buildAgentContextMessages(task),
   }
   lastRequest.value = request
@@ -502,7 +503,12 @@ async function submitTask(): Promise<void> {
   messages.value.push(userMessage)
   prompt.value = ''
   await persistAgentUserMessage(request, userMessage)
-  await executeRequest(request)
+  const requestWithSession: AgentRunRequest = {
+    ...request,
+    ...(activeSessionId.value ? { agentSessionId: activeSessionId.value } : {}),
+  }
+  lastRequest.value = requestWithSession
+  await executeRequest(requestWithSession)
 }
 
 function buildAgentContextMessages(task: string): AgentRunRequest['messages'] {

@@ -229,7 +229,7 @@ v-model="draft.claude.model" class="settings-input"
             </div>
             <input
 v-model.number="draft.responseTimeoutSeconds"
-              class="settings-input" type="number" min="5" max="300" step="5" />
+              class="settings-input" type="number" min="5" step="5" />
             <span class="settings-hint">等待模型返回第一段内容的最长时间，收到首个片段后流式阶段不限时</span>
           </div>
 
@@ -485,6 +485,6 @@ function save() {
 
 function normalizeTimeout(value: number): number {
   if (!Number.isFinite(value)) return 30
-  return Math.min(300, Math.max(5, Math.round(value)))
+  return Math.max(5, Math.round(value))
 }
 </script>

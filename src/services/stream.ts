@@ -78,7 +78,7 @@ export async function generateStreamWithContext(options: GenerateStreamWithConte
 
 function normalizeResponseTimeout(value: number | undefined): number {
     if (!Number.isFinite(value)) return DEFAULT_RESPONSE_TIMEOUT_SECONDS
-    return Math.min(300, Math.max(5, Math.round(value ?? DEFAULT_RESPONSE_TIMEOUT_SECONDS)))
+    return Math.max(5, Math.round(value ?? DEFAULT_RESPONSE_TIMEOUT_SECONDS))
 }
 
 /**

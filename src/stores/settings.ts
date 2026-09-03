@@ -145,7 +145,7 @@ function normalizeBackendRagMode(value: unknown, legacyEnabled?: unknown): Backe
 function normalizeTimeout(value: unknown): number {
     const parsed = Number(value)
     if (!Number.isFinite(parsed)) return defaults.responseTimeoutSeconds
-    return Math.min(300, Math.max(5, Math.round(parsed)))
+    return Math.max(5, Math.round(parsed))
 }
 
 function normalizeMaxContextTokens(value: unknown): number {

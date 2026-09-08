@@ -20,11 +20,18 @@ function toRagMode(runtime: ModelRuntimeConfig): RagContextInfo['mode'] {
     return runtime.backendRagMode ?? 'auto'
 }
 
-function buildBackendChatBody(
+export interface BackendChatRequestBody {
+    provider: NonNullable<ModelRuntimeConfig['backendProvider']>
+    model: string
+    messages: Array<{ role: ChatMessage['role']; content: string }>
+    rag: 'auto' | boolean
+}
+
+export function buildBackendChatBody(
     messages: Message[],
     userText: string,
     runtime: ModelRuntimeConfig
-): Record<string, unknown> {
+): BackendChatRequestBody {
     const chatMessages = buildMessages(
         messages,
         userText,

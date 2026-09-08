@@ -103,6 +103,7 @@ export function useChatView() {
     let suppressConvWatch = false
     const streamMessageConversations = new Map<string, number>()
     const persistTimers = new Map<string, ReturnType<typeof setTimeout>>()
+    const resumingGenerationMessages = new Set<string>()
 
     // ── 会话切换 ─────────────────────────────────────────────
 
@@ -777,20 +778,26 @@ export function useChatView() {
             && !isTerminalRunStatus(message.generationRunStatus)
         )
         if (!pending?.generationRunId) return
+        if (resumingGenerationMessages.has(pending.id)) return
+        resumingGenerationMessages.add(pending.id)
 
-        updateMessage(pending.id, {
-            status: pending.content ? 'streaming' : 'loading',
-            canContinue: false,
-            errorMessage: undefined,
-        })
-        streamMessageConversations.set(pending.id, convId)
-        await flushMessagePersist(pending.id, convId)
-        await runStream({
-            aiMessageId: pending.id,
-            prompt: '',
-            convId,
-            resumeRunId: pending.generationRunId,
-        })
+        try {
+            updateMessage(pending.id, {
+                status: pending.content ? 'streaming' : 'loading',
+                canContinue: false,
+                errorMessage: undefined,
+            })
+            streamMessageConversations.set(pending.id, convId)
+            await flushMessagePersist(pending.id, convId)
+            await runStream({
+                aiMessageId: pending.id,
+                prompt: '',
+                convId,
+                resumeRunId: pending.generationRunId,
+            })
+        } finally {
+            resumingGenerationMessages.delete(pending.id)
+        }
     }
 
     // ── 生命周期 ─────────────────────────────────────────────
@@ -826,6 +833,7 @@ export function useChatView() {
         }
         persistTimers.clear()
         streamMessageConversations.clear()
+        resumingGenerationMessages.clear()
     })
 
     // ── 对外暴露 ─────────────────────────────────────────────

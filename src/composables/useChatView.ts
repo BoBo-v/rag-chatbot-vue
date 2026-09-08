@@ -176,6 +176,10 @@ export function useChatView() {
             status: statusOverride ?? msg.status,
             canContinue: msg.canContinue,
             errorMessage: msg.errorMessage,
+            generationRunId: msg.generationRunId,
+            generationSequence: msg.generationSequence,
+            generationTurnId: msg.generationTurnId,
+            generationRunStatus: msg.generationRunStatus,
             ragContext: msg.ragContext
                 ? {
                     ...msg.ragContext,

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { MessageStatus, RagContextInfo } from '../types/chat'
+import type { GenerationRunStatus, MessageStatus, RagContextInfo } from '../types/chat'
 import type { ComparisonRunStatus, ModelRuntimeConfig } from '../types/model'
 
 // 这个文件集中定义 IndexedDB 的表结构。
@@ -38,6 +38,10 @@ export interface DBMessage {
     canContinue?: boolean
     errorMessage?: string
     ragContext?: RagContextInfo
+    generationRunId?: string
+    generationSequence?: number
+    generationTurnId?: string
+    generationRunStatus?: GenerationRunStatus
     createdAt: number
 }
 
@@ -189,6 +193,20 @@ class ChatDB extends Dexie {
             comparisonRuns: 'id, sessionId, status, startedAt, finishedAt'
         })
         this.version(5).stores({
+            conversations: '++id, updatedAt',
+            messages: 'id, conversationId',
+            searchDocs: '++docId, &messageId, conversationId, updatedAt, createdAt, role',
+            searchTerms: '[term+docId], term, docId',
+            searchTermStats: 'term',
+            searchTags: '[tag+docId], tag, docId',
+            recentSearches: '++id, query, usedAt',
+            searchMeta: 'key',
+            comparisonSessions: 'id, conversationId, updatedAt, createdAt',
+            comparisonRuns: 'id, sessionId, status, startedAt, finishedAt',
+            agentSessions: 'id, updatedAt, createdAt',
+            agentMessages: 'id, sessionId, createdAt'
+        })
+        this.version(6).stores({
             conversations: '++id, updatedAt',
             messages: 'id, conversationId',
             searchDocs: '++docId, &messageId, conversationId, updatedAt, createdAt, role',

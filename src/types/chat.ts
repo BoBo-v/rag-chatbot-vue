@@ -7,6 +7,8 @@ export type Role = 'user' | 'assistant'
 // loading: 占位等待中；streaming: 正在流式输出；done: 完成；error: 失败；aborted: 用户中断。
 export type MessageStatus = 'loading' | 'streaming' | 'done' | 'error' | 'aborted'
 
+export type GenerationRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+
 // 图片附件在本地保存为 base64，发送给不同模型 provider 时再转换成对应格式。
 export interface ImageAttachment {
     base64: string
@@ -54,6 +56,10 @@ export interface Message {
     formattedContent?: string
     errorMessage?: string
     ragContext?: RagContextInfo
+    generationRunId?: string
+    generationSequence?: number
+    generationTurnId?: string
+    generationRunStatus?: GenerationRunStatus
 }
 
 // 统一错误分类，方便 UI 根据错误类型展示更友好的提示。

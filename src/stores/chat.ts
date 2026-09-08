@@ -7,8 +7,19 @@ import { db } from '../db'
 const messages = ref<Message[]>([])
 
 export function useChat() {
-    function normalizeRestoredMessageStatus(m: { role: Role; status: MessageStatus; content: string }) {
+    function normalizeRestoredMessageStatus(m: {
+        role: Role
+        status: MessageStatus
+        content: string
+        generationRunId?: string
+    }) {
         if (m.role === 'assistant' && (m.status === 'loading' || m.status === 'streaming')) {
+            if (m.generationRunId) {
+                return {
+                    status: m.status,
+                    canContinue: undefined,
+                }
+            }
             if (m.content.trim()) {
                 return {
                     status: 'done' as MessageStatus,
@@ -40,6 +51,7 @@ export function useChat() {
                 role,
                 status: m.status as MessageStatus,
                 content: m.content,
+                generationRunId: m.generationRunId,
             })
 
             return {
@@ -52,6 +64,10 @@ export function useChat() {
                 canContinue: restored.canContinue ?? m.canContinue,
                 errorMessage: m.errorMessage,
                 ragContext: m.ragContext,
+                generationRunId: m.generationRunId,
+                generationSequence: m.generationSequence,
+                generationTurnId: m.generationTurnId,
+                generationRunStatus: m.generationRunStatus,
             }
         })
     }

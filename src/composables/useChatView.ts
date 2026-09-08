@@ -5,7 +5,9 @@ import { generateStreamWithContext } from '../services/stream'
 import { createRuntimeFromSettings } from '../services/runtime'
 import {
     cancelBackendChatRun,
+    BackendChatRunClientError,
     createBackendChatRun,
+    getBackendChatRun,
     ragContextFromRunEvent,
     streamBackendChatRunEvents,
     type BackendChatRunEvent,
@@ -118,6 +120,7 @@ export function useChatView() {
         }
         await nextTick()
         resetAfterConversationChange()
+        if (newId !== null) void resumePendingGeneration(newId)
     })
 
     function handleSelectConversation(id: number) {
@@ -473,6 +476,7 @@ export function useChatView() {
         sourceUserMessageId?: string
         turnId?: string
         regeneratedFromRunId?: string
+        resumeRunId?: string
     }
 
     /**
@@ -498,7 +502,9 @@ export function useChatView() {
         const requestMessages = options.contextMessages ?? messages.value
 
         try {
-            if (runtime.transport === 'backend') {
+            if (options.resumeRunId) {
+                await resumeBackendStream(options, options.resumeRunId)
+            } else if (runtime.transport === 'backend') {
                 await runBackendStream(options, requestMessages, runtime)
             } else {
                 // 直连模型继续使用旧流，不影响已有 Ollama/OpenAI/Claude 行为。
@@ -525,11 +531,17 @@ export function useChatView() {
                 updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
                 return
             }
-            const chatErr = classifyError(err)
+            const expiredRun = Boolean(options.resumeRunId)
+                && err instanceof BackendChatRunClientError
+                && err.code === 'GENERATION_RUN_NOT_FOUND'
+            const chatErr = expiredRun
+                ? { type: 'server' as const, message: '生成任务缓存已过期，无法继续恢复。', status: 404 }
+                : classifyError(err)
             needsStatusFallback = false
             updateMessage(options.aiMessageId, {
                 status: 'error',
                 errorMessage: chatErr.message,
+                ...(expiredRun ? { generationRunStatus: 'failed' as const } : {}),
             })
             toast.show(chatErr.message, 'error')
         } finally {
@@ -611,6 +623,45 @@ export function useChatView() {
         })
     }
 
+    async function resumeBackendStream(options: RunStreamOptions, runId: string): Promise<void> {
+        const message = messages.value.find(item => item.id === options.aiMessageId)
+        if (!message) throw new Error('找不到待恢复的助手消息。')
+
+        activeGenerationRunId = runId
+        const snapshot = await getBackendChatRun(runId, { signal: streamCtrl?.controller.signal })
+        if (snapshot.assistantMessageId !== options.aiMessageId || snapshot.conversationId !== String(options.convId)) {
+            throw new Error('生成任务与当前聊天消息不匹配。')
+        }
+
+        let afterSequence = message.generationSequence ?? 0
+        if (afterSequence > snapshot.lastSequence) {
+            afterSequence = snapshot.lastSequence
+            updateMessage(options.aiMessageId, {
+                content: snapshot.outputText,
+                formattedContent: undefined,
+                generationSequence: snapshot.lastSequence,
+            })
+        } else if (afterSequence === snapshot.lastSequence && message.content !== snapshot.outputText) {
+            updateMessage(options.aiMessageId, {
+                content: snapshot.outputText,
+                formattedContent: undefined,
+            })
+        }
+        updateMessage(options.aiMessageId, { generationRunStatus: snapshot.status })
+
+        if (isTerminalRunStatus(snapshot.status) && afterSequence === snapshot.lastSequence) {
+            applyTerminalRunSnapshot(options.aiMessageId, snapshot)
+            return
+        }
+
+        await flushMessagePersist(options.aiMessageId, options.convId)
+        await streamBackendChatRunEvents(runId, {
+            afterSequence,
+            signal: streamCtrl?.controller.signal,
+            onEvent: async event => handleBackendRunEvent(options, event),
+        })
+    }
+
     async function handleBackendRunEvent(options: RunStreamOptions, event: BackendChatRunEvent): Promise<void> {
         const message = messages.value.find(item => item.id === options.aiMessageId)
         if (!message || message.generationRunId !== event.runId || streamCtrl?.isAborted) return
@@ -676,6 +727,72 @@ export function useChatView() {
         return null
     }
 
+    function isTerminalRunStatus(status: Message['generationRunStatus']): boolean {
+        return status === 'completed' || status === 'failed' || status === 'cancelled'
+    }
+
+    function applyTerminalRunSnapshot(
+        messageId: string,
+        snapshot: Awaited<ReturnType<typeof getBackendChatRun>>,
+    ): void {
+        needsStatusFallback = false
+        if (snapshot.status === 'completed') {
+            updateMessage(messageId, {
+                content: snapshot.outputText,
+                generationSequence: snapshot.lastSequence,
+                generationRunStatus: 'completed',
+                status: 'done',
+                canContinue: false,
+                errorMessage: undefined,
+            })
+            void formatFinishedMessage(messageId)
+            return
+        }
+        if (snapshot.status === 'cancelled') {
+            updateMessage(messageId, {
+                content: snapshot.outputText,
+                generationSequence: snapshot.lastSequence,
+                generationRunStatus: 'cancelled',
+                status: 'aborted',
+                canContinue: true,
+                errorMessage: undefined,
+            })
+            return
+        }
+        updateMessage(messageId, {
+            content: snapshot.outputText,
+            generationSequence: snapshot.lastSequence,
+            generationRunStatus: 'failed',
+            status: 'error',
+            canContinue: false,
+            errorMessage: snapshot.errorMessage ?? '生成任务失败。',
+        })
+    }
+
+    async function resumePendingGeneration(convId: number): Promise<void> {
+        if (isStreaming.value || currentId.value !== convId) return
+        const pending = [...messages.value].reverse().find(message =>
+            message.role === 'assistant'
+            && Boolean(message.generationRunId)
+            && !isTerminalRunStatus(message.generationRunStatus)
+        )
+        if (!pending?.generationRunId) return
+
+        updateMessage(pending.id, {
+            status: pending.content ? 'streaming' : 'loading',
+            canContinue: false,
+            errorMessage: undefined,
+        })
+        streamMessageConversations.set(pending.id, convId)
+        await flushMessagePersist(pending.id, convId)
+        await runStream({
+            aiMessageId: pending.id,
+            prompt: '',
+            convId,
+            resumeRunId: pending.generationRunId,
+        })
+    }
+
     // ── 生命周期 ─────────────────────────────────────────────
 
     onMounted(async () => {
@@ -693,6 +810,12 @@ export function useChatView() {
             await loadForConversation(latestId)
             await nextTick()
             resetAfterConversationChange()
+            void resumePendingGeneration(latestId)
+        } else if (currentId.value !== null) {
+            await loadForConversation(currentId.value)
+            await nextTick()
+            resetAfterConversationChange()
+            void resumePendingGeneration(currentId.value)
         }
     })
 

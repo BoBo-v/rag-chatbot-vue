@@ -406,6 +406,48 @@ export function useChatView() {
             return
         }
 
+        if (errMsg.generationRunId && !isTerminalRunStatus(errMsg.generationRunStatus)) {
+            updateMessage(errMsg.id, {
+                status: errMsg.content ? 'streaming' : 'loading',
+                canContinue: false,
+                errorMessage: undefined,
+            })
+            streamMessageConversations.set(errMsg.id, currentId.value)
+            await flushMessagePersist(errMsg.id, currentId.value)
+            await runStream({
+                aiMessageId: errMsg.id,
+                prompt: '',
+                convId: currentId.value,
+                resumeRunId: errMsg.generationRunId,
+            })
+            return
+        }
+
+        if (errMsg.generationTurnId && !errMsg.generationRunId) {
+            const contextMessages = messages.value
+                .filter(message => message.id !== errMsg.id)
+                .map(snapshotMessage)
+            updateMessage(errMsg.id, {
+                content: '',
+                formattedContent: undefined,
+                status: 'loading',
+                canContinue: false,
+                errorMessage: undefined,
+                generationRunStatus: 'queued',
+            })
+            streamMessageConversations.set(errMsg.id, currentId.value)
+            await flushMessagePersist(errMsg.id, currentId.value)
+            await runStream({
+                aiMessageId: errMsg.id,
+                prompt: userMsg.content,
+                convId: currentId.value,
+                contextMessages,
+                sourceUserMessageId: userMsg.id,
+                turnId: errMsg.generationTurnId,
+            })
+            return
+        }
+
         await db.messages.delete(messageId)
         messages.value.splice(msgIdx, 1)
 
@@ -542,7 +584,13 @@ export function useChatView() {
             updateMessage(options.aiMessageId, {
                 status: 'error',
                 errorMessage: chatErr.message,
-                ...(expiredRun ? { generationRunStatus: 'failed' as const } : {}),
+                ...(expiredRun
+                    ? {
+                        generationRunId: undefined,
+                        generationSequence: 0,
+                        generationRunStatus: 'failed' as const,
+                    }
+                    : {}),
             })
             toast.show(chatErr.message, 'error')
         } finally {

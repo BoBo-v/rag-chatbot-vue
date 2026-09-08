@@ -210,13 +210,17 @@ class BackendChatRunSseParser {
     private buffer = ''
     private lastSequence: number
     private terminalReceived = false
+    private readonly runId: string
+    private readonly onEvent: StreamBackendChatRunOptions['onEvent']
 
     constructor(
-        private readonly runId: string,
+        runId: string,
         afterSequence: number,
-        private readonly onEvent: StreamBackendChatRunOptions['onEvent'],
+        onEvent: StreamBackendChatRunOptions['onEvent'],
     ) {
+        this.runId = runId
         this.lastSequence = afterSequence
+        this.onEvent = onEvent
     }
 
     async push(chunk: string): Promise<void> {

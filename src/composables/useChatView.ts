@@ -3,7 +3,13 @@ import { useChat } from '../stores/chat'
 import { useConversations } from '../stores/conversations'
 import { generateStreamWithContext } from '../services/stream'
 import { createRuntimeFromSettings } from '../services/runtime'
-import { fetchBackendChatContext } from '../services/providers/backendChat'
+import {
+    cancelBackendChatRun,
+    createBackendChatRun,
+    ragContextFromRunEvent,
+    streamBackendChatRunEvents,
+    type BackendChatRunEvent,
+} from '../services/providers/backendChatRun'
 import { db } from '../db'
 import { classifyError } from '../utils/error'
 import { useToast } from './useToast'
@@ -86,6 +92,7 @@ export function useChatView() {
 
     // ── 非响应式标志位 ───────────────────────────────────────
     let streamCtrl:  StreamController | null = null  // 当前流式请求控制器
+    let activeGenerationRunId: string | null = null
     // createConversation 会设置 currentId，触发 watcher 加载消息——
     // 但 handleSend 中刚写入内存的消息会被 loadForConversation 覆盖清空，
     // 所以在 handleSend 创建会话期间用此标志临时屏蔽 watcher
@@ -293,10 +300,16 @@ export function useChatView() {
     // ── 用户操作入口 ─────────────────────────────────────────
 
     function handleStop() {
-        // Stop generation from the UI. The provider request and stream reader are both cancelled.
+        // 后端 Run 必须显式 DELETE 才会停止模型；中断 SSE 本身不会取消后台任务。
         if (!streamCtrl) return
+        const runId = activeGenerationRunId
         typewriter.abort(streamCtrl.messageId)
         streamCtrl.abort()
+        if (runId) {
+            void cancelBackendChatRun(runId).catch(err => {
+                console.warn('[chat] 取消后端生成任务失败', err)
+            })
+        }
     }
 
     // 发送消息：写入用户消息 → 创建 AI 占位 → 启动流式生成
@@ -360,7 +373,12 @@ export function useChatView() {
         await scrollToBottom()
         streamMessageConversations.set(aiMsg.id, convId)
         await persistMessage(aiMsg.id, convId)
-        await runStream({ aiMessageId: aiMsg.id, prompt: promptText, convId })
+        await runStream({
+            aiMessageId: aiMsg.id,
+            prompt: promptText,
+            convId,
+            sourceUserMessageId: userMsgId,
+        })
     }
 
     // 重试：删除失败的 AI 消息，用同一条用户消息重新生成
@@ -390,7 +408,13 @@ export function useChatView() {
         const aiMsg = createAssistantMessage()
         streamMessageConversations.set(aiMsg.id, currentId.value)
         await persistMessage(aiMsg.id, currentId.value)
-        await runStream({ aiMessageId: aiMsg.id, prompt: userMsg.content, convId: currentId.value })
+        await runStream({
+            aiMessageId: aiMsg.id,
+            prompt: userMsg.content,
+            convId: currentId.value,
+            sourceUserMessageId: userMsg.id,
+            regeneratedFromRunId: errMsg.generationRunId,
+        })
     }
 
     // 继续生成：复用已中断的 AI 消息，以空 prompt 续写
@@ -406,6 +430,26 @@ export function useChatView() {
                 ? { ...snapshotMessage(item), status: 'aborted', canContinue: true }
                 : snapshotMessage(item)
         )
+
+        if (settings.transport === 'backend') {
+            const sourceUserMessage = findPreviousUserMessage(messageId)
+            if (!sourceUserMessage) return
+            updateMessage(msg.id, { canContinue: false })
+            await flushMessagePersist(msg.id, currentId.value)
+
+            const continuation = createAssistantMessage()
+            streamMessageConversations.set(continuation.id, currentId.value)
+            await persistMessage(continuation.id, currentId.value)
+            await runStream({
+                aiMessageId: continuation.id,
+                prompt: '',
+                convId: currentId.value,
+                contextMessages,
+                sourceUserMessageId: sourceUserMessage.id,
+            })
+            return
+        }
+
         updateMessage(msg.id, { status: 'loading', canContinue: false })
         streamMessageConversations.set(messageId, currentId.value)
         await flushMessagePersist(messageId, currentId.value)
@@ -426,6 +470,9 @@ export function useChatView() {
         convId: number
         contextMessages?: Message[]
         skipRagContext?: boolean
+        sourceUserMessageId?: string
+        turnId?: string
+        regeneratedFromRunId?: string
     }
 
     /**
@@ -450,48 +497,28 @@ export function useChatView() {
         const runtime = createRuntimeFromSettings(settings)
         const requestMessages = options.contextMessages ?? messages.value
 
-        if (!options.skipRagContext && runtime.transport === 'backend') {
-            try {
-                const ragContext = await fetchBackendChatContext(
-                    requestMessages,
-                    options.prompt,
-                    runtime,
-                    streamCtrl.controller.signal,
-                )
-                updateMessage(options.aiMessageId, { ragContext })
-            } catch (err) {
-                if (!streamCtrl.controller.signal.aborted) {
-                    // 引用资料只是可解释信息，获取失败不能阻断主回答。
-                    updateMessage(options.aiMessageId, {
-                        ragContext: {
-                            mode: runtime.backendRagMode ?? 'auto',
-                            enabled: false,
-                            results: [],
-                            errorMessage: err instanceof Error ? err.message : '引用资料获取失败',
-                        },
-                    })
-                }
-            }
-        }
-
         try {
-            // generateStreamWithContext chooses the active provider and calls onChunk for every text delta.
-            await generateStreamWithContext({
-                messages: requestMessages,
-                userText: options.prompt,
-                runtime,
-                onChunk: (chunk) => {
-                    if (streamCtrl?.isAborted) return
-                    typewriter.push(options.aiMessageId, chunk)
-                    scheduleMessagePersist(options.aiMessageId)
-                    handleIncomingChunk()
-                },
-                onDone: () => {
-                    needsStatusFallback = false
-                    typewriter.markDone(options.aiMessageId)
-                },
-                signal: streamCtrl.controller.signal,
-            })
+            if (runtime.transport === 'backend') {
+                await runBackendStream(options, requestMessages, runtime)
+            } else {
+                // 直连模型继续使用旧流，不影响已有 Ollama/OpenAI/Claude 行为。
+                await generateStreamWithContext({
+                    messages: requestMessages,
+                    userText: options.prompt,
+                    runtime,
+                    onChunk: (chunk) => {
+                        if (streamCtrl?.isAborted) return
+                        typewriter.push(options.aiMessageId, chunk)
+                        scheduleMessagePersist(options.aiMessageId)
+                        handleIncomingChunk()
+                    },
+                    onDone: () => {
+                        needsStatusFallback = false
+                        typewriter.markDone(options.aiMessageId)
+                    },
+                    signal: streamCtrl.controller.signal,
+                })
+            }
         } catch (err: unknown) {
             if (streamCtrl?.isAborted) {
                 needsStatusFallback = false
@@ -531,10 +558,122 @@ export function useChatView() {
                 queueSearchIndex(aiMessage, options.convId, updatedAt, updatedAt)
             }
             streamMessageConversations.delete(options.aiMessageId)
+            activeGenerationRunId = null
             streamCtrl = null
             isStreaming.value = false
             scheduleScroll()
         }
+    }
+
+    async function runBackendStream(
+        options: RunStreamOptions,
+        requestMessages: Message[],
+        runtime: ReturnType<typeof createRuntimeFromSettings>,
+    ): Promise<void> {
+        const message = messages.value.find(item => item.id === options.aiMessageId)
+        if (!message) throw new Error('找不到待生成的助手消息。')
+        const sourceUserMessageId = options.sourceUserMessageId ?? findPreviousUserMessage(options.aiMessageId)?.id
+        if (!sourceUserMessageId) throw new Error('找不到生成任务对应的用户消息。')
+
+        const turnId = options.turnId ?? message.generationTurnId ?? crypto.randomUUID()
+        updateMessage(options.aiMessageId, {
+            generationTurnId: turnId,
+            generationRunStatus: 'queued',
+            errorMessage: undefined,
+        })
+        await flushMessagePersist(options.aiMessageId, options.convId)
+
+        const created = await createBackendChatRun({
+            messages: requestMessages,
+            userText: options.prompt,
+            runtime,
+            conversationId: options.convId,
+            turnId,
+            sourceUserMessageId,
+            assistantMessageId: options.aiMessageId,
+            regeneratedFromRunId: options.regeneratedFromRunId,
+        }, { signal: streamCtrl?.controller.signal })
+
+        activeGenerationRunId = created.run.runId
+        const afterSequence = message.generationRunId === created.run.runId
+            ? message.generationSequence ?? 0
+            : 0
+        updateMessage(options.aiMessageId, {
+            generationRunId: created.run.runId,
+            generationRunStatus: created.run.status,
+        })
+        await flushMessagePersist(options.aiMessageId, options.convId)
+
+        await streamBackendChatRunEvents(created.run.runId, {
+            afterSequence,
+            signal: streamCtrl?.controller.signal,
+            onEvent: async event => handleBackendRunEvent(options, event),
+        })
+    }
+
+    async function handleBackendRunEvent(options: RunStreamOptions, event: BackendChatRunEvent): Promise<void> {
+        const message = messages.value.find(item => item.id === options.aiMessageId)
+        if (!message || message.generationRunId !== event.runId || streamCtrl?.isAborted) return
+
+        const baseChanges: Partial<Message> = { generationSequence: event.sequence }
+        switch (event.type) {
+            case 'run_started':
+                updateMessage(options.aiMessageId, { ...baseChanges, generationRunStatus: 'running' })
+                break
+            case 'rag_context': {
+                const rag = ragContextFromRunEvent(event)
+                updateMessage(options.aiMessageId, {
+                    ...baseChanges,
+                    ragContext: rag
+                        ? { mode: rag.mode, enabled: rag.enabled, results: rag.citations }
+                        : undefined,
+                })
+                break
+            }
+            case 'text_delta': {
+                const content = typeof event.data.content === 'string' ? event.data.content : ''
+                if (content) appendToMessage(options.aiMessageId, content)
+                updateMessage(options.aiMessageId, { ...baseChanges, generationRunStatus: 'running' })
+                handleIncomingChunk()
+                break
+            }
+            case 'run_completed':
+                needsStatusFallback = false
+                updateMessage(options.aiMessageId, { ...baseChanges, generationRunStatus: 'completed' })
+                typewriter.markDone(options.aiMessageId)
+                break
+            case 'run_failed': {
+                needsStatusFallback = false
+                const errorMessage = typeof event.data.message === 'string' ? event.data.message : '生成任务失败。'
+                updateMessage(options.aiMessageId, {
+                    ...baseChanges,
+                    status: 'error',
+                    generationRunStatus: 'failed',
+                    errorMessage,
+                })
+                toast.show(errorMessage, 'error')
+                break
+            }
+            case 'run_cancelled':
+                needsStatusFallback = false
+                updateMessage(options.aiMessageId, {
+                    ...baseChanges,
+                    status: 'aborted',
+                    canContinue: true,
+                    generationRunStatus: 'cancelled',
+                })
+                break
+        }
+        scheduleMessagePersist(options.aiMessageId)
+    }
+
+    function findPreviousUserMessage(messageId: string): Message | null {
+        const index = messages.value.findIndex(message => message.id === messageId)
+        const start = index === -1 ? messages.value.length - 1 : index - 1
+        for (let i = start; i >= 0; i -= 1) {
+            if (messages.value[i].role === 'user') return messages.value[i]
+        }
+        return null
     }
 
     // ── 生命周期 ─────────────────────────────────────────────

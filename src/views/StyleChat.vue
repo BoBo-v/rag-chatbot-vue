@@ -194,7 +194,7 @@ v-for="(img, idx) in msg.images" :key="idx"
                   <div class="abort-dot"></div>
                   已停止
                 </div>
-                <button class="btn-continue" :disabled="isStreaming" @click="handleContinue(msg.id)">
+                <button v-if="msg.canContinue !== false" class="btn-continue" :disabled="isStreaming" @click="handleContinue(msg.id)">
                   ↻ 继续生成
                 </button>
               </div>

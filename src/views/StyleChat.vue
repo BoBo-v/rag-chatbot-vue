@@ -115,6 +115,26 @@
           </div>
         </div>
         <div class="topbar-right">
+          <div
+              class="transport-status"
+              :class="currentSettings.transport === 'backend' ? 'is-backend' : 'is-direct'"
+              role="status"
+              :aria-label="currentSettings.transport === 'backend'
+                ? '后端代理模式，回答支持后台生成和恢复'
+                : '直连模式，生成时切换会话会中断回答'"
+              :title="currentSettings.transport === 'backend'
+                ? '回答由后端任务持续生成，切换会话后可以回来恢复'
+                : '模型由当前页面直接连接，生成时切换会话会中断回答'"
+          >
+            <Server v-if="currentSettings.transport === 'backend'" :size="14" aria-hidden="true" />
+            <Cable v-else :size="14" aria-hidden="true" />
+            <span class="transport-label">
+              {{ currentSettings.transport === 'backend' ? '后端代理' : '直连模式' }}
+            </span>
+            <span class="transport-detail">
+              {{ currentSettings.transport === 'backend' ? '可后台恢复' : (isStreaming ? '切换会中断' : '仅当前页面') }}
+            </span>
+          </div>
           <div class="topbar-status" :class="{ active: isStreaming }">
             <span class="status-dot"></span>
             <span>{{ isStreaming ? 'Thinking...' : 'Ready' }}</span>
@@ -384,6 +404,7 @@ v-if="speechSupported"
 import { ref, watch } from 'vue'
 import {
   BookUp2,
+  Cable,
   CircleAlert,
   CircleCheck,
   FileText,
@@ -394,6 +415,7 @@ import {
   Plus,
   Search,
   Send,
+  Server,
   Settings2,
   Sparkles,
   Square,

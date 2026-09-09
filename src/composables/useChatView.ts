@@ -108,6 +108,7 @@ export function useChatView() {
     let activeStreamTransport: 'direct' | 'backend' | null = null
     let activeStreamSettled: Promise<void> | null = null
     let conversationNavigationPending = false
+    let resumeCheckTimer: ReturnType<typeof setTimeout> | null = null
 
     // ── 会话切换 ─────────────────────────────────────────────
 
@@ -918,6 +919,20 @@ export function useChatView() {
         }
     }
 
+    function schedulePendingGenerationResume() {
+        if (document.visibilityState === 'hidden') return
+        if (resumeCheckTimer !== null) clearTimeout(resumeCheckTimer)
+        resumeCheckTimer = setTimeout(() => {
+            resumeCheckTimer = null
+            const convId = currentId.value
+            if (convId !== null) void resumePendingGeneration(convId)
+        }, 0)
+    }
+
+    function handleDocumentVisibilityChange() {
+        if (document.visibilityState === 'visible') schedulePendingGenerationResume()
+    }
+
     // ── 生命周期 ─────────────────────────────────────────────
 
     onMounted(async () => {
@@ -925,6 +940,9 @@ export function useChatView() {
         await nextTick()
         attachScrollListener()
         await loadAll()
+        document.addEventListener('visibilitychange', handleDocumentVisibilityChange)
+        window.addEventListener('pageshow', schedulePendingGenerationResume)
+        window.addEventListener('focus', schedulePendingGenerationResume)
         void searchService.ensureIndex().catch(err => {
             console.warn('[search] 初始化索引失败', err)
         })
@@ -945,6 +963,13 @@ export function useChatView() {
     })
 
     onUnmounted(() => {
+        document.removeEventListener('visibilitychange', handleDocumentVisibilityChange)
+        window.removeEventListener('pageshow', schedulePendingGenerationResume)
+        window.removeEventListener('focus', schedulePendingGenerationResume)
+        if (resumeCheckTimer !== null) {
+            clearTimeout(resumeCheckTimer)
+            resumeCheckTimer = null
+        }
         detachScrollListener()
         for (const timer of persistTimers.values()) {
             clearTimeout(timer)

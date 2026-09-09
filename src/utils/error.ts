@@ -5,7 +5,11 @@ import type { ChatError } from '../types/chat'
 export function classifyError(err: unknown): ChatError {
     if (err instanceof DOMException) {
         if (err.name === 'TimeoutError') {
-            return { type: 'timeout', message: '请求超时（30 秒无响应），请检查网络连接后重试' }
+            const timeoutSeconds = err.message.match(/after\s+(\d+)\s+seconds/i)?.[1]
+            const message = timeoutSeconds
+                ? `等待模型首个响应超过 ${timeoutSeconds} 秒，请检查网络连接后重试`
+                : '请求超时，请检查网络连接后重试'
+            return { type: 'timeout', message }
         }
         if (err.name === 'AbortError') {
             return { type: 'network', message: '请求已取消' }

@@ -131,9 +131,9 @@
             <span class="transport-label">
               {{ currentSettings.transport === 'backend' ? '后端代理' : '直连模式' }}
             </span>
-            <span class="transport-detail">
-              {{ currentSettings.transport === 'backend' ? '可后台恢复' : (isStreaming ? '切换会中断' : '仅当前页面') }}
-            </span>
+<!--            <span class="transport-detail">-->
+<!--              {{ currentSettings.transport === 'backend' ? '可后台恢复' : (isStreaming ? '切换会中断' : '仅当前页面') }}-->
+<!--            </span>-->
           </div>
           <div class="topbar-status" :class="{ active: isStreaming }">
             <span class="status-dot"></span>

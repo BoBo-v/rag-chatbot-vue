@@ -104,6 +104,10 @@ export function useChatView() {
     const streamMessageConversations = new Map<string, number>()
     const persistTimers = new Map<string, ReturnType<typeof setTimeout>>()
     const resumingGenerationMessages = new Set<string>()
+    const detachedGenerationMessages = new Set<string>()
+    let activeStreamTransport: 'direct' | 'backend' | null = null
+    let activeStreamSettled: Promise<void> | null = null
+    let conversationNavigationPending = false
 
     // ── 会话切换 ─────────────────────────────────────────────
 
@@ -124,17 +128,68 @@ export function useChatView() {
         if (newId !== null) void resumePendingGeneration(newId)
     })
 
-    function handleSelectConversation(id: number) {
-        // Do not switch conversations while streaming, otherwise the in-flight reply could be persisted to the wrong place.
-        if (isStreaming.value) return
+    async function handleSelectConversation(id: number) {
+        if (id === currentId.value) {
+            sidebarOpen.value = false
+            return
+        }
+        if (!await prepareForConversationNavigation()) return
         selectConversation(id)
         sidebarOpen.value = false
     }
 
-    function handleNewConversation() {
-        if (isStreaming.value) return
+    async function handleNewConversation() {
+        if (currentId.value === null) {
+            sidebarOpen.value = false
+            return
+        }
+        if (!await prepareForConversationNavigation()) return
         currentId.value = null
         sidebarOpen.value = false
+    }
+
+    async function prepareForConversationNavigation(): Promise<boolean> {
+        if (!isStreaming.value) return true
+        if (conversationNavigationPending) return false
+
+        conversationNavigationPending = true
+        try {
+            if (activeStreamTransport === 'backend') {
+                if (!streamCtrl || !activeGenerationRunId) {
+                    toast.show('后台任务正在建立，请稍后再切换会话', 'warning')
+                    return false
+                }
+
+                const messageId = streamCtrl.messageId
+                const convId = streamMessageConversations.get(messageId)
+                if (convId !== undefined) await flushMessagePersist(messageId, convId)
+
+                detachedGenerationMessages.add(messageId)
+                streamCtrl.controller.abort()
+                await waitForActiveStreamToSettle()
+                toast.show('回答已转到后台生成，返回该会话时会自动恢复', 'success')
+                return true
+            }
+
+            const confirmed = await confirm({
+                title: '停止回答并切换会话？',
+                message: '当前为直连模式。切换会话会停止正在生成的回答，离开后无法自动恢复。',
+                confirmText: '停止并切换',
+                cancelText: '继续等待',
+            })
+            if (!confirmed) return false
+
+            handleStop()
+            await waitForActiveStreamToSettle()
+            return true
+        } finally {
+            conversationNavigationPending = false
+        }
+    }
+
+    async function waitForActiveStreamToSettle(): Promise<void> {
+        const pending = activeStreamSettled
+        if (pending) await pending
     }
 
     async function handleDeleteConversation(id: number) {
@@ -535,13 +590,17 @@ export function useChatView() {
     async function runStream(options: RunStreamOptions): Promise<void> {
         // Every generation path ends here: normal send, retry, and continue.
         // Reset transient stream state before starting a new provider request.
+        let settleActiveStream: () => void = () => undefined
+        const settled = new Promise<void>(resolve => { settleActiveStream = resolve })
+        activeStreamSettled = settled
         typewriter.reset()
         needsStatusFallback = true
+        const runtime = createRuntimeFromSettings(settings)
+        activeStreamTransport = options.resumeRunId ? 'backend' : runtime.transport
+        streamCtrl = createStreamController(options.aiMessageId)
         isStreaming.value = true
         await nextTick()
         scheduleScroll()
-        streamCtrl = createStreamController(options.aiMessageId)
-        const runtime = createRuntimeFromSettings(settings)
         const requestMessages = options.contextMessages ?? messages.value
 
         try {
@@ -569,6 +628,10 @@ export function useChatView() {
                 })
             }
         } catch (err: unknown) {
+            if (detachedGenerationMessages.has(options.aiMessageId)) {
+                needsStatusFallback = false
+                return
+            }
             if (streamCtrl?.isAborted) {
                 needsStatusFallback = false
                 updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
@@ -596,33 +659,40 @@ export function useChatView() {
         } finally {
             // This block runs for success, error, and abort.
             // It persists the assistant message, updates the conversation timestamp, and refreshes search.
-            await typewriter.waitForPendingDone()
+            try {
+                await typewriter.waitForPendingDone()
 
-            if (needsStatusFallback) {
-                if (streamCtrl?.isAborted) {
-                    updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
-                } else {
-                    updateMessage(options.aiMessageId, { status: 'done' })
+                if (needsStatusFallback) {
+                    if (streamCtrl?.isAborted) {
+                        updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
+                    } else {
+                        updateMessage(options.aiMessageId, { status: 'done' })
+                    }
                 }
-            }
 
-            const aiMessage = messages.value.find(msg => msg.id === options.aiMessageId)
-            if (aiMessage) {
-                await flushMessageSnapshotPersist(aiMessage, options.convId)
-            } else {
-                await flushMessagePersist(options.aiMessageId, options.convId)
+                const aiMessage = messages.value.find(msg => msg.id === options.aiMessageId)
+                if (aiMessage) {
+                    await flushMessageSnapshotPersist(aiMessage, options.convId)
+                } else {
+                    await flushMessagePersist(options.aiMessageId, options.convId)
+                }
+                const updatedAt = Date.now()
+                await db.conversations.update(options.convId, { updatedAt })
+                await refreshList()
+                if (aiMessage && (!aiMessage.generationRunId || isTerminalRunStatus(aiMessage.generationRunStatus))) {
+                    queueSearchIndex(aiMessage, options.convId, updatedAt, updatedAt)
+                }
+            } finally {
+                detachedGenerationMessages.delete(options.aiMessageId)
+                streamMessageConversations.delete(options.aiMessageId)
+                activeGenerationRunId = null
+                activeStreamTransport = null
+                streamCtrl = null
+                isStreaming.value = false
+                scheduleScroll()
+                if (activeStreamSettled === settled) activeStreamSettled = null
+                settleActiveStream()
             }
-            const updatedAt = Date.now()
-            await db.conversations.update(options.convId, { updatedAt })
-            await refreshList()
-            if (aiMessage) {
-                queueSearchIndex(aiMessage, options.convId, updatedAt, updatedAt)
-            }
-            streamMessageConversations.delete(options.aiMessageId)
-            activeGenerationRunId = null
-            streamCtrl = null
-            isStreaming.value = false
-            scheduleScroll()
         }
     }
 
@@ -882,6 +952,7 @@ export function useChatView() {
         persistTimers.clear()
         streamMessageConversations.clear()
         resumingGenerationMessages.clear()
+        detachedGenerationMessages.clear()
     })
 
     // ── 对外暴露 ─────────────────────────────────────────────

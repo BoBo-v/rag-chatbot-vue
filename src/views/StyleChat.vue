@@ -477,7 +477,6 @@ const {
   retrySearch,
 } = useConversationSearch({
   onSelect: handleSelectConversation,
-  canSelect: () => !isStreaming.value,
 })
 
 // ── 语音输入 ──────────────────────────────────────

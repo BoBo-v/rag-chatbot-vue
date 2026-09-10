@@ -1,7 +1,5 @@
 import type { Message } from '../types/chat'
 import type { ModelRuntimeConfig } from '../types/model'
-import { settings } from '../stores/settings'
-import { createRuntimeFromSettings } from './runtime'
 import { ollamaStream, fetchOllamaModels } from './providers/ollama'
 import { openaiStream, fetchOpenAIModels } from './providers/openai'
 import { claudeStream, getClaudeModels } from './providers/claude'
@@ -84,8 +82,7 @@ function normalizeResponseTimeout(value: number | undefined): number {
 /**
  * 获取当前 provider 的可用模型列表
  */
-export async function fetchModels(): Promise<string[]> {
-    const runtime = createRuntimeFromSettings(settings)
+export async function fetchModels(runtime: ModelRuntimeConfig): Promise<string[]> {
     // 设置面板刷新模型列表时会调用这里。
     switch (runtime.provider) {
         case 'openai':

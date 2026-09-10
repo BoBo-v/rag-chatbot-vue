@@ -2911,7 +2911,7 @@ datalist option {
 
 .settings-panel,
 [data-theme="light"] .settings-panel {
-    width: min(480px, 100vw);
+    width: min(760px, 100vw);
     max-width: none;
     height: 100dvh;
     max-height: none;

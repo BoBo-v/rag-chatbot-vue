@@ -1,16 +1,28 @@
 <template>
   <Teleport to="body">
-    <div class="settings-overlay" @click.self="cancelChanges">
+    <div class="settings-overlay" @click.self="requestClose">
       <div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <header class="settings-header">
           <div class="settings-heading">
             <span class="settings-eyebrow">WORKSPACE</span>
             <span id="settings-title" class="settings-title">设置</span>
           </div>
-          <button type="button" class="settings-close" aria-label="关闭设置" @click="cancelChanges">
-            <X :size="19" aria-hidden="true" />
-          </button>
+          <div class="settings-header-actions">
+            <div class="settings-header-status" :class="{ dirty: hasUnsavedChanges, error: saveError }" role="status" aria-live="polite">
+              <AlertCircle v-if="saveError || hasUnsavedChanges" :size="14" aria-hidden="true" />
+              <CheckCircle2 v-else :size="14" aria-hidden="true" />
+              <span>{{ saveError ? '保存失败' : hasUnsavedChanges ? `未保存 · ${changedSettingCount} 项` : '已保存' }}</span>
+            </div>
+            <button type="button" class="settings-close" aria-label="关闭设置" @click="requestClose">
+              <X :size="19" aria-hidden="true" />
+            </button>
+          </div>
         </header>
+
+        <div v-if="hasUnsavedChanges" class="settings-dirty-banner" role="status" aria-live="polite">
+          <AlertCircle :size="17" aria-hidden="true" />
+          <div><strong>有 {{ changedSettingCount }} 项修改尚未保存</strong><span>点击底部“保存更改”后生效。</span></div>
+        </div>
 
         <div class="settings-mobile-tabs" role="tablist" aria-label="设置分组">
           <button
@@ -24,7 +36,7 @@
             @click="activeSection = section.id"
           >
             <component :is="section.icon" :size="15" aria-hidden="true" />
-            <span>{{ section.label }}</span>
+            <span class="settings-tab-label"><span>{{ section.label }}</span><span v-if="sectionHasChanges(section.id)" class="settings-dirty-dot" aria-hidden="true"></span></span>
           </button>
         </div>
 
@@ -41,7 +53,7 @@
               @click="activeSection = section.id"
             >
               <component :is="section.icon" :size="17" aria-hidden="true" />
-              <span>{{ section.label }}</span>
+              <span class="settings-nav-label"><span>{{ section.label }}</span><span v-if="sectionHasChanges(section.id)" class="settings-dirty-dot" aria-hidden="true"></span></span>
               <ChevronRight v-if="activeSection === section.id" :size="15" aria-hidden="true" />
             </button>
             <div class="settings-nav-note"><span class="settings-nav-dot"></span><span>配置保存在此设备</span></div>
@@ -158,7 +170,25 @@
           </main>
         </div>
 
-        <footer class="settings-footer"><span class="modified-count" :class="{ active: hasUnsavedChanges }">已修改 · {{ changedSettingCount }} 项设置</span><div class="footer-actions"><button type="button" class="btn-cancel" @click="cancelChanges">取消</button><button type="button" class="btn-save" :disabled="!hasUnsavedChanges" @click="save"><Save :size="16" aria-hidden="true" /><span>保存更改</span></button></div></footer>
+        <footer class="settings-footer" :class="{ 'has-save-error': saveError }">
+          <div class="settings-footer-status" :class="{ dirty: hasUnsavedChanges, error: saveError }" role="status" aria-live="polite">
+            <AlertCircle v-if="saveError || hasUnsavedChanges" :size="16" aria-hidden="true" />
+            <CheckCircle2 v-else :size="16" aria-hidden="true" />
+            <div class="settings-footer-status-copy">
+              <strong>{{ saveError ? '保存失败' : hasUnsavedChanges ? `有 ${changedSettingCount} 项修改未保存` : '设置已保存' }}</strong>
+              <span v-if="saveError">{{ saveError }}</span>
+              <span v-else-if="hasUnsavedChanges">保存后生效</span>
+            </div>
+          </div>
+          <div class="footer-actions">
+            <button type="button" class="btn-cancel" @click="requestClose">取消</button>
+            <button type="button" class="btn-save" :disabled="!hasUnsavedChanges || isSaving" :class="{ loading: isSaving }" @click="save">
+              <LoaderCircle v-if="isSaving" class="spinning" :size="16" aria-hidden="true" />
+              <Save v-else :size="16" aria-hidden="true" />
+              <span>{{ isSaving ? '保存中…' : '保存更改' }}</span>
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   </Teleport>
@@ -167,14 +197,18 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch, type Component } from 'vue'
 import { AlertCircle, Bot, CheckCircle2, ChevronRight, CornerDownLeft, Database, LoaderCircle, MessageSquareText, Monitor, Moon, RefreshCw, RotateCcw, Save, Server, Settings2, SlidersHorizontal, Sparkles, Sun, TestTube2, Trash2, Waypoints, X } from 'lucide-vue-next'
-import { settings } from '../stores/settings'
+import { persistSettings, settings } from '../stores/settings'
 import { fetchModels } from '../services/stream'
 import { createRuntimeFromSettings } from '../services/runtime'
 import { getClaudeModels } from '../services/providers/claude'
 import { fetchBackendChatProviders, type BackendChatProvider } from '../services/knowledge'
-import type { BackendRagMode, ProviderType, ThemeType, TransportMode } from '../stores/settings'
+import type { AppSettings, BackendRagMode, ProviderType, ThemeType, TransportMode } from '../stores/settings'
+import { useConfirm } from '../composables/useConfirm'
+import { useToast } from '../composables/useToast'
 
 const emit = defineEmits<{ close: [] }>()
+const { confirm } = useConfirm()
+const toast = useToast()
 const DEFAULT_SYSTEM_PROMPT = '你是一个专业的 AI 助手，回答要简洁清晰。'
 const UNLIMITED = 1100000
 type SectionId = 'general' | 'ai' | 'model' | 'prompt' | 'knowledge' | 'behavior' | 'appearance' | 'advanced'
@@ -212,6 +246,8 @@ const backendProviderError = ref('')
 const connectionState = ref<ConnectionState>('idle')
 const connectionError = ref('')
 const modelRequestId = ref(0)
+const saveError = ref('')
+const isSaving = ref(false)
 
 const activeRagModeHint = computed(() => ragModes.find(mode => mode.value === draft.ragMode)?.hint ?? ragModes[0].hint)
 const activeConnectionModeHint = computed(() => connectionModes.find(mode => mode.value === draft.transport)?.hint ?? connectionModes[0].hint)
@@ -226,13 +262,42 @@ const changedSettingCount = computed(() => {
 })
 const hasUnsavedChanges = computed(() => changedSettingCount.value > 0)
 const contextTokenLabel = computed(() => formatTokenLimit(draft.maxContextTokens))
+const dirtySections = computed<Record<SectionId, boolean>>(() => ({
+  general: draft.transport !== initialDraft.transport,
+  ai: draft.provider !== initialDraft.provider || draft.ollama.url !== initialDraft.ollama.url || draft.ollama.model !== initialDraft.ollama.model || draft.openai.apiKey !== initialDraft.openai.apiKey || draft.openai.baseUrl !== initialDraft.openai.baseUrl || draft.openai.model !== initialDraft.openai.model || draft.claude.apiKey !== initialDraft.claude.apiKey || draft.claude.model !== initialDraft.claude.model,
+  model: draft.maxContextTokens !== initialDraft.maxContextTokens || draft.responseTimeoutSeconds !== initialDraft.responseTimeoutSeconds || draft.showModelInTopbar !== initialDraft.showModelInTopbar,
+  prompt: draft.systemPrompt !== initialDraft.systemPrompt,
+  knowledge: draft.ragMode !== initialDraft.ragMode,
+  behavior: false,
+  appearance: draft.theme !== initialDraft.theme,
+  advanced: draft.backend.provider !== initialDraft.backend.provider || draft.backend.model !== initialDraft.backend.model,
+}))
 
 function findTierIndex(value: number): number { if (value >= UNLIMITED) return contextTiers.length - 1; const index = contextTiers.findIndex(tier => value <= tier.max); return index < 0 ? contextTiers.length - 2 : index }
 function selectTier(index: number) { activeTierIndex.value = index; draft.maxContextTokens = contextTiers[index].max }
 function formatTokenLimit(value: number): string { if (value >= UNLIMITED) return '无限制'; if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`; if (value >= 1000) return `${Math.round(value / 1000)}K`; return String(value) }
 function setTheme(theme: ThemeType) { draft.theme = theme; settings.theme = theme }
 function restorePrompt() { draft.systemPrompt = DEFAULT_SYSTEM_PROMPT }
-function cancelChanges() { settings.theme = initialDraft.theme; emit('close') }
+function sectionHasChanges(sectionId: SectionId): boolean { return dirtySections.value[sectionId] }
+function discardChanges() {
+  modelRequestId.value += 1
+  settings.theme = initialDraft.theme
+  emit('close')
+}
+async function requestClose() {
+  if (!hasUnsavedChanges.value) {
+    discardChanges()
+    return
+  }
+  const shouldDiscard = await confirm({
+    title: '放弃未保存的修改？',
+    message: `还有 ${changedSettingCount.value} 项修改未保存，放弃后这些内容将丢失。`,
+    cancelText: '继续编辑',
+    confirmText: '放弃更改',
+    danger: true,
+  })
+  if (shouldDiscard) discardChanges()
+}
 
 async function loadModels() {
   const requestId = ++modelRequestId.value
@@ -295,11 +360,57 @@ async function loadBackendProviders() {
 }
 function applyBackendDefaultModel() { const provider = backendProviders.value.find(item => item.id === draft.backend.provider); if (provider) draft.backend.model = provider.defaultModel }
 function normalizeTimeout(value: number): number { if (!Number.isFinite(value)) return 30; return Math.max(5, Math.round(value)) }
+function createSettingsSnapshot(): AppSettings {
+  const backend = { ...draft.backend }
+  if (!backend.model) {
+    const provider = backendProviders.value.find(item => item.id === backend.provider)
+    backend.model = provider?.defaultModel ?? draft.ollama.model
+  }
+  return {
+    transport: draft.transport,
+    provider: draft.provider,
+    theme: draft.theme,
+    systemPrompt: draft.systemPrompt,
+    maxContextTokens: draft.maxContextTokens,
+    responseTimeoutSeconds: normalizeTimeout(draft.responseTimeoutSeconds),
+    showModelInTopbar: draft.showModelInTopbar,
+    ragMode: draft.ragMode,
+    backend,
+    ollama: { ...draft.ollama },
+    openai: { ...draft.openai },
+    claude: { ...draft.claude },
+  }
+}
 function save() {
-  draft.responseTimeoutSeconds = normalizeTimeout(draft.responseTimeoutSeconds)
-  if (!draft.backend.model) { const provider = backendProviders.value.find(item => item.id === draft.backend.provider); draft.backend.model = provider?.defaultModel ?? draft.ollama.model }
-  Object.assign(settings, { transport: draft.transport, provider: draft.provider, theme: draft.theme, systemPrompt: draft.systemPrompt, maxContextTokens: draft.maxContextTokens, responseTimeoutSeconds: draft.responseTimeoutSeconds, showModelInTopbar: draft.showModelInTopbar, ragMode: draft.ragMode })
-  Object.assign(settings.backend, draft.backend); Object.assign(settings.ollama, draft.ollama); Object.assign(settings.openai, draft.openai); Object.assign(settings.claude, draft.claude); emit('close')
+  if (!hasUnsavedChanges.value || isSaving.value) return
+  isSaving.value = true
+  saveError.value = ''
+  try {
+    const nextSettings = createSettingsSnapshot()
+    persistSettings(nextSettings)
+    Object.assign(settings, {
+      transport: nextSettings.transport,
+      provider: nextSettings.provider,
+      theme: nextSettings.theme,
+      systemPrompt: nextSettings.systemPrompt,
+      maxContextTokens: nextSettings.maxContextTokens,
+      responseTimeoutSeconds: nextSettings.responseTimeoutSeconds,
+      showModelInTopbar: nextSettings.showModelInTopbar,
+      ragMode: nextSettings.ragMode,
+    })
+    Object.assign(settings.backend, nextSettings.backend)
+    Object.assign(settings.ollama, nextSettings.ollama)
+    Object.assign(settings.openai, nextSettings.openai)
+    Object.assign(settings.claude, nextSettings.claude)
+    toast.show('设置已保存', 'success')
+    emit('close')
+  } catch (error) {
+    saveError.value = error instanceof Error && error.message
+      ? `未能保存到此设备：${error.message}`
+      : '未能保存到此设备，请检查浏览器存储权限后重试。'
+  } finally {
+    isSaving.value = false
+  }
 }
 
 void loadModels()
@@ -325,7 +436,10 @@ void loadBackendProviders()
 .behavior-list { display: flex; flex-direction: column; gap: 0; margin-bottom: 24px; border-top: 1px solid var(--border-subtle); }.behavior-row { min-width: 0; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 70px; border-bottom: 1px solid var(--border-subtle); }.behavior-icon { width: 30px; height: 30px; display: grid; place-items: center; color: var(--accent-text); background: var(--accent-bg); border-radius: var(--radius-sm); }.behavior-row div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }.behavior-row strong { color: var(--text-primary); font-size: 13px; }.behavior-row div span { color: var(--text-muted); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }.behavior-state { padding: 4px 7px; color: var(--success); background: var(--success-bg); border-radius: var(--radius-pill); font-size: 10px; white-space: nowrap; }.theme-switcher { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }.theme-btn { min-height: 52px; display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--text-secondary); background: var(--bg-surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; }.theme-btn:hover { color: var(--text-primary); border-color: var(--border-strong); }.theme-btn.active { color: var(--accent-text); background: var(--accent-bg); border-color: var(--accent-border); }
 .settings-footer { min-height: 76px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 24px; border-top: 1px solid var(--border-subtle); background: var(--bg-topbar); }.modified-count { color: var(--text-muted); font-size: 12px; }.modified-count.active { color: var(--accent-text); }.footer-actions { display: flex; align-items: center; gap: 8px; }.btn-cancel, .btn-save { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 16px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; }.btn-cancel { color: var(--text-secondary); background: var(--bg-surface-2); border: 1px solid var(--border-subtle); }.btn-cancel:hover { color: var(--text-primary); border-color: var(--border-strong); }.btn-save { color: #fff; background: var(--accent-deep); border: 1px solid var(--accent-border); box-shadow: 0 0 16px var(--accent-glow); }.btn-save:hover:not(:disabled) { background: var(--accent-deeper); }.btn-save:disabled { color: var(--text-faint); background: var(--bg-surface-3); border-color: var(--border-faint); box-shadow: none; cursor: not-allowed; }
 .settings-close:focus-visible, .settings-nav-item:focus-visible, .settings-mobile-tab:focus-visible, .provider-tab:focus-visible, .segmented-option:focus-visible, .btn-refresh:focus-visible, .secondary-action:focus-visible, .error-retry:focus-visible, .text-action:focus-visible, .theme-btn:focus-visible, .context-preset-btn:focus-visible, .btn-cancel:focus-visible, .btn-save:focus-visible, .settings-toggle input:focus-visible + .toggle-track, .settings-slider:focus-visible { outline: none; box-shadow: var(--focus-ring); }.settings-toggle { position: relative; display: inline-flex; min-width: 44px; min-height: 32px; align-items: center; justify-content: flex-end; cursor: pointer; }.settings-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }.toggle-track { width: 38px; height: 22px; display: flex; align-items: center; padding: 3px; background: var(--bg-surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-pill); }.toggle-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--text-muted); transition: transform var(--motion-fast), background var(--motion-fast); }.settings-toggle input:checked + .toggle-track { background: var(--accent-bg); border-color: var(--accent-border); }.settings-toggle input:checked + .toggle-track .toggle-thumb { transform: translateX(16px); background: var(--accent); }
+.settings-header-actions { min-width: 0; display: flex; align-items: center; gap: 8px; }.settings-header-status { min-width: 0; min-height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; color: var(--success); background: var(--success-bg); border: 1px solid var(--success-border); border-radius: var(--radius-pill); font-size: 11px; white-space: nowrap; }.settings-header-status.dirty { color: var(--accent-text); background: var(--accent-bg); border-color: var(--accent-border); }.settings-header-status.error { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-border); }.settings-header-status span { min-width: 0; overflow-wrap: anywhere; }.settings-dirty-banner { min-width: 0; flex: 0 0 auto; display: flex; align-items: flex-start; gap: 9px; padding: 10px 24px; color: var(--accent-text); background: var(--accent-bg); border-bottom: 1px solid var(--accent-border); }.settings-dirty-banner > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }.settings-dirty-banner strong { color: var(--text-primary); font-size: 12px; line-height: 1.35; }.settings-dirty-banner span { color: var(--accent-text); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }.settings-nav-label, .settings-tab-label { min-width: 0; display: flex; align-items: center; gap: 7px; overflow-wrap: anywhere; }.settings-dirty-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }.settings-footer-status { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; gap: 8px; color: var(--text-muted); }.settings-footer-status.dirty { color: var(--accent-text); }.settings-footer-status.error { color: var(--danger); }.settings-footer-status-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }.settings-footer-status strong { color: currentColor; font-size: 12px; line-height: 1.35; }.settings-footer-status span { min-width: 0; color: var(--text-muted); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }.settings-footer-status.error span { color: var(--danger); }.btn-save.loading { cursor: wait; }
 @media (max-width: 767px) { .settings-panel { width: 100vw; border-left: 0; }.settings-header { min-height: 62px; padding: 0 14px 0 16px; }.settings-eyebrow { display: none; }.settings-title { font-size: 17px; }.settings-layout { display: flex; flex-direction: column; overflow: hidden; }.settings-nav { display: none; }.settings-mobile-tabs { min-width: 0; flex: 0 0 auto; display: flex; gap: 5px; overflow-x: auto; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-topbar); scrollbar-width: none; }.settings-mobile-tabs::-webkit-scrollbar { display: none; }.settings-mobile-tab { min-width: max-content; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; color: var(--text-secondary); background: transparent; border: 1px solid transparent; border-radius: var(--radius-pill); cursor: pointer; font-size: 12px; }.settings-mobile-tab.active { color: var(--accent-text); background: var(--accent-bg); border-color: var(--accent-border); }.settings-content { width: 100%; min-height: 0; flex: 1 1 auto; padding: 22px 16px calc(124px + env(safe-area-inset-bottom)); }.settings-section { max-width: none; }.section-heading { margin-bottom: 22px; flex-wrap: wrap; }.section-heading h2 { font-size: 22px; }.section-heading p { font-size: 12px; }.settings-input, .settings-textarea, .settings-slider, .provider-tab, .theme-btn, .segmented-option, .context-preset-btn, .btn-refresh, .secondary-action, .error-retry, .text-action, .btn-cancel, .btn-save, .settings-toggle { min-height: 44px; }.settings-field-grid, .settings-field-grid.two-columns { grid-template-columns: minmax(0, 1fr); gap: 0; }.provider-tab { padding: 8px 5px; flex-direction: column; gap: 4px; font-size: 11px; }.segmented-option { padding: 7px 5px; }.context-presets { grid-template-columns: repeat(3, minmax(0, 1fr)); }.settings-textarea { min-height: 140px; }.prompt-editor-footer { align-items: flex-start; flex-direction: column; }.prompt-actions { width: 100%; justify-content: flex-end; }.model-chip, .prompt-badge { max-width: 100%; }.connection-status { padding-inline: 7px; }.action-row { align-items: stretch; flex-direction: column; gap: 7px; }.secondary-action { width: 100%; }.settings-footer { min-height: 76px; align-items: center; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }.modified-count { min-width: 0; font-size: 11px; }.footer-actions { flex: 1 1 auto; justify-content: flex-end; }.btn-cancel, .btn-save { padding-inline: 13px; }.behavior-row { grid-template-columns: 32px minmax(0, 1fr); padding: 8px 0; }.behavior-state { grid-column: 2; justify-self: start; } }
+@media (max-width: 767px) { .settings-header-actions { gap: 4px; }.settings-header-status { max-width: 132px; overflow: hidden; text-overflow: ellipsis; }.settings-dirty-banner { padding: 10px 16px; }.settings-content { padding-bottom: calc(144px + env(safe-area-inset-bottom)); }.settings-footer { min-height: 96px; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }.settings-footer-status { flex: 0 0 auto; min-height: 22px; align-items: flex-start; }.settings-footer-status-copy { flex: 1 1 auto; }.footer-actions { width: 100%; flex: 0 0 auto; }.footer-actions .btn-cancel, .footer-actions .btn-save { flex: 1 1 0; } }
 @media (max-width: 374px) { .settings-content { padding-inline: 12px; }.settings-footer { gap: 8px; padding-inline: 10px; }.modified-count { font-size: 10px; }.btn-cancel, .btn-save { padding-inline: 10px; font-size: 11px; } }
+@media (max-width: 374px) { .settings-header-status { max-width: 112px; padding-inline: 7px; font-size: 10px; }.settings-dirty-banner { padding-inline: 12px; }.settings-content { padding-bottom: calc(144px + env(safe-area-inset-bottom)); }.settings-footer { min-height: 96px; padding-inline: 10px; } }
 @media (prefers-reduced-motion: reduce) { .settings-panel, .spinning { animation-duration: 1ms; animation-iteration-count: 1; } }
 </style>

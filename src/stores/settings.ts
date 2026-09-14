@@ -39,6 +39,10 @@ export interface AppSettings {
 
 const STORAGE_KEY = 'ai-chat-settings'
 
+export function persistSettings(value: AppSettings): void {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
+}
+
 // 默认设置。用户第一次打开应用，或者 localStorage 读取失败时会使用这些值。
 const defaults: AppSettings = {
     transport: 'direct',
@@ -164,7 +168,7 @@ export const settings = reactive<AppSettings>(load())
 // 任何设置变动都会自动保存，用户不需要手动管理 localStorage。
 watch(settings, (val) => {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(val))
+        persistSettings(val)
     } catch (e) {
         console.warn('设置保存失败，可能存储空间不足', e)
     }

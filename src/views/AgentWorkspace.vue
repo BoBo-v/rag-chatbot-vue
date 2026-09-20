@@ -2,7 +2,7 @@
   <section class="agent-workspace">
     <header class="agent-toolbar">
       <div class="agent-heading">
-        <span class="agent-eyebrow">Agent V0</span>
+        <span class="agent-eyebrow">Agent</span>
         <div class="agent-title-row">
           <h1>Agent 工作台</h1>
           <span class="agent-status" :class="`is-${agent.status.value}`">
@@ -19,6 +19,15 @@
             <option v-if="modelOptions.length === 0" value="">暂无可用模型</option>
             <option v-for="option in modelOptions" :key="option.key" :value="option.key">
               {{ option.providerName }} / {{ option.model }}
+            </option>
+          </select>
+        </label>
+
+        <label class="agent-model-field">
+          <span>Agent Profile</span>
+          <select v-model="selectedProfile" :disabled="agent.isRunning.value">
+            <option v-for="profile in profileOptions" :key="profile.id" :value="profile.id">
+              {{ profile.label }}
             </option>
           </select>
         </label>
@@ -280,9 +289,31 @@
                 <time :datetime="event.timestamp">{{ formatEventTime(event.timestamp) }}</time>
               </div>
               <p>{{ eventDetail(event) }}</p>
-              <div v-if="toolResult(event)" class="agent-tool-result">
+              <div v-if="toolMetadata(event) || toolResult(event)" class="agent-tool-result">
                 <span>工具返回结果</span>
-                <pre>{{ toolResult(event) }}</pre>
+                <template v-if="toolMetadata(event)?.kind === 'web_search'">
+                  <div class="agent-search-results">
+                    <a
+                      v-for="item in webSearchResults(event)"
+                      :key="item.url"
+                      class="agent-search-result"
+                      :href="item.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <strong>{{ item.title }}</strong>
+                      <span>{{ item.source }}<template v-if="item.publishedAt"> · {{ item.publishedAt }}</template></span>
+                      <p>{{ item.snippet }}</p>
+                    </a>
+                  </div>
+                </template>
+                <template v-else-if="toolMetadata(event)?.kind === 'mcp'">
+                  <div class="agent-mcp-result">
+                    <strong>{{ readText(toolMetadata(event)?.serverToolName, 'readonly_mcp') }}</strong>
+                    <pre v-if="structuredContent(event)">{{ structuredContent(event) }}</pre>
+                  </div>
+                </template>
+                <pre v-if="toolResult(event)">{{ toolResult(event) }}</pre>
               </div>
             </div>
           </article>
@@ -352,6 +383,7 @@ import {
   saveAgentAccessKey,
   type AgentEvent,
   type AgentProviderId,
+  type AgentProfileId,
   type AgentProviderInfo,
   type AgentRunRequest,
   type AgentUsage,
@@ -383,6 +415,7 @@ const providers = ref<AgentProviderInfo[]>([])
 const providersLoading = ref(false)
 const providerError = ref('')
 const selectedModelKey = ref('')
+const selectedProfile = ref<AgentProfileId>('tools-v0')
 const accessKey = ref(loadAgentAccessKey())
 const accessKeyInput = ref<HTMLInputElement | null>(null)
 const showAccessKey = ref(false)
@@ -398,6 +431,12 @@ const messageFeed = ref<HTMLElement | null>(null)
 const lastRequest = ref<AgentRunRequest | null>(null)
 const pendingModelKey = ref('')
 let providerController: AbortController | null = null
+
+const profileOptions: Array<{ id: AgentProfileId; label: string }> = [
+  { id: 'calculator-v0', label: 'calculator-v0 · calculator' },
+  { id: 'tools-v0', label: 'tools-v0 · calculator + datetime' },
+  { id: 'agent-v1', label: 'agent-v1 · calculator + web_search + readonly_mcp' },
+]
 
 const modelOptions = computed<AgentModelOption[]>(() => providers.value.flatMap(provider =>
   provider.agentModels.map(model => ({
@@ -487,7 +526,7 @@ async function submitTask(): Promise<void> {
   if (!task || !runtime || agent.isRunning.value) return
 
   const request: AgentRunRequest = {
-    agentProfile: 'tools-v0',
+    agentProfile: selectedProfile.value,
     provider: runtime.provider,
     model: runtime.model,
     agentTurnId: crypto.randomUUID(),
@@ -694,6 +733,7 @@ async function refreshAgentSessionList(): Promise<void> {
 }
 
 function applyAgentSessionRuntime(session: AgentSessionListItem): void {
+  selectedProfile.value = session.agentProfile
   const modelKey = `${session.provider}:${session.model}`
   if (modelOptions.value.some(option => option.key === modelKey)) {
     selectedModelKey.value = modelKey
@@ -786,6 +826,61 @@ function eventTone(event: AgentEvent): string {
 
 function toolResult(event: AgentEvent): string {
   return event.type === 'tool_completed' ? readText(event.data.result, '') : ''
+}
+
+interface WebSearchResultView {
+  title: string
+  url: string
+  snippet: string
+  publishedAt: string | null
+  source: string
+}
+
+function toolMetadata(event: AgentEvent): Record<string, unknown> | null {
+  if (event.type !== 'tool_completed' || !isRecord(event.data.metadata)) return null
+  return event.data.metadata
+}
+
+function webSearchResults(event: AgentEvent): WebSearchResultView[] {
+  const metadata = toolMetadata(event)
+  if (!metadata || metadata.kind !== 'web_search' || !Array.isArray(metadata.results)) return []
+  const seen = new Set<string>()
+  const results: WebSearchResultView[] = []
+  for (const value of metadata.results) {
+    if (!isRecord(value)) continue
+    const url = readHttpUrl(value.url)
+    const title = readText(value.title, '')
+    if (!url || !title || seen.has(url)) continue
+    seen.add(url)
+    results.push({
+      title,
+      url,
+      snippet: readText(value.snippet, ''),
+      publishedAt: typeof value.publishedAt === 'string' ? value.publishedAt : null,
+      source: readText(value.source, new URL(url).hostname),
+    })
+  }
+  return results
+}
+
+function structuredContent(event: AgentEvent): string {
+  const metadata = toolMetadata(event)
+  if (!metadata || !isRecord(metadata.structuredContent)) return ''
+  return JSON.stringify(metadata.structuredContent, null, 2)
+}
+
+function readHttpUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function formatEventTime(value: string): string {
@@ -1626,6 +1721,56 @@ textarea:disabled {
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.agent-search-results {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-search-result {
+  display: block;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  text-decoration: none;
+}
+
+.agent-search-result:hover {
+  border-color: var(--accent);
+}
+
+.agent-search-result strong,
+.agent-search-result span,
+.agent-search-result p {
+  display: block;
+}
+
+.agent-search-result strong {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.agent-search-result span {
+  margin-top: 2px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.agent-search-result p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.agent-mcp-result > strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+  font-size: 11px;
 }
 
 .agent-run-meta {

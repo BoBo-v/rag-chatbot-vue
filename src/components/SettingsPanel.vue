@@ -163,6 +163,11 @@
 
             <section v-show="activeSection === 'advanced'" class="settings-section" aria-labelledby="section-advanced">
               <div class="section-heading"><div><span class="section-kicker">ADVANCED</span><h2 id="section-advanced">AI代理服务</h2><p>低频使用的后端代理配置集中放在这里。</p></div></div>
+              <div class="settings-field">
+                <label for="backend-api-url" class="settings-label">后端 API 地址</label>
+                <input id="backend-api-url" v-model="draft.backend.url" class="settings-input" placeholder="http://localhost:3001" spellcheck="false" autocomplete="url" />
+                <span class="settings-hint">填写后端 Fastify 地址，不要添加末尾的 /api。保存后立即用于后端代理请求。</span>
+              </div>
               <div v-if="draft.transport === 'backend'" class="settings-field"><div class="field-label-row"><label class="settings-label">后端代理厂商</label><button type="button" class="btn-refresh" :disabled="loadingBackendProviders" :class="{ loading: loadingBackendProviders }" @click="loadBackendProviders"><RefreshCw :size="14" :class="{ spinning: loadingBackendProviders }" aria-hidden="true" /><span>{{ loadingBackendProviders ? '加载中…' : '刷新厂商' }}</span></button></div><select v-model="draft.backend.provider" class="settings-input settings-select" @change="applyBackendDefaultModel"><option v-for="backendProvider in backendProviders" :key="backendProvider.id" :value="backendProvider.id">{{ backendProvider.name }}</option></select><input v-model="draft.backend.model" class="settings-input" placeholder="使用厂商默认模型或手动输入" spellcheck="false" autocomplete="off" /><div v-if="backendProviderError" class="settings-error-card" role="alert"><AlertCircle :size="17" aria-hidden="true" /><span>{{ backendProviderError }}</span><button type="button" class="error-retry" :disabled="loadingBackendProviders" @click="loadBackendProviders">重试</button></div><span v-else class="settings-hint">后端代理统一请求 /api/chat，API Key 和厂商路由由后端管理。</span></div>
               <div v-else class="settings-info-card subtle"><Server :size="17" aria-hidden="true" /><span>切换到后端代理后，可以在这里选择后端厂商和默认模型。</span></div>
               <div class="settings-info-card subtle"><Settings2 :size="17" aria-hidden="true" /><span>API Key、服务地址和提示词都会保存在当前设备的本地设置中。</span></div>
@@ -257,7 +262,7 @@ const connectionStatusLabel = computed(() => connectionState.value === 'loading'
 const connectionHint = computed(() => connectionError.value || (connectionState.value === 'success' ? '当前服务响应正常。' : '保存前可以先测试当前服务。'))
 const promptStats = computed(() => ({ characters: draft.systemPrompt.length, tokens: Math.max(0, Math.ceil(draft.systemPrompt.trim().length / 4)) }))
 const changedSettingCount = computed(() => {
-  const pairs: [unknown, unknown][] = [[draft.transport, initialDraft.transport], [draft.provider, initialDraft.provider], [draft.theme, initialDraft.theme], [draft.systemPrompt, initialDraft.systemPrompt], [draft.maxContextTokens, initialDraft.maxContextTokens], [draft.responseTimeoutSeconds, initialDraft.responseTimeoutSeconds], [draft.showModelInTopbar, initialDraft.showModelInTopbar], [draft.ragMode, initialDraft.ragMode], [draft.backend.provider, initialDraft.backend.provider], [draft.backend.model, initialDraft.backend.model], [draft.ollama.url, initialDraft.ollama.url], [draft.ollama.model, initialDraft.ollama.model], [draft.openai.apiKey, initialDraft.openai.apiKey], [draft.openai.baseUrl, initialDraft.openai.baseUrl], [draft.openai.model, initialDraft.openai.model], [draft.claude.apiKey, initialDraft.claude.apiKey], [draft.claude.model, initialDraft.claude.model]]
+  const pairs: [unknown, unknown][] = [[draft.transport, initialDraft.transport], [draft.provider, initialDraft.provider], [draft.theme, initialDraft.theme], [draft.systemPrompt, initialDraft.systemPrompt], [draft.maxContextTokens, initialDraft.maxContextTokens], [draft.responseTimeoutSeconds, initialDraft.responseTimeoutSeconds], [draft.showModelInTopbar, initialDraft.showModelInTopbar], [draft.ragMode, initialDraft.ragMode], [draft.backend.url, initialDraft.backend.url], [draft.backend.provider, initialDraft.backend.provider], [draft.backend.model, initialDraft.backend.model], [draft.ollama.url, initialDraft.ollama.url], [draft.ollama.model, initialDraft.ollama.model], [draft.openai.apiKey, initialDraft.openai.apiKey], [draft.openai.baseUrl, initialDraft.openai.baseUrl], [draft.openai.model, initialDraft.openai.model], [draft.claude.apiKey, initialDraft.claude.apiKey], [draft.claude.model, initialDraft.claude.model]]
   return pairs.filter(([current, initial]) => current !== initial).length
 })
 const hasUnsavedChanges = computed(() => changedSettingCount.value > 0)
@@ -270,7 +275,7 @@ const dirtySections = computed<Record<SectionId, boolean>>(() => ({
   knowledge: draft.ragMode !== initialDraft.ragMode,
   behavior: false,
   appearance: draft.theme !== initialDraft.theme,
-  advanced: draft.backend.provider !== initialDraft.backend.provider || draft.backend.model !== initialDraft.backend.model,
+  advanced: draft.backend.url !== initialDraft.backend.url || draft.backend.provider !== initialDraft.backend.provider || draft.backend.model !== initialDraft.backend.model,
 }))
 
 function findTierIndex(value: number): number { if (value >= UNLIMITED) return contextTiers.length - 1; const index = contextTiers.findIndex(tier => value <= tier.max); return index < 0 ? contextTiers.length - 2 : index }

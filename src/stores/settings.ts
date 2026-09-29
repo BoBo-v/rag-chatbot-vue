@@ -9,6 +9,8 @@ export type BackendChatProviderType = 'ollama' | 'openai' | 'anthropic'
 export type BackendRagMode = 'auto' | 'off' | 'force'
 export type TransportMode = 'direct' | 'backend'
 
+const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? ''
+
 export interface AppSettings {
     transport: TransportMode
     provider: ProviderType
@@ -19,6 +21,7 @@ export interface AppSettings {
     showModelInTopbar: boolean
     ragMode: BackendRagMode
     backend: {
+        url: string
         provider: BackendChatProviderType
         model: string
     }
@@ -54,6 +57,7 @@ const defaults: AppSettings = {
     showModelInTopbar: true,
     ragMode: 'auto',
     backend: {
+        url: configuredApiBaseUrl,
         provider: 'ollama',
         model: 'qwen2.5:7b',
     },
@@ -91,6 +95,7 @@ function load(): AppSettings {
                 showModelInTopbar: typeof saved.showModelInTopbar === 'boolean' ? saved.showModelInTopbar : defaults.showModelInTopbar,
                 ragMode: normalizeBackendRagMode(saved.ragMode ?? saved.ollama?.backendRagMode, saved.ollama?.enableBackendRag),
                 backend: {
+                    url: stringOrDefault(saved.backend?.url, defaults.backend.url),
                     provider: normalizeBackendProvider(saved.backend?.provider ?? saved.ollama?.backendProvider),
                     model: stringOrDefault(saved.backend?.model ?? saved.ollama?.backendModel, defaults.backend.model),
                 },

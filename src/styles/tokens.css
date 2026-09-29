@@ -148,21 +148,21 @@
   --bg-overlay: rgba(29, 23, 40, 0.42);
   --bg-sidebar-overlay: rgba(29, 23, 40, 0.32);
 
-  --text-primary: #1d1728;
-  --text-secondary: #5e566a;
-  --text-muted: #7e748b;
-  --text-faint: #a39aaa;
-  --text-placeholder: #8f859b;
-  --text-code: #2d2638;
-  --text-sidebar-title: #746b80;
-  --text-status: #6f657c;
-  --text-status-dot: #9e94aa;
+  --text-primary: #191424;
+  --text-secondary: #494154;
+  --text-muted: #6e657c;
+  --text-faint: #91889e;
+  --text-placeholder: #8b8198;
+  --text-code: #251f30;
+  --text-sidebar-title: #655c70;
+  --text-status: #5d5469;
+  --text-status-dot: #8f859b;
 
-  --border: #d8d0e4;
-  --border-subtle: #e3dcea;
-  --border-faint: #ece7f1;
-  --border-strong: #b7a6d0;
-  --grid-line: rgba(109, 40, 217, 0.045);
+  --border: #d4ccdf;
+  --border-subtle: #dfd7e7;
+  --border-faint: #ece6f2;
+  --border-strong: #ae9cc7;
+  --grid-line: rgba(109, 40, 217, 0.022);
   --scrollbar-thumb: rgba(109, 40, 217, 0.22);
 
   --accent: var(--violet-600);

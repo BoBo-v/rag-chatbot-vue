@@ -25,20 +25,38 @@ export function useMessageRenderer() {
         return rendered
     }
 
-    // 代码块复制按钮是 Markdown 渲染出来的 HTML，不是 Vue 模板里的按钮。
-    // 因此用事件委托：点击聊天区域时向上查找 .code-copy-btn。
+    // 代码块操作按钮由 Markdown 渲染出来的 HTML 生成。
+    // 因此使用事件委托：点击聊天区域时判断是复制操作还是折行切换操作。
     function handleCodeBlockCopy(e: MouseEvent) {
-        const btn = (e.target as HTMLElement).closest('.code-copy-btn') as HTMLElement | null
-        if (!btn) return
-        const code = btn.closest('.code-block-wrapper')?.querySelector('code')?.textContent ?? ''
-        navigator.clipboard.writeText(code).then(() => {
-            btn.textContent = '已复制 ✓'
-            btn.classList.add('copied')
-            setTimeout(() => {
-                btn.textContent = '复制'
-                btn.classList.remove('copied')
-            }, 2000)
-        })
+        const target = e.target as HTMLElement
+
+        // 处理复制按钮
+        const copyBtn = target.closest('.code-copy-btn') as HTMLElement | null
+        if (copyBtn) {
+            const code = copyBtn.closest('.code-block-wrapper')?.querySelector('code')?.textContent ?? ''
+            navigator.clipboard.writeText(code).then(() => {
+                copyBtn.textContent = '已复制 ✓'
+                copyBtn.classList.add('copied')
+                setTimeout(() => {
+                    copyBtn.textContent = '复制'
+                    copyBtn.classList.remove('copied')
+                }, 2000)
+            })
+            return
+        }
+
+        // 处理代码块换行/滚动切换按钮
+        const wrapBtn = target.closest('.code-wrap-btn') as HTMLElement | null
+        if (wrapBtn) {
+            const wrapper = wrapBtn.closest('.code-block-wrapper')
+            const pre = wrapper?.querySelector('pre')
+            if (pre) {
+                const isWrapped = pre.classList.toggle('wrap-text')
+                wrapBtn.textContent = isWrapped ? '滚动' : '换行'
+                wrapBtn.title = isWrapped ? '切换回横向滚动' : '切换自动折行'
+                wrapBtn.classList.toggle('active', isWrapped)
+            }
+        }
     }
 
     return { renderContent, handleCodeBlockCopy }

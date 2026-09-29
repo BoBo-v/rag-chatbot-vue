@@ -162,7 +162,7 @@
             </section>
 
             <section v-show="activeSection === 'advanced'" class="settings-section" aria-labelledby="section-advanced">
-              <div class="section-heading"><div><span class="section-kicker">ADVANCED</span><h2 id="section-advanced">高级</h2><p>低频使用的后端代理配置集中放在这里。</p></div></div>
+              <div class="section-heading"><div><span class="section-kicker">ADVANCED</span><h2 id="section-advanced">AI代理服务</h2><p>低频使用的后端代理配置集中放在这里。</p></div></div>
               <div v-if="draft.transport === 'backend'" class="settings-field"><div class="field-label-row"><label class="settings-label">后端代理厂商</label><button type="button" class="btn-refresh" :disabled="loadingBackendProviders" :class="{ loading: loadingBackendProviders }" @click="loadBackendProviders"><RefreshCw :size="14" :class="{ spinning: loadingBackendProviders }" aria-hidden="true" /><span>{{ loadingBackendProviders ? '加载中…' : '刷新厂商' }}</span></button></div><select v-model="draft.backend.provider" class="settings-input settings-select" @change="applyBackendDefaultModel"><option v-for="backendProvider in backendProviders" :key="backendProvider.id" :value="backendProvider.id">{{ backendProvider.name }}</option></select><input v-model="draft.backend.model" class="settings-input" placeholder="使用厂商默认模型或手动输入" spellcheck="false" autocomplete="off" /><div v-if="backendProviderError" class="settings-error-card" role="alert"><AlertCircle :size="17" aria-hidden="true" /><span>{{ backendProviderError }}</span><button type="button" class="error-retry" :disabled="loadingBackendProviders" @click="loadBackendProviders">重试</button></div><span v-else class="settings-hint">后端代理统一请求 /api/chat，API Key 和厂商路由由后端管理。</span></div>
               <div v-else class="settings-info-card subtle"><Server :size="17" aria-hidden="true" /><span>切换到后端代理后，可以在这里选择后端厂商和默认模型。</span></div>
               <div class="settings-info-card subtle"><Settings2 :size="17" aria-hidden="true" /><span>API Key、服务地址和提示词都会保存在当前设备的本地设置中。</span></div>
@@ -222,7 +222,7 @@ const sections: { id: SectionId; label: string; icon: Component }[] = [
   { id: 'knowledge', label: '知识库', icon: Database },
   { id: 'behavior', label: '对话行为', icon: CornerDownLeft },
   { id: 'appearance', label: '外观', icon: Monitor },
-  { id: 'advanced', label: '高级', icon: Server },
+  { id: 'advanced', label: 'AI代理服务', icon: Server },
 ]
 const themes: { value: ThemeType; label: string }[] = [{ value: 'dark', label: '暗色' }, { value: 'light', label: '浅色' }, { value: 'system', label: '跟随系统' }]
 const providers: { value: ProviderType; label: string }[] = [{ value: 'ollama', label: 'Ollama' }, { value: 'openai', label: 'OpenAI 兼容' }, { value: 'claude', label: 'Claude' }]

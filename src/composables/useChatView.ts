@@ -519,6 +519,40 @@ export function useChatView() {
         })
     }
 
+    // 重新生成：针对已生成的 AI 消息重新请求回复
+    async function handleRegenerate(messageId: string) {
+        if (isStreaming.value) return
+        const msgIdx = messages.value.findIndex(m => m.id === messageId)
+        if (msgIdx === -1 || currentId.value === null) return
+        const targetMsg = messages.value[msgIdx]
+        if (targetMsg.role !== 'assistant') return
+
+        const userMsg = findPreviousUserMessage(messageId)
+        if (!userMsg) return
+
+        updateMessage(targetMsg.id, {
+            content: '',
+            formattedContent: undefined,
+            status: 'loading',
+            errorMessage: undefined,
+            canContinue: false,
+        })
+        streamMessageConversations.set(targetMsg.id, currentId.value)
+        await flushMessagePersist(targetMsg.id, currentId.value)
+
+        const contextMessages = messages.value
+            .slice(0, msgIdx)
+            .map(snapshotMessage)
+
+        await runStream({
+            aiMessageId: targetMsg.id,
+            prompt: userMsg.content,
+            convId: currentId.value,
+            contextMessages,
+            sourceUserMessageId: userMsg.id,
+        })
+    }
+
     // 继续生成：复用已中断的 AI 消息，以空 prompt 续写
     async function handleContinue(messageId: string) {
         // Continue reuses an aborted assistant message and appends more content to it.
@@ -999,6 +1033,7 @@ export function useChatView() {
         handleStop,
         handleContinue,
         handleRetry,
+        handleRegenerate,
         handleSelectConversation,
         handleNewConversation,
         handleDeleteConversation,

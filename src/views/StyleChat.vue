@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-shell">
+  <div class="chat-shell" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
 
     <!-- ── 动态背景 ── -->
     <div class="bg-canvas">
@@ -105,13 +105,52 @@
       <!-- ── 顶栏 ── -->
       <header class="topbar">
         <div class="topbar-left">
-          <button class="menu-btn" type="button" aria-label="打开会话列表" @click="sidebarOpen = !sidebarOpen">
-            <Menu :size="19" aria-hidden="true" />
+          <button
+            class="menu-btn"
+            type="button"
+            :aria-label="isSidebarCollapsed ? '展开会话列表' : '收起会话列表'"
+            :title="isSidebarCollapsed ? '展开会话列表 (Ctrl+[)' : '收起会话列表 (Ctrl+[)'"
+            @click="toggleSidebar"
+          >
+            <PanelLeftClose v-if="!isSidebarCollapsed" :size="18" aria-hidden="true" />
+            <PanelLeft v-else :size="18" aria-hidden="true" />
           </button>
           <div class="topbar-logo">
             <img class="logo-mark" src="/favicon.svg" alt="" aria-hidden="true" />
             <span class="logo-text">AI Chat</span>
-            <span v-if="currentSettings.showModelInTopbar" class="topbar-model">{{ currentModelName }}</span>
+            <!-- 顶栏快速切换模型下拉 -->
+            <div v-if="currentSettings.showModelInTopbar" class="topbar-model-wrapper">
+              <button
+                type="button"
+                class="topbar-model-btn"
+                :title="`当前模型：${currentModelName} · 点击快速切换`"
+                @click.stop="modelDropdownOpen = !modelDropdownOpen"
+              >
+                <Bot :size="13" aria-hidden="true" />
+                <span class="topbar-model-text">{{ currentModelName }}</span>
+                <ChevronDown :size="12" class="topbar-model-chevron" :class="{ open: modelDropdownOpen }" aria-hidden="true" />
+              </button>
+              <div v-if="modelDropdownOpen" class="topbar-model-dropdown" role="menu">
+                <div class="dropdown-header">
+                  <span>{{ currentSettings.transport === 'backend' ? '后端代理厂商' : currentSettings.provider.toUpperCase() }} 模型</span>
+                  <button type="button" class="dropdown-settings-link" @click="modelDropdownOpen = false; settingsOpen = true">详细设置</button>
+                </div>
+                <div class="dropdown-list">
+                  <button
+                    v-for="m in quickModels"
+                    :key="m"
+                    type="button"
+                    class="dropdown-item"
+                    :class="{ active: isCurrentModel(m) }"
+                    @click="selectQuickModel(m)"
+                  >
+                    <Check v-if="isCurrentModel(m)" :size="13" />
+                    <span v-else class="item-spacer"></span>
+                    <span class="dropdown-item-name">{{ m }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="topbar-right">
@@ -151,8 +190,24 @@
 
           <!-- 空状态 -->
           <div v-if="messages.length === 0" class="empty-state">
-            <div class="empty-icon"><Sparkles :size="28" aria-hidden="true" /></div>
-            <p>发送消息开始对话</p>
+            <div class="empty-icon"><Sparkles :size="26" aria-hidden="true" /></div>
+            <h2 class="empty-title">有什么我可以帮你的？</h2>
+            <p class="empty-desc">选择下方推荐或在下方直接输入消息开始对话</p>
+            <div class="empty-suggestions">
+              <button
+                v-for="s in suggestionPrompts"
+                :key="s.title"
+                type="button"
+                class="suggestion-card"
+                @click="applySuggestion(s.prompt)"
+              >
+                <div class="suggestion-header">
+                  <component :is="s.icon" :size="15" class="suggestion-icon" aria-hidden="true" />
+                  <span class="suggestion-title">{{ s.title }}</span>
+                </div>
+                <p class="suggestion-snippet">{{ s.desc }}</p>
+              </button>
+            </div>
           </div>
 
           <!-- 消息列表 -->
@@ -209,6 +264,11 @@ v-for="(img, idx) in msg.images" :key="idx"
                   </div>
                 </template>
               </div>
+              <!-- RAG 引用文档展示 -->
+              <RagCitations
+                v-if="msg.role === 'assistant' && msg.ragContext"
+                :context="msg.ragContext"
+              />
               <div v-if="msg.status === 'aborted'" class="abort-badge-row">
                 <div class="badge-aborted">
                   <div class="abort-dot"></div>
@@ -227,10 +287,55 @@ v-for="(img, idx) in msg.images" :key="idx"
                   ↻ 重试
                 </button>
               </div>
-              <RagCitations
-                v-if="msg.role === 'assistant' && msg.ragContext"
-                :context="msg.ragContext"
-              />
+              <!-- 消息快捷操作栏（优雅轻量 Icon-only 设计） -->
+              <div class="msg-actions-bar" :class="msg.role">
+                <template v-if="msg.role === 'user'">
+                  <button
+                    type="button"
+                    class="msg-action-btn"
+                    data-tooltip="编辑提问"
+                    aria-label="编辑提问"
+                    @click="handleEditPrompt(msg.content)"
+                  >
+                    <Pencil :size="14" :stroke-width="1.75" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    class="msg-action-btn"
+                    :class="{ copied: copiedMsgId === msg.id }"
+                    :data-tooltip="copiedMsgId === msg.id ? '已复制' : '复制提问'"
+                    :aria-label="copiedMsgId === msg.id ? '已复制' : '复制提问'"
+                    @click="handleCopyMessage(msg.id, msg.content)"
+                  >
+                    <Check v-if="copiedMsgId === msg.id" :size="14" :stroke-width="2" aria-hidden="true" />
+                    <Copy v-else :size="14" :stroke-width="1.75" aria-hidden="true" />
+                  </button>
+                </template>
+                <template v-else-if="msg.role === 'assistant' && msg.status !== 'loading' && msg.status !== 'error'">
+                  <button
+                    type="button"
+                    class="msg-action-btn"
+                    :class="{ copied: copiedMsgId === msg.id }"
+                    :data-tooltip="copiedMsgId === msg.id ? '已复制' : '复制全文'"
+                    :aria-label="copiedMsgId === msg.id ? '已复制' : '复制全文'"
+                    @click="handleCopyMessage(msg.id, msg.content)"
+                  >
+                    <Check v-if="copiedMsgId === msg.id" :size="14" :stroke-width="2" aria-hidden="true" />
+                    <Copy v-else :size="14" :stroke-width="1.75" aria-hidden="true" />
+                  </button>
+                  <button
+                    v-if="msg.status === 'done'"
+                    type="button"
+                    class="msg-action-btn"
+                    :disabled="isStreaming"
+                    data-tooltip="重新生成"
+                    aria-label="重新生成"
+                    @click="handleRegenerate(msg.id)"
+                  >
+                    <RotateCcw :size="14" :stroke-width="1.75" aria-hidden="true" />
+                  </button>
+                </template>
+              </div>
             </div>
           </div>
 
@@ -308,10 +413,11 @@ class="input-box" :class="{ disabled: isStreaming }"
               ref="textareaRef"
               v-model="inputValue"
               class="input-field"
-              placeholder="输入消息..."
+              placeholder="输入消息... (输入框为空时按 ↑ 可恢复上一条提问)"
               :disabled="isStreaming"
               rows="1"
               @keydown.enter.exact.prevent="handleSend"
+              @keydown.up="handleKeyUp"
               @input="autoResize"
               @paste="handlePaste"
           ></textarea>
@@ -401,18 +507,27 @@ v-if="speechSupported"
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   BookUp2,
+  Bot,
   Cable,
+  Check,
+  ChevronDown,
   CircleAlert,
   CircleCheck,
+  Code2,
+  Copy,
+  FileSearch,
   FileText,
   Image as ImageIcon,
-  Menu,
   MessageSquarePlus,
   Mic,
+  PanelLeft,
+  PanelLeftClose,
+  Pencil,
   Plus,
+  RotateCcw,
   Search,
   Send,
   Server,
@@ -422,13 +537,15 @@ import {
   Trash2,
   TriangleAlert,
   X,
+  Zap,
 } from 'lucide-vue-next'
 import { useChatView } from '../composables/useChatView'
 import { useSpeechRecognition } from '../composables/useSpeechRecognition'
 import { useConversationSearch } from '../composables/useConversationSearch'
 import { useMessageRenderer } from '../composables/useMessageRenderer'
 import { useConversationGroups } from '../composables/useConversationGroups'
-import { settings as currentSettings } from '../stores/settings'
+import { persistSettings, settings as currentSettings } from '../stores/settings'
+import { getClaudeModels } from '../services/providers/claude'
 import { uploadKnowledgeFile } from '../services/knowledge'
 import type { UploadProgress } from '../services/knowledge'
 import SettingsPanel from '../components/SettingsPanel.vue'
@@ -453,6 +570,7 @@ const {
   handleSend,
   handleContinue,
   handleRetry,
+  handleRegenerate: handleRegenerateMessage,
   scrollToBottom,
   handleSelectConversation,
   handleNewConversation,
@@ -502,6 +620,164 @@ const dragOver = ref(false)
 function openImagePreview(src: string) {
   previewImageSrc.value = src
 }
+
+// ── 侧边栏折叠与快捷键 ────────────────────────────
+const isSidebarCollapsed = ref(localStorage.getItem('ai_chat_sidebar_collapsed') === 'true')
+
+function toggleSidebar() {
+  if (window.innerWidth <= 768) {
+    sidebarOpen.value = !sidebarOpen.value
+  } else {
+    isSidebarCollapsed.value = !isSidebarCollapsed.value
+    localStorage.setItem('ai_chat_sidebar_collapsed', String(isSidebarCollapsed.value))
+  }
+}
+
+function handleGlobalKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === '[') {
+    e.preventDefault()
+    toggleSidebar()
+  }
+}
+
+// ── 顶栏模型快速切换 ──────────────────────────────
+const modelDropdownOpen = ref(false)
+const claudeModels = getClaudeModels()
+
+const quickModels = computed(() => {
+  if (currentSettings.transport === 'backend') {
+    const list = [currentSettings.backend.model, currentSettings.ollama.model, 'qwen2.5:7b', 'deepseek-chat', 'claude-3-5-sonnet-20241022'].filter(Boolean)
+    return Array.from(new Set(list))
+  }
+  if (currentSettings.provider === 'ollama') {
+    const list = [currentSettings.ollama.model, 'qwen2.5:7b', 'llama3:8b', 'deepseek-r1:7b', 'mistral'].filter(Boolean)
+    return Array.from(new Set(list))
+  }
+  if (currentSettings.provider === 'openai') {
+    const list = [currentSettings.openai.model, 'gpt-4o', 'gpt-4o-mini', 'deepseek-chat', 'moonshot-v1-8k'].filter(Boolean)
+    return Array.from(new Set(list))
+  }
+  const list = [currentSettings.claude.model, ...claudeModels].filter(Boolean)
+  return Array.from(new Set(list))
+})
+
+function isCurrentModel(m: string): boolean {
+  if (currentSettings.transport === 'backend') {
+    return (currentSettings.backend.model || currentSettings.ollama.model) === m
+  }
+  return currentSettings[currentSettings.provider].model === m
+}
+
+function selectQuickModel(modelName: string) {
+  if (currentSettings.transport === 'backend') {
+    currentSettings.backend.model = modelName
+  } else {
+    currentSettings[currentSettings.provider].model = modelName
+  }
+  persistSettings(currentSettings)
+  modelDropdownOpen.value = false
+  toast.show(`已切换至模型：${modelName}`, 'success')
+}
+
+function handleClickOutside(e: MouseEvent) {
+  if (modelDropdownOpen.value) {
+    const target = e.target as HTMLElement
+    if (!target.closest('.topbar-model-wrapper')) {
+      modelDropdownOpen.value = false
+    }
+  }
+}
+
+// ── 消息级操作与键盘快捷键 ────────────────────────
+const copiedMsgId = ref<string | null>(null)
+let copyTimer: ReturnType<typeof setTimeout> | null = null
+
+function handleCopyMessage(id: string, content: string) {
+  navigator.clipboard.writeText(content).then(() => {
+    copiedMsgId.value = id
+    toast.show('已复制内容到剪贴板', 'success')
+    if (copyTimer) clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => {
+      copiedMsgId.value = null
+    }, 2000)
+  })
+}
+
+function handleEditPrompt(content: string) {
+  inputValue.value = content
+  nextTick(() => {
+    textareaRef.value?.focus()
+    autoResize()
+  })
+  toast.show('已载入问题到输入框', 'success')
+}
+
+function handleRegenerate(id: string) {
+  handleRegenerateMessage(id)
+}
+
+function handleKeyUp(e: KeyboardEvent) {
+  if (inputValue.value.trim() === '') {
+    for (let i = messages.value.length - 1; i >= 0; i--) {
+      if (messages.value[i].role === 'user' && messages.value[i].content) {
+        e.preventDefault()
+        inputValue.value = messages.value[i].content
+        nextTick(() => {
+          autoResize()
+        })
+        break
+      }
+    }
+  }
+}
+
+// ── 空状态推荐卡片 ────────────────────────────────
+const suggestionPrompts = [
+  {
+    title: '代码排错与重构',
+    desc: '分析一段代码中的潜在 Bug，并提供现代化重构与性能优化建议。',
+    prompt: '请帮我 review 这段代码，找出潜在的 Bug、性能瓶颈，并给出重构后的实现方案：\n\n```\n// 在这里粘贴你的代码\n```',
+    icon: Code2,
+  },
+  {
+    title: '解释核心逻辑',
+    desc: '用通俗易懂的语言梳理复杂算法或设计模式的核心原理。',
+    prompt: '请用通俗生动的比喻，配合简单的示例代码，帮我详细解释一下：',
+    icon: FileSearch,
+  },
+  {
+    title: '编写自动化脚本',
+    desc: '生成高效实用的 Python / Shell 脚本以自动化处理日常任务。',
+    prompt: '我想写一个脚本来自动处理以下任务，请提供 Python 和 Shell 的实现方案：\n任务需求：',
+    icon: Zap,
+  },
+  {
+    title: '架构与技术选型',
+    desc: '对比主流技术方案的优劣势、适用场景与潜在陷阱。',
+    prompt: '针对以下业务场景，有哪些主流的技术选型方案？请对比它们的优缺点及落地建议：\n场景描述：',
+    icon: Sparkles,
+  },
+]
+
+function applySuggestion(promptText: string) {
+  inputValue.value = promptText
+  nextTick(() => {
+    textareaRef.value?.focus()
+    autoResize()
+  })
+}
+
+// ── 生命周期监听 ──────────────────────────────────
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('click', handleClickOutside)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('click', handleClickOutside)
+  if (copyTimer) clearTimeout(copyTimer)
+})
 
 // ── 上传相关 ──────────────────────────────────────
 const imageInputRef = ref<HTMLInputElement | null>(null)

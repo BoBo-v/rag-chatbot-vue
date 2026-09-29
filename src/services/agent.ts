@@ -1,5 +1,6 @@
 export const AGENT_EVENT_VERSION = 1 as const
 export const AGENT_ACCESS_KEY_STORAGE_KEY = 'ai-chat.agent-access-key'
+import { apiFetch } from './api'
 
 export type AgentProviderId = 'ollama'
 export type AgentProfileId = 'calculator-v0' | 'tools-v0' | 'agent-v1'
@@ -98,7 +99,7 @@ const terminalEventTypes = new Set<AgentEventType>([
 ])
 
 export async function fetchAgentProviders(signal?: AbortSignal): Promise<AgentProviderInfo[]> {
-    const response = await fetch('/api/providers', { signal })
+    const response = await apiFetch('/api/providers', { signal })
     if (!response.ok) throw await toApiError(response)
 
     const payload = await readJson<{ providers?: unknown }>(response)
@@ -117,7 +118,7 @@ export async function streamAgentRun(
 ): Promise<void> {
     let response: Response
     try {
-        response = await fetch('/api/agent', {
+        response = await apiFetch('/api/agent', {
             method: 'POST',
             headers: buildAgentHeaders(options.accessKey),
             body: JSON.stringify(request),

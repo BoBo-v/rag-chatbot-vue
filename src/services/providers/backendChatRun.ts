@@ -1,6 +1,7 @@
 import type { Message, RagCitation } from '../../types/chat'
 import type { ModelRuntimeConfig } from '../../types/model'
 import { buildBackendChatBody } from './backendChat'
+import { apiFetch } from '../api'
 
 export const BACKEND_CHAT_RUN_EVENT_VERSION = 1 as const
 
@@ -313,7 +314,7 @@ function buildHeaders(accessKey?: string): Headers {
 
 async function request(url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
     try {
-        return await fetch(url, init)
+        return await apiFetch(url, init)
     } catch (error) {
         throw normalizeNetworkError(error, signal)
     }

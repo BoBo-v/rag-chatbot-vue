@@ -3,6 +3,7 @@ import type { ModelRuntimeConfig } from '../../types/model'
 import { buildMessages, type ChatMessage } from '../context'
 import { readOllamaNdjsonStream } from './ollama'
 import type { RagCitation, RagContextInfo } from '../../types/chat'
+import { apiFetch } from '../api'
 
 function toBackendRagValue(runtime: ModelRuntimeConfig): 'auto' | boolean {
     switch (runtime.backendRagMode) {
@@ -71,7 +72,7 @@ export async function fetchBackendChatContext(
     signal?: AbortSignal
 ): Promise<RagContextInfo> {
     // /api/chat/context 只返回 RAG 注入信息，不调用模型。这里用于解释“本次回答用了哪些资料”。
-    const res = await fetch('/api/chat/context', {
+    const res = await apiFetch('/api/chat/context', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildBackendChatBody(messages, userText, runtime)),
@@ -105,7 +106,7 @@ export async function backendChatStream(
     onDone: () => void,
     signal?: AbortSignal
 ): Promise<void> {
-    const res = await fetch('/api/chat', {
+    const res = await apiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildBackendChatBody(messages, userText, runtime)),

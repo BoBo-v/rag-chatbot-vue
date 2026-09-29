@@ -73,6 +73,7 @@ export interface KnowledgeSearchOptions {
     minScore?: number
     fileId?: string
 }
+import { apiFetch, apiUrl } from './api'
 
 export interface BackendChatProvider {
     id: 'ollama' | 'openai' | 'anthropic'
@@ -115,7 +116,7 @@ export async function uploadKnowledgeFile(file: File, options: KnowledgeUploadOp
 
     let response: Response
     try {
-        response = await fetch(endpoint, {
+        response = await apiFetch(endpoint, {
             method: 'POST',
             body: formData,
         })
@@ -163,7 +164,7 @@ function subscribeUploadProgress(
     progressId: string,
     onProgress: (progress: UploadProgress) => void
 ): EventSource {
-    const events = new EventSource(`/api/upload/progress/${encodeURIComponent(progressId)}`)
+    const events = new EventSource(apiUrl(`/api/upload/progress/${encodeURIComponent(progressId)}`))
     events.addEventListener('progress', event => {
         const progress = JSON.parse(event.data) as UploadProgress
         onProgress(progress)
@@ -223,7 +224,7 @@ export async function getVectorStoreStatus(): Promise<VectorStoreStatus> {
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response
     try {
-        response = await fetch(path, init)
+        response = await apiFetch(path, init)
     } catch (error) {
         throw new Error(error instanceof Error ? error.message : '无法连接知识库接口', { cause: error })
     }

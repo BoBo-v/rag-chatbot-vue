@@ -2455,20 +2455,58 @@ datalist option {
     color: var(--accent-text);
 }
 
-.chat-shell .conv-del {
+.chat-shell .conv-actions {
     display: flex;
-    width: 30px;
-    height: 30px;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.chat-shell .conv-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+    padding: 0;
 }
 
-.chat-shell .conv-item:hover .conv-del,
-.chat-shell .conv-item.active .conv-del,
-.chat-shell .conv-item:focus-within .conv-del {
+.chat-shell .conv-item:hover .conv-action-btn,
+.chat-shell .conv-item.active .conv-action-btn,
+.chat-shell .conv-item:focus-within .conv-action-btn {
     opacity: 1;
     pointer-events: auto;
+}
+
+.chat-shell .conv-action-btn:hover {
+    background: var(--bg-surface-3);
+    color: var(--text-primary);
+}
+
+.chat-shell .conv-action-btn.conv-del:hover {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+}
+
+.chat-shell .conv-rename-input {
+    flex: 1;
+    min-width: 0;
+    height: 28px;
+    padding: 2px 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--bg-surface-3);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-xs);
+    outline: none;
 }
 
 .chat-shell .main-content {

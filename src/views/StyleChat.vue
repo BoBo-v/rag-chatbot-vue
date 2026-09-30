@@ -82,13 +82,58 @@
                 v-for="conv in group.items"
                 :key="conv.id"
                 class="conv-item"
-                :class="{ active: conv.id === currentId }"
+                :class="{ active: conv.id === currentId, editing: editingConvId === conv.id }"
                 @click="handleSelectConversation(conv.id)"
             >
-              <span class="conv-title">{{ conv.title }}</span>
-              <button class="conv-del" type="button" title="删除" aria-label="删除对话" @click.stop="handleDeleteConversation(conv.id)">
-                <Trash2 :size="14" aria-hidden="true" />
-              </button>
+              <template v-if="editingConvId === conv.id">
+                <input
+                    ref="renameInputRef"
+                    v-model="editingTitleDraft"
+                    class="conv-rename-input"
+                    type="text"
+                    maxlength="60"
+                    @click.stop
+                    @keydown.enter.prevent="saveRenameConversation(conv.id)"
+                    @keydown.esc="cancelRenameConversation"
+                    @blur="saveRenameConversation(conv.id)"
+                />
+                <button
+                    class="conv-action-btn"
+                    type="button"
+                    title="保存"
+                    aria-label="保存标题"
+                    @click.stop="saveRenameConversation(conv.id)"
+                >
+                  <Check :size="13" aria-hidden="true" />
+                </button>
+              </template>
+              <template v-else>
+                <span
+                    class="conv-title"
+                    :title="conv.title"
+                    @dblclick.stop="startRenameConversation(conv.id, conv.title)"
+                >{{ conv.title }}</span>
+                <div class="conv-actions">
+                  <button
+                      class="conv-action-btn"
+                      type="button"
+                      title="重命名"
+                      aria-label="重命名对话"
+                      @click.stop="startRenameConversation(conv.id, conv.title)"
+                  >
+                    <Pencil :size="13" aria-hidden="true" />
+                  </button>
+                  <button
+                      class="conv-action-btn conv-del"
+                      type="button"
+                      title="删除"
+                      aria-label="删除对话"
+                      @click.stop="handleDeleteConversation(conv.id)"
+                  >
+                    <Trash2 :size="13" aria-hidden="true" />
+                  </button>
+                </div>
+              </template>
             </div>
           </template>
           <div v-if="conversations.length === 0" class="conv-empty">暂无对话记录</div>
@@ -577,6 +622,7 @@ const {
   handleSelectConversation,
   handleNewConversation,
   handleDeleteConversation,
+  handleRenameConversation,
   addImages,
   removeImage,
   addFiles,
@@ -634,6 +680,34 @@ const dragOver = ref(false)
 // 点击聊天里的图片时，把 data URL 存到 previewImageSrc，模板中的 lightbox 会显示大图。
 function openImagePreview(src: string) {
   previewImageSrc.value = src
+}
+
+// ── 会话重命名 ────────────────────────────────────
+const editingConvId = ref<number | null>(null)
+const editingTitleDraft = ref('')
+const renameInputRef = ref<HTMLInputElement | null>(null)
+
+function startRenameConversation(id: number, currentTitle: string) {
+  editingConvId.value = id
+  editingTitleDraft.value = currentTitle
+  nextTick(() => {
+    renameInputRef.value?.focus()
+    renameInputRef.value?.select()
+  })
+}
+
+async function saveRenameConversation(id: number) {
+  if (editingConvId.value !== id) return
+  const newTitle = editingTitleDraft.value.trim()
+  editingConvId.value = null
+  if (newTitle) {
+    await handleRenameConversation(id, newTitle)
+  }
+}
+
+function cancelRenameConversation() {
+  editingConvId.value = null
+  editingTitleDraft.value = ''
 }
 
 // ── 侧边栏折叠与快捷键 ────────────────────────────

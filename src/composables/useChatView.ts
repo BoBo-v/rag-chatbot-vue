@@ -52,7 +52,7 @@ export function useChatView() {
 
     const {
         conversations, currentId,
-        loadAll, createConversation, selectConversation, deleteConversation, refreshList,
+        loadAll, createConversation, selectConversation, deleteConversation, renameConversation, refreshList,
     } = useConversations()
 
     const toast = useToast()
@@ -209,6 +209,11 @@ export function useChatView() {
         void searchService.deleteConversation(id).catch(err => {
             console.warn('[search] 删除会话索引失败', err)
         })
+    }
+
+    async function handleRenameConversation(id: number, newTitle: string) {
+        await renameConversation(id, newTitle)
+        toast.show('会话已重命名', 'success')
     }
 
     // ── 持久化 ───────────────────────────────────────────────
@@ -1037,6 +1042,7 @@ export function useChatView() {
         handleSelectConversation,
         handleNewConversation,
         handleDeleteConversation,
+        handleRenameConversation,
         addImages,
         removeImage,
         addFiles,

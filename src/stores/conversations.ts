@@ -39,6 +39,17 @@ export function useConversations() {
         }
     }
 
+    // 重命名会话
+    async function renameConversation(id: number, newTitle: string) {
+        const title = newTitle.trim()
+        if (!title) return
+        await db.conversations.update(id, { title, updatedAt: Date.now() })
+        const target = conversations.value.find(c => c.id === id)
+        if (target) {
+            target.title = title
+        }
+    }
+
     // 当会话 updatedAt 改变后，重新读取列表可以让侧边栏排序保持正确。
     async function refreshList() {
         const list = await db.conversations.orderBy('updatedAt').reverse().toArray()
@@ -52,6 +63,7 @@ export function useConversations() {
         createConversation,
         selectConversation,
         deleteConversation,
+        renameConversation,
         refreshList,
     }
 }

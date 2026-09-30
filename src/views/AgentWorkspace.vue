@@ -220,19 +220,43 @@
                 v-html="message.renderedContent"
               ></div>
               <p v-else class="agent-user-bubble">{{ message.content }}</p>
-              <!-- 助手回答快捷复制栏 -->
-              <div v-if="message.role === 'assistant'" class="agent-msg-actions">
-                <button
-                  type="button"
-                  class="agent-msg-action-btn"
-                  :class="{ copied: copiedMsgId === message.id }"
-                  :data-tooltip="copiedMsgId === message.id ? '已复制' : '复制全文'"
-                  :aria-label="copiedMsgId === message.id ? '已复制' : '复制全文'"
-                  @click="copyMessageContent(message.id, message.content)"
-                >
-                  <Check v-if="copiedMsgId === message.id" :size="13" :stroke-width="2" aria-hidden="true" />
-                  <Copy v-else :size="13" :stroke-width="1.75" aria-hidden="true" />
-                </button>
+              <!-- 消息快捷操作栏（支持复制提问、编辑提问、复制Agent全文） -->
+              <div class="agent-msg-actions" :class="{ 'is-user': message.role === 'user' }">
+                <template v-if="message.role === 'user'">
+                  <button
+                    type="button"
+                    class="agent-msg-action-btn"
+                    data-tooltip="编辑问题"
+                    aria-label="编辑问题"
+                    @click="handleEditPrompt(message.content)"
+                  >
+                    <Pencil :size="13" :stroke-width="1.75" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    class="agent-msg-action-btn"
+                    :class="{ copied: copiedMsgId === message.id }"
+                    :data-tooltip="copiedMsgId === message.id ? '已复制' : '复制问题'"
+                    :aria-label="copiedMsgId === message.id ? '已复制' : '复制问题'"
+                    @click="copyMessageContent(message.id, message.content, 'user')"
+                  >
+                    <Check v-if="copiedMsgId === message.id" :size="13" :stroke-width="2" aria-hidden="true" />
+                    <Copy v-else :size="13" :stroke-width="1.75" aria-hidden="true" />
+                  </button>
+                </template>
+                <template v-else>
+                  <button
+                    type="button"
+                    class="agent-msg-action-btn"
+                    :class="{ copied: copiedMsgId === message.id }"
+                    :data-tooltip="copiedMsgId === message.id ? '已复制' : '复制全文'"
+                    :aria-label="copiedMsgId === message.id ? '已复制' : '复制全文'"
+                    @click="copyMessageContent(message.id, message.content, 'assistant')"
+                  >
+                    <Check v-if="copiedMsgId === message.id" :size="13" :stroke-width="2" aria-hidden="true" />
+                    <Copy v-else :size="13" :stroke-width="1.75" aria-hidden="true" />
+                  </button>
+                </template>
               </div>
             </div>
           </article>
@@ -278,6 +302,7 @@
         <form class="agent-composer" @submit.prevent="submitTask">
           <div class="agent-composer-input">
             <textarea
+              ref="promptTextareaRef"
               v-model="prompt"
               rows="3"
               maxlength="8000"
@@ -423,6 +448,7 @@ import {
   MessageSquare,
   PanelLeft,
   PanelRight,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
@@ -499,14 +525,16 @@ const historyError = ref('')
 const messageFeed = ref<HTMLElement | null>(null)
 const lastRequest = ref<AgentRunRequest | null>(null)
 const pendingModelKey = ref('')
+const promptTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const { show: showToast } = useToast()
 const copiedMsgId = ref<string | null>(null)
 
-function copyMessageContent(id: string, text: string) {
+function copyMessageContent(id: string, text: string, role: 'assistant' | 'user' = 'assistant') {
   if (!text) return
   navigator.clipboard.writeText(text).then(() => {
     copiedMsgId.value = id
-    showToast('已复制 Agent 回复全文', 'success', 2000)
+    const label = role === 'user' ? '提问内容' : 'Agent 回复全文'
+    showToast(`已复制${label}`, 'success', 2000)
     setTimeout(() => {
       if (copiedMsgId.value === id) {
         copiedMsgId.value = null
@@ -515,6 +543,14 @@ function copyMessageContent(id: string, text: string) {
   }).catch(() => {
     showToast('复制失败，请手动选择复制', 'error')
   })
+}
+
+function handleEditPrompt(content: string) {
+  prompt.value = content
+  nextTick(() => {
+    promptTextareaRef.value?.focus()
+  })
+  showToast('已载入问题到输入框', 'success', 2000)
 }
 
 function handleFeedClick(e: MouseEvent) {
@@ -1735,6 +1771,7 @@ textarea:disabled {
   font-size: 14px;
   line-height: 1.6;
   overflow-wrap: break-word;
+  user-select: text;
 }
 
 /* 助手 Markdown 气泡（彻底消除 pre-wrap 强制断行缺陷） */
@@ -1753,14 +1790,19 @@ textarea:disabled {
   white-space: normal;
 }
 
-/* 助手回复底部快捷操作栏 */
+/* 消息底部快捷操作栏 */
 .agent-msg-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 4px;
   margin-top: 6px;
   padding-right: 2px;
   opacity: 0.65;
   transition: opacity var(--motion-fast) ease;
+}
+
+.agent-msg-actions.is-user {
+  justify-content: flex-end;
 }
 
 .agent-message:hover .agent-msg-actions {

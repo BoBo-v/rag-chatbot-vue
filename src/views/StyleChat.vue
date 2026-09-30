@@ -416,7 +416,9 @@ class="input-box" :class="{ disabled: isStreaming }"
               placeholder="输入消息... (输入框为空时按 ↑ 可恢复上一条提问)"
               :disabled="isStreaming"
               rows="1"
-              @keydown.enter.exact.prevent="handleSend"
+              @keydown.enter.exact.prevent="handleKeyEnter"
+              @compositionstart="handleCompositionStart"
+              @compositionend="handleCompositionEnd"
               @keydown.up="handleKeyUp"
               @input="autoResize"
               @paste="handlePaste"
@@ -714,6 +716,25 @@ function handleEditPrompt(content: string) {
 
 function handleRegenerate(id: string) {
   handleRegenerateMessage(id)
+}
+
+const isComposing = ref(false)
+
+function handleCompositionStart() {
+  isComposing.value = true
+}
+
+function handleCompositionEnd() {
+  setTimeout(() => {
+    isComposing.value = false
+  }, 30)
+}
+
+function handleKeyEnter(e: KeyboardEvent) {
+  if (e.isComposing || isComposing.value || e.keyCode === 229) {
+    return
+  }
+  handleSend()
 }
 
 function handleKeyUp(e: KeyboardEvent) {

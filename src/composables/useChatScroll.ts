@@ -4,6 +4,7 @@ export function useChatScroll() {
     const unreadCount = ref<number>(0)
     const containerRef = ref<HTMLDivElement | null>(null)
 
+    const BOTTOM_THRESHOLD = 80
     let userAtBottom = true
     let isScrolling = false
     let attachedElement: HTMLDivElement | null = null
@@ -11,25 +12,33 @@ export function useChatScroll() {
     function isAtBottom(): boolean {
         const el = containerRef.value
         if (!el) return false
-        return el.scrollHeight - el.scrollTop - el.clientHeight < 20
+        return el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_THRESHOLD
     }
 
     function scheduleScroll(): void {
         if (!userAtBottom || isScrolling) return
         isScrolling = true
         requestAnimationFrame(async () => {
-            await nextTick()
-            const el = containerRef.value
-            if (el) el.scrollTop = el.scrollHeight
-            isScrolling = false
+            try {
+                await nextTick()
+                const el = containerRef.value
+                if (el) el.scrollTop = el.scrollHeight
+            } finally {
+                isScrolling = false
+            }
         })
     }
 
-    async function scrollToBottom(): Promise<void> {
+    async function scrollToBottom(options?: { smooth?: boolean } | boolean | Event): Promise<void> {
         await nextTick()
         const el = containerRef.value
         if (!el) return
-        el.scrollTop = el.scrollHeight
+        const isSmooth = options === false ? false : true
+        if (isSmooth) {
+            el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+        } else {
+            el.scrollTop = el.scrollHeight
+        }
         unreadCount.value = 0
         userAtBottom = true
     }
@@ -49,7 +58,9 @@ export function useChatScroll() {
 
     function handleIncomingChunk(): void {
         if (!userAtBottom) {
-            unreadCount.value++
+            if (unreadCount.value === 0) {
+                unreadCount.value = 1
+            }
         } else {
             scheduleScroll()
         }

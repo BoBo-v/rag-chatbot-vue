@@ -1780,7 +1780,7 @@
 
     .input-area  { padding: 10px 10px 16px; }
     .input-box   { padding: 10px 12px 8px; border-radius: 16px; }
-    .input-field { font-size: 13px; padding: 0 0 8px; min-height: 28px; }
+    .input-field { font-size: 16px; padding: 0 0 8px; min-height: 28px; }
     .tool-btn { width: 32px; height: 32px; }
     .send-btn, .stop-btn { width: 36px; height: 36px; font-size: 16px; }
     .stop-btn { border-radius: 50%; }

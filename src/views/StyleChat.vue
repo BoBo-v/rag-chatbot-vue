@@ -602,13 +602,26 @@ const {
 // ── 语音输入 ──────────────────────────────────────
 const { isListening, isSupported: speechSupported, start: startSpeech, stop: stopSpeech } = useSpeechRecognition()
 
+let voicePrefixText = ''
+
 function toggleVoice() {
   if (isListening.value) {
     stopSpeech()
+    voicePrefixText = ''
   } else {
+    const existing = inputValue.value
+    voicePrefixText = existing ? (existing.endsWith('\n') || existing.endsWith(' ') ? existing : existing + ' ') : ''
     startSpeech(
-        (text) => { inputValue.value = text },
-        (err) => { toast.show(err, 'warning') }
+        (text) => {
+          inputValue.value = voicePrefixText + text
+          nextTick(() => {
+            autoResize()
+          })
+        },
+        (err) => {
+          voicePrefixText = ''
+          toast.show(err, 'warning')
+        }
     )
   }
 }

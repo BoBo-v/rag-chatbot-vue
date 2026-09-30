@@ -381,10 +381,10 @@ v-for="(img, idx) in msg.images" :key="idx"
           </div>
         </div>
         <div
-class="input-box" :class="{ disabled: isStreaming }"
-             @dragover.prevent="dragOver = true"
-             @dragleave.prevent="dragOver = false"
-             @drop.prevent="handleDrop">
+            class="input-box"
+            @dragover.prevent="dragOver = true"
+            @dragleave.prevent="dragOver = false"
+            @drop.prevent="handleDrop">
           <input
               ref="imageInputRef"
               type="file"
@@ -413,8 +413,7 @@ class="input-box" :class="{ disabled: isStreaming }"
               ref="textareaRef"
               v-model="inputValue"
               class="input-field"
-              placeholder="输入消息... (输入框为空时按 ↑ 可恢复上一条提问)"
-              :disabled="isStreaming"
+              :placeholder="isStreaming ? 'AI 正在回复中，可在此准备下一条提问...' : '输入消息... (输入框为空时按 ↑ 可恢复上一条提问)'"
               rows="1"
               @keydown.enter.exact.prevent="handleKeyEnter"
               @compositionstart="handleCompositionStart"
@@ -425,16 +424,16 @@ class="input-box" :class="{ disabled: isStreaming }"
           ></textarea>
           <div class="input-toolbar">
             <div class="toolbar-left">
-              <button class="tool-btn" :disabled="isStreaming" title="上传图片" @click="imageInputRef?.click()">
+              <button class="tool-btn" title="上传图片" @click="imageInputRef?.click()">
                 <ImageIcon :size="18" aria-hidden="true" />
               </button>
-              <button class="tool-btn" :disabled="isStreaming" title="上传文件" @click="fileInputRef?.click()">
+              <button class="tool-btn" title="上传文件" @click="fileInputRef?.click()">
                 <FileText :size="18" aria-hidden="true" />
               </button>
               <button
                   class="tool-btn knowledge-upload-btn"
                   :class="{ uploading: isKnowledgeUploading }"
-                  :disabled="isStreaming || isKnowledgeUploading"
+                  :disabled="isKnowledgeUploading"
                   :title="isKnowledgeUploading ? '知识库上传中' : '上传到知识库'"
                   @click="knowledgeInputRef?.click()"
               >
@@ -445,7 +444,6 @@ class="input-box" :class="{ disabled: isStreaming }"
 v-if="speechSupported"
                       class="tool-btn voice-btn"
                       :class="{ 'is-listening': isListening }"
-                      :disabled="isStreaming"
                       :title="isListening ? '停止语音输入' : '语音输入'"
                       @click="toggleVoice">
                 <Mic :size="18" aria-hidden="true" />
@@ -466,7 +464,9 @@ v-if="speechSupported"
           </div>
         </div>
         <div class="input-hint">
-          <template v-if="isStreaming">AI 正在回复中...</template>
+          <template v-if="isStreaming">
+            AI 正在回复中 · 可在此预先键入下一条提问或点击右下角停止
+          </template>
           <template v-else>
             <span class="hint-key">Enter</span> 发送 · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 纸夹为本轮附件，书本上传到知识库
           </template>
@@ -732,6 +732,10 @@ function handleCompositionEnd() {
 
 function handleKeyEnter(e: KeyboardEvent) {
   if (e.isComposing || isComposing.value || e.keyCode === 229) {
+    return
+  }
+  if (isStreaming.value) {
+    toast.show('请等待当前回答完成，或先点击停止', 'warning')
     return
   }
   handleSend()

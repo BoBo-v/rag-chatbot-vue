@@ -1113,41 +1113,37 @@
     justify-content: flex-start;
 }
 
-.msg-row.assistant.has-rag-context {
-    display: grid;
-    grid-template-columns: 34px minmax(0, min(560px, 76%));
+.msg-row.assistant {
+    display: flex;
+    flex-direction: row;
     align-items: flex-start;
-    column-gap: 10px;
-    row-gap: 6px;
+    justify-content: flex-start;
+    gap: 12px;
+    width: 100%;
 }
 
-.msg-row.assistant.has-rag-context .msg-avatar {
-    grid-column: 1;
-    grid-row: 2;
-    margin-top: 0;
+.msg-row.assistant .msg-col {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    max-width: min(760px, 84%);
+    gap: 8px;
+    width: 100%;
 }
 
-.msg-row.assistant.has-rag-context .msg-col {
-    display: contents;
+.msg-row.assistant .msg-bubble {
+    width: 100%;
+    box-sizing: border-box;
 }
 
-.msg-row.assistant.has-rag-context .msg-bubble {
-    grid-column: 2;
-    grid-row: 1;
+.msg-row.assistant .rag-citations-container {
+    width: 100%;
+    box-sizing: border-box;
 }
 
-.msg-row.assistant.has-rag-context .abort-badge-row,
-.msg-row.assistant.has-rag-context .error-badge-row {
-    grid-column: 2;
-}
-
-.msg-row.assistant.has-rag-context .rag-citations {
-    grid-column: 2;
-}
-
-.msg-row.assistant.has-rag-context .msg-actions-bar {
-    grid-column: 2;
-    justify-self: end;
+.msg-row.assistant .msg-actions-bar {
+    align-self: flex-start;
 }
 
 /* ─── 头像 ───────────────────────────────────── */
@@ -2860,10 +2856,13 @@ datalist option {
 }
 
 .chat-shell .msg-actions-bar.assistant {
-    align-self: flex-end;
-    justify-self: end;
-    justify-content: flex-end;
+    align-self: flex-start;
+    justify-self: start;
+    justify-content: flex-start;
+    margin-left: 2px;
     margin-right: 4px;
+    flex-wrap: wrap;
+    opacity: 0.9;
 }
 
 .chat-shell .msg-action-btn {
@@ -2909,6 +2908,83 @@ datalist option {
     cursor: not-allowed;
     pointer-events: none;
 }
+
+.chat-shell .msg-action-btn.btn-adopt-draft {
+    width: auto;
+    height: 28px;
+    padding: 0 9px;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 550;
+    color: var(--accent-text);
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius-sm);
+}
+
+.chat-shell .msg-action-btn.btn-adopt-draft:hover {
+    color: #fff;
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.chat-shell .msg-action-btn.btn-adopt-draft.copied {
+    color: var(--success);
+    background: var(--success-bg);
+    border-color: var(--success-border);
+}
+.chat-shell .msg-action-btn:has(.action-btn-text-sub) {
+    width: auto;
+    height: 28px;
+    padding: 0 7px;
+    gap: 4px;
+}
+
+.chat-shell .msg-action-btn .action-btn-text-sub {
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.chat-shell .ticket-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: var(--radius-xs);
+    white-space: nowrap;
+}
+
+.chat-shell .ticket-status-badge.badge-escalated {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.chat-shell .ticket-status-badge.badge-confirmed {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.chat-shell .msg-action-btn.btn-action-escalate.active {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.chat-shell .msg-action-btn.btn-action-confirm.active {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.chat-shell .msg-action-btn.has-evidence {
+    color: var(--accent-text);
+}
+
 
 /* ─── 消息快捷操作悬停浮层 Tooltip（现代毛玻璃微气泡） ─── */
 .chat-shell .msg-action-btn[data-tooltip]::after {
@@ -2988,16 +3064,7 @@ datalist option {
     }
 }
 
-.chat-shell .msg-row.assistant.has-rag-context {
-    grid-template-columns: 36px minmax(0, min(760px, 84%));
-    column-gap: 12px;
-    row-gap: 8px;
-}
 
-.chat-shell .msg-row.assistant.has-rag-context .msg-actions-bar {
-    grid-column: 2;
-    justify-self: end;
-}
 
 .chat-shell .msg-avatar {
     width: 36px;
@@ -3247,10 +3314,7 @@ datalist option {
 
     .chat-shell .msg-col { max-width: calc(100% - 42px); }
 
-    .chat-shell .msg-row.assistant.has-rag-context {
-        grid-template-columns: 30px minmax(0, calc(100% - 40px));
-        column-gap: 8px;
-    }
+
 
     .chat-shell .msg-avatar {
         width: 30px;

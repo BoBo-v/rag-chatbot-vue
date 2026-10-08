@@ -3,7 +3,7 @@
     <header class="agent-toolbar">
       <div class="agent-heading">
         <div class="agent-title-row">
-          <h1>Agent 工作台</h1>
+          <h1>排障 Agent 工作台</h1>
           <span class="agent-status" :class="`is-${agent.status.value}`">
             <span class="agent-status-dot" aria-hidden="true"></span>
             {{ statusLabel }}

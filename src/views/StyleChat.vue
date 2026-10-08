@@ -13,15 +13,15 @@
     <!-- ── 侧边栏 ── -->
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
-        <span class="sidebar-title">对话列表</span>
-        <button class="new-chat-btn" type="button" title="新对话" aria-label="新建对话" @click="handleNewConversation">
+        <span class="sidebar-title">工单记录</span>
+        <button class="new-chat-btn" type="button" title="新建工单" aria-label="新建工单" @click="handleNewConversation">
           <Plus :size="17" aria-hidden="true" />
         </button>
       </div>
       <div class="sidebar-body">
         <button class="new-chat-big-btn" @click="handleNewConversation">
           <MessageSquarePlus class="new-chat-icon" :size="17" aria-hidden="true" />
-          新建对话
+          新建工单
         </button>
         <div class="sidebar-search">
           <Search class="sidebar-search-icon" :size="16" aria-hidden="true" />
@@ -29,8 +29,8 @@
               v-model="conversationSearchDraft"
               class="sidebar-search-input"
               type="search"
-              placeholder="搜索对话..."
-              aria-label="搜索对话"
+              placeholder="搜索历史工单..."
+              aria-label="搜索历史工单"
           />
           <button
               v-if="conversationSearchDraft"
@@ -71,7 +71,7 @@
             </button>
           </div>
           <div v-else-if="!isSearchLoading && searchResults.length === 0" class="conv-empty search-empty">
-            没有匹配的对话
+            没有匹配的工单记录
           </div>
         </div>
 
@@ -136,7 +136,7 @@
               </template>
             </div>
           </template>
-          <div v-if="conversations.length === 0" class="conv-empty">暂无对话记录</div>
+          <div v-if="conversations.length === 0" class="conv-empty">暂无历史工单</div>
         </template>
       </div>
     </aside>
@@ -153,8 +153,8 @@
           <button
             class="menu-btn"
             type="button"
-            :aria-label="isSidebarCollapsed ? '展开会话列表' : '收起会话列表'"
-            :title="isSidebarCollapsed ? '展开会话列表 (Ctrl+[)' : '收起会话列表 (Ctrl+[)'"
+            :aria-label="isSidebarCollapsed ? '展开工单列表' : '收起工单列表'"
+            :title="isSidebarCollapsed ? '展开工单列表 (Ctrl+[)' : '收起工单列表 (Ctrl+[)'"
             @click="toggleSidebar"
           >
             <PanelLeftClose v-if="!isSidebarCollapsed" :size="18" aria-hidden="true" />
@@ -162,7 +162,7 @@
           </button>
           <div class="topbar-logo">
             <img class="logo-mark" src="/favicon.svg" alt="" aria-hidden="true" />
-            <span class="logo-text">AI Chat</span>
+            <span class="logo-text">技术支持工单决策台</span>
             <!-- 顶栏快速切换模型下拉 -->
             <div v-if="currentSettings.showModelInTopbar" class="topbar-model-wrapper">
               <button
@@ -236,8 +236,8 @@
           <!-- 空状态 -->
           <div v-if="messages.length === 0" class="empty-state">
             <div class="empty-icon"><Sparkles :size="26" aria-hidden="true" /></div>
-            <h2 class="empty-title">有什么我可以帮你的？</h2>
-            <p class="empty-desc">选择下方推荐或在下方直接输入消息开始对话</p>
+            <h2 class="empty-title">技术支持工单决策台</h2>
+            <p class="empty-desc">选择预设工单用例或直接粘贴客户报障信息进行检索诊断与草稿生成</p>
             <div class="empty-suggestions">
               <button
                 v-for="s in suggestionPrompts"
@@ -260,7 +260,7 @@
               v-for="msg in messages"
               :key="msg.id"
               class="msg-row"
-              :class="[msg.role, { 'has-rag-context': msg.role === 'assistant' && msg.ragContext }]"
+              :class="msg.role"
           >
             <div
                 v-if="msg.role === 'assistant'"
@@ -332,14 +332,14 @@ v-for="(img, idx) in msg.images" :key="idx"
                   ↻ 重试
                 </button>
               </div>
-              <!-- 消息快捷操作栏（优雅轻量 Icon-only 设计） -->
+              <!-- 消息快捷操作栏（工单排障操作设计） -->
               <div class="msg-actions-bar" :class="msg.role">
                 <template v-if="msg.role === 'user'">
                   <button
                     type="button"
                     class="msg-action-btn"
-                    data-tooltip="编辑提问"
-                    aria-label="编辑提问"
+                    data-tooltip="编辑报障信息"
+                    aria-label="编辑报障信息"
                     @click="handleEditPrompt(msg.content)"
                   >
                     <Pencil :size="14" :stroke-width="1.75" aria-hidden="true" />
@@ -347,37 +347,113 @@ v-for="(img, idx) in msg.images" :key="idx"
                   <button
                     type="button"
                     class="msg-action-btn"
-                    :class="{ copied: copiedMsgId === msg.id }"
-                    :data-tooltip="copiedMsgId === msg.id ? '已复制' : '复制提问'"
-                    :aria-label="copiedMsgId === msg.id ? '已复制' : '复制提问'"
-                    @click="handleCopyMessage(msg.id, msg.content)"
+                    :class="{ copied: copiedUserMsgId === msg.id }"
+                    :data-tooltip="copiedUserMsgId === msg.id ? '已复制报障' : '复制报障内容'"
+                    :aria-label="copiedUserMsgId === msg.id ? '已复制报障' : '复制报障内容'"
+                    @click="handleCopyUserMessage(msg.id, msg.content)"
                   >
-                    <Check v-if="copiedMsgId === msg.id" :size="14" :stroke-width="2" aria-hidden="true" />
+                    <Check v-if="copiedUserMsgId === msg.id" :size="14" :stroke-width="2" aria-hidden="true" />
                     <Copy v-else :size="14" :stroke-width="1.75" aria-hidden="true" />
                   </button>
                 </template>
                 <template v-else-if="msg.role === 'assistant' && msg.status !== 'loading' && msg.status !== 'error'">
+                  <!-- 工单处置状态徽章（若已转人工或方案已确认） -->
+                  <span v-if="escalatedMsgIds.has(msg.id)" class="ticket-status-badge badge-escalated">
+                    <Headphones :size="12" aria-hidden="true" /> 已转二线人工
+                  </span>
+                  <span v-if="confirmedMsgIds.has(msg.id)" class="ticket-status-badge badge-confirmed">
+                    <CheckCheck :size="12" aria-hidden="true" /> 方案已确认闭环
+                  </span>
+
+                  <!-- 采纳草稿并复制回复 -->
+                  <button
+                    type="button"
+                    class="msg-action-btn btn-adopt-draft"
+                    :class="{ copied: copiedMsgId === msg.id }"
+                    :data-tooltip="copiedMsgId === msg.id ? '已采纳并复制' : '采纳草稿并复制回复'"
+                    :aria-label="copiedMsgId === msg.id ? '已采纳并复制' : '采纳草稿并复制回复'"
+                    @click="handleAdoptAndCopyDraft(msg.id, msg.content)"
+                  >
+                    <Check v-if="copiedMsgId === msg.id" :size="14" :stroke-width="2" aria-hidden="true" />
+                    <ClipboardCheck v-else :size="14" :stroke-width="1.75" aria-hidden="true" />
+                    <span class="action-btn-text">采纳草稿并复制回复</span>
+                  </button>
+
+                  <!-- 编辑草稿 -->
                   <button
                     type="button"
                     class="msg-action-btn"
-                    :class="{ copied: copiedMsgId === msg.id }"
-                    :data-tooltip="copiedMsgId === msg.id ? '已复制' : '复制全文'"
-                    :aria-label="copiedMsgId === msg.id ? '已复制' : '复制全文'"
-                    @click="handleCopyMessage(msg.id, msg.content)"
+                    data-tooltip="载入草稿到输入框编辑"
+                    aria-label="编辑客户回复草稿"
+                    @click="handleEditDraft(msg.content)"
                   >
-                    <Check v-if="copiedMsgId === msg.id" :size="14" :stroke-width="2" aria-hidden="true" />
-                    <Copy v-else :size="14" :stroke-width="1.75" aria-hidden="true" />
+                    <Pencil :size="14" :stroke-width="1.75" aria-hidden="true" />
+                    <span class="action-btn-text-sub">编辑</span>
                   </button>
+
+                  <!-- 查看证据 -->
+                  <button
+                    type="button"
+                    class="msg-action-btn"
+                    :class="{ 'has-evidence': msg.ragContext?.results?.length }"
+                    :data-tooltip="msg.ragContext?.results?.length ? `查看 ${msg.ragContext.results.length} 条检索依据` : '当前回答未命中知识库'"
+                    aria-label="查看证据"
+                    @click="handleViewEvidence(msg)"
+                  >
+                    <FileSearch :size="14" :stroke-width="1.75" aria-hidden="true" />
+                    <span class="action-btn-text-sub">查看证据</span>
+                  </button>
+
+                  <!-- 转人工 -->
+                  <button
+                    type="button"
+                    class="msg-action-btn btn-action-escalate"
+                    :class="{ active: escalatedMsgIds.has(msg.id) }"
+                    :data-tooltip="escalatedMsgIds.has(msg.id) ? '已标记为转二线研发' : '标记转二线研发人工接管'"
+                    aria-label="转人工接管"
+                    @click="handleEscalateTicket(msg.id)"
+                  >
+                    <Headphones :size="14" :stroke-width="1.75" aria-hidden="true" />
+                    <span class="action-btn-text-sub">转人工</span>
+                  </button>
+
+                  <!-- 标记为已确认 -->
+                  <button
+                    type="button"
+                    class="msg-action-btn btn-action-confirm"
+                    :class="{ active: confirmedMsgIds.has(msg.id) }"
+                    :data-tooltip="confirmedMsgIds.has(msg.id) ? '已标记为解决方案闭环' : '标记为已确认解决并闭环'"
+                    aria-label="标记为已确认"
+                    @click="handleConfirmResolution(msg.id)"
+                  >
+                    <CheckCheck :size="14" :stroke-width="1.75" aria-hidden="true" />
+                    <span class="action-btn-text-sub">标记已确认</span>
+                  </button>
+
+                  <!-- 重新生成 -->
                   <button
                     v-if="msg.status === 'done'"
                     type="button"
                     class="msg-action-btn"
                     :disabled="isStreaming"
-                    data-tooltip="重新生成"
-                    aria-label="重新生成"
+                    data-tooltip="重新排障与生成"
+                    aria-label="重新排障与生成"
                     @click="handleRegenerate(msg.id)"
                   >
                     <RotateCcw :size="14" :stroke-width="1.75" aria-hidden="true" />
+                  </button>
+
+                  <!-- 复制完整排障分析 -->
+                  <button
+                    type="button"
+                    class="msg-action-btn"
+                    :class="{ copied: copiedFullMsgId === msg.id }"
+                    :data-tooltip="copiedFullMsgId === msg.id ? '已复制完整分析' : '复制完整排障分析(含内部分析)'"
+                    aria-label="复制完整排障分析"
+                    @click="handleCopyFullMessage(msg.id, msg.content)"
+                  >
+                    <Check v-if="copiedFullMsgId === msg.id" :size="14" :stroke-width="2" aria-hidden="true" />
+                    <Copy v-else :size="14" :stroke-width="1.75" aria-hidden="true" />
                   </button>
                 </template>
               </div>
@@ -458,7 +534,7 @@ v-for="(img, idx) in msg.images" :key="idx"
               ref="textareaRef"
               v-model="inputValue"
               class="input-field"
-              :placeholder="isStreaming ? 'AI 正在回复中，可在此准备下一条提问...' : '输入消息... (输入框为空时按 ↑ 可恢复上一条提问)'"
+              :placeholder="isStreaming ? '正在检索排障并生成回复中，可在此准备下一条工单信息...' : '描述客户报障现象、报错日志、复现步骤或贴入工单 (按 ↑ 可恢复上一条)...'"
               rows="1"
               @keydown.enter.exact.prevent="handleKeyEnter"
               @compositionstart="handleCompositionStart"
@@ -510,10 +586,10 @@ v-if="speechSupported"
         </div>
         <div class="input-hint">
           <template v-if="isStreaming">
-            AI 正在回复中 · 可在此预先键入下一条提问或点击右下角停止
+            正在检索知识库并生成排障建议 · 可在此预先键入下一条工单信息或点击右下角停止
           </template>
           <template v-else>
-            <span class="hint-key">Enter</span> 发送 · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 纸夹为本轮附件，书本上传到知识库
+            <span class="hint-key">Enter</span> 提交排障 · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 纸夹添加日志附件，书本上传至技术知识库
           </template>
         </div>
       </div>
@@ -560,13 +636,16 @@ import {
   Bot,
   Cable,
   Check,
+  CheckCheck,
   ChevronDown,
   CircleAlert,
   CircleCheck,
+  ClipboardCheck,
   Code2,
   Copy,
   FileSearch,
   FileText,
+  Headphones,
   Image as ImageIcon,
   MessageSquarePlus,
   Mic,
@@ -584,7 +663,6 @@ import {
   Trash2,
   TriangleAlert,
   X,
-  Zap,
 } from 'lucide-vue-next'
 import { useChatView } from '../composables/useChatView'
 import { useSpeechRecognition } from '../composables/useSpeechRecognition'
@@ -779,15 +857,114 @@ function handleClickOutside(e: MouseEvent) {
 
 // ── 消息级操作与键盘快捷键 ────────────────────────
 const copiedMsgId = ref<string | null>(null)
+const copiedFullMsgId = ref<string | null>(null)
+const copiedUserMsgId = ref<string | null>(null)
 let copyTimer: ReturnType<typeof setTimeout> | null = null
+let copyFullTimer: ReturnType<typeof setTimeout> | null = null
+let copyUserTimer: ReturnType<typeof setTimeout> | null = null
 
-function handleCopyMessage(id: string, content: string) {
-  navigator.clipboard.writeText(content).then(() => {
+/**
+ * 智能提取“【客户回复草稿】”部分，避免将内部排障依据、chunk ID、二线判断等内部字段复制给客户
+ */
+function extractCustomerReplyDraft(content: string): { text: string; isDraftOnly: boolean } {
+  const pattern = /(?:【客户回复草稿】|###\s*客户回复草稿|\*\*客户回复草稿\*\*|客户回复草稿[:：])\s*([\s\S]*)$/i
+  const match = content.match(pattern)
+  if (match && match[1]?.trim()) {
+    return { text: match[1].trim(), isDraftOnly: true }
+  }
+  return { text: content.trim(), isDraftOnly: false }
+}
+
+
+const escalatedMsgIds = ref<Set<string>>(new Set())
+const confirmedMsgIds = ref<Set<string>>(new Set())
+
+function handleEditDraft(content: string) {
+  const { text } = extractCustomerReplyDraft(content)
+  inputValue.value = text
+  nextTick(() => {
+    if (textareaRef.value) {
+      textareaRef.value.focus()
+      autoResize()
+    }
+  })
+  toast.show('已将客户回复草稿载入输入框，可在下方微调修改', 'success')
+}
+
+function handleViewEvidence(msg: { ragContext?: { results?: unknown[] } }) {
+  if (msg.ragContext?.results && msg.ragContext.results.length > 0) {
+    toast.show(`当前回答已关联 ${msg.ragContext.results.length} 处知识库依据，已在下方展开溯源卡片`, 'success')
+  } else {
+    toast.show('当前回答未命中知识库检索切片，属于通用模型推理', 'warning')
+  }
+}
+
+function handleEscalateTicket(msgId: string) {
+  const next = new Set(escalatedMsgIds.value)
+  if (next.has(msgId)) {
+    next.delete(msgId)
+    escalatedMsgIds.value = next
+    toast.show('已取消【转二线研发】状态标记', 'success')
+  } else {
+    next.add(msgId)
+    escalatedMsgIds.value = next
+    const conf = new Set(confirmedMsgIds.value)
+    conf.delete(msgId)
+    confirmedMsgIds.value = conf
+    toast.show('工单已标记为【转二线研发人工介入】，建议技术人员接管深入排障', 'warning')
+  }
+}
+
+function handleConfirmResolution(msgId: string) {
+  const next = new Set(confirmedMsgIds.value)
+  if (next.has(msgId)) {
+    next.delete(msgId)
+    confirmedMsgIds.value = next
+    toast.show('已取消【方案已确认】状态标记', 'success')
+  } else {
+    next.add(msgId)
+    confirmedMsgIds.value = next
+    const esc = new Set(escalatedMsgIds.value)
+    esc.delete(msgId)
+    escalatedMsgIds.value = esc
+    toast.show('排障方案已标记为【方案已确认闭环】，工单处理完成', 'success')
+  }
+}
+
+function handleAdoptAndCopyDraft(id: string, content: string) {
+  const { text, isDraftOnly } = extractCustomerReplyDraft(content)
+  navigator.clipboard.writeText(text).then(() => {
     copiedMsgId.value = id
-    toast.show('已复制内容到剪贴板', 'success')
+    if (isDraftOnly) {
+      toast.show('已采纳草稿并复制客户回复（已过滤内部分析）', 'success')
+    } else {
+      toast.show('已采纳草稿并复制回复内容', 'success')
+    }
     if (copyTimer) clearTimeout(copyTimer)
     copyTimer = setTimeout(() => {
       copiedMsgId.value = null
+    }, 2000)
+  })
+}
+
+function handleCopyFullMessage(id: string, content: string) {
+  navigator.clipboard.writeText(content).then(() => {
+    copiedFullMsgId.value = id
+    toast.show('已复制完整排障分析与回复到剪贴板', 'success')
+    if (copyFullTimer) clearTimeout(copyFullTimer)
+    copyFullTimer = setTimeout(() => {
+      copiedFullMsgId.value = null
+    }, 2000)
+  })
+}
+
+function handleCopyUserMessage(id: string, content: string) {
+  navigator.clipboard.writeText(content).then(() => {
+    copiedUserMsgId.value = id
+    toast.show('已复制工单报障内容', 'success')
+    if (copyUserTimer) clearTimeout(copyUserTimer)
+    copyUserTimer = setTimeout(() => {
+      copiedUserMsgId.value = null
     }, 2000)
   })
 }
@@ -798,7 +975,7 @@ function handleEditPrompt(content: string) {
     textareaRef.value?.focus()
     autoResize()
   })
-  toast.show('已载入问题到输入框', 'success')
+  toast.show('已载入报障内容到输入框', 'success')
 }
 
 function handleRegenerate(id: string) {
@@ -843,31 +1020,42 @@ function handleKeyUp(e: KeyboardEvent) {
   }
 }
 
-// ── 空状态推荐卡片 ────────────────────────────────
+// ── 快捷排障工单用例 ────────────────────────────────
 const suggestionPrompts = [
   {
-    title: '代码排错与重构',
-    desc: '分析一段代码中的潜在 Bug，并提供现代化重构与性能优化建议。',
-    prompt: '请帮我 review 这段代码，找出潜在的 Bug、性能瓶颈，并给出重构后的实现方案：\n\n```\n// 在这里粘贴你的代码\n```',
+    title: '【用例1 预构建错误】Vite 依赖预构建失败',
+    desc: '典型排障：Failed to resolve import lodash-es，检索知识库，给出排查步骤与客户回复草稿。',
+    prompt: `【客户报障工单 #1024】
+产品/组件：Vite 5.x
+问题描述：本地执行 npm run dev 报 "[vite] Internal server error: Failed to resolve import 'lodash-es' from 'src/main.ts'. Does the file exist?"，确认已在 package.json 声明且已安装。
+环境信息：Node 18.18.0, Vite 5.1.4, Windows 11
+排查请求：请基于技术知识库进行问题定性、给出建议排障步骤，并生成客户回复草稿。`,
     icon: Code2,
   },
   {
-    title: '解释核心逻辑',
-    desc: '用通俗易懂的语言梳理复杂算法或设计模式的核心原理。',
-    prompt: '请用通俗生动的比喻，配合简单的示例代码，帮我详细解释一下：',
+    title: '【用例2 证据不足】生产环境偶现白屏',
+    desc: '边界拒答：无报错日志与版本上下文，触发证据不足提示、信息追问并建议人工介入。',
+    prompt: `【客户报障工单 #1025】
+产品/组件：Vite 前端应用
+问题描述：打包构建发布到生产环境后，部分用户反馈页面偶现白屏，刷新有时能好。
+环境信息：暂无控制台报错日志，未提供浏览器版本与网络环境。
+排查请求：请分析当前证据是否足以确认根因；若证据不足请明确指出信息缺口，草拟向客户追问的清单与回复草稿。`,
+    icon: TriangleAlert,
+  },
+  {
+    title: '【用例3 配置踩坑】dev server 本地代理 404',
+    desc: '版本排错：server.proxy 目标路径未 rewrite 导致 404，溯源官方配置文档。',
+    prompt: `【客户报障工单 #1026】
+产品/组件：Vite 5.x
+问题描述：在 vite.config.ts 中配置了 server.proxy 转发 '/api' 到后端 'http://localhost:8080'，但发起 fetch('/api/user') 依然 404。
+配置片段：
+server: {
+  proxy: {
+    '/api': { target: 'http://localhost:8080', changeOrigin: true }
+  }
+}
+排查请求：请基于知识库定位代理配置常见陷阱与解决步骤，并输出可直接发送的客户回复草稿。`,
     icon: FileSearch,
-  },
-  {
-    title: '编写自动化脚本',
-    desc: '生成高效实用的 Python / Shell 脚本以自动化处理日常任务。',
-    prompt: '我想写一个脚本来自动处理以下任务，请提供 Python 和 Shell 的实现方案：\n任务需求：',
-    icon: Zap,
-  },
-  {
-    title: '架构与技术选型',
-    desc: '对比主流技术方案的优劣势、适用场景与潜在陷阱。',
-    prompt: '针对以下业务场景，有哪些主流的技术选型方案？请对比它们的优缺点及落地建议：\n场景描述：',
-    icon: Sparkles,
   },
 ]
 

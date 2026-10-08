@@ -150,9 +150,9 @@
             </section>
 
             <section v-show="activeSection === 'behavior'" class="settings-section" aria-labelledby="section-behavior">
-              <div class="section-heading"><div><span class="section-kicker">CONVERSATION</span><h2 id="section-behavior">对话行为</h2><p>聊天工作区保持现有的快速输入和流式体验。</p></div></div>
+              <div class="section-heading"><div><span class="section-kicker">CONVERSATION</span><h2 id="section-behavior">对话行为</h2><p>工单决策工作区保持现有的快速输入和流式体验。</p></div></div>
               <div class="behavior-list"><div class="behavior-row"><span class="behavior-icon"><Sparkles :size="16" aria-hidden="true" /></span><div><strong>流式输出</strong><span>收到模型片段后立即显示。</span></div><span class="behavior-state">已启用</span></div><div class="behavior-row"><span class="behavior-icon"><MessageSquareText :size="16" aria-hidden="true" /></span><div><strong>自动滚动</strong><span>停留在底部时跟随新消息，手动上滑后保留阅读位置。</span></div><span class="behavior-state">已启用</span></div><div class="behavior-row"><span class="behavior-icon"><CornerDownLeft :size="16" aria-hidden="true" /></span><div><strong>Enter 发送</strong><span>Enter 发送消息，Shift + Enter 换行。</span></div><span class="behavior-state">已启用</span></div></div>
-              <div class="settings-info-card subtle"><Settings2 :size="17" aria-hidden="true" /><span>这些行为由聊天工作区统一管理，当前没有额外的持久化开关。</span></div>
+              <div class="settings-info-card subtle"><Settings2 :size="17" aria-hidden="true" /><span>这些行为由工单决策工作区统一管理，当前没有额外的持久化开关。</span></div>
             </section>
 
             <section v-show="activeSection === 'appearance'" class="settings-section" aria-labelledby="section-appearance">
@@ -202,7 +202,7 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch, type Component } from 'vue'
 import { AlertCircle, Bot, CheckCircle2, ChevronRight, CornerDownLeft, Database, LoaderCircle, MessageSquareText, Monitor, Moon, RefreshCw, RotateCcw, Save, Server, Settings2, SlidersHorizontal, Sparkles, Sun, TestTube2, Trash2, Waypoints, X } from 'lucide-vue-next'
-import { persistSettings, settings } from '../stores/settings'
+import { persistSettings, settings, DEFAULT_SYSTEM_PROMPT } from '../stores/settings'
 import { fetchModels } from '../services/stream'
 import { createRuntimeFromSettings } from '../services/runtime'
 import { getClaudeModels } from '../services/providers/claude'
@@ -214,7 +214,6 @@ import { useToast } from '../composables/useToast'
 const emit = defineEmits<{ close: [] }>()
 const { confirm } = useConfirm()
 const toast = useToast()
-const DEFAULT_SYSTEM_PROMPT = '你是一个专业的 AI 助手，回答要简洁清晰。'
 const UNLIMITED = 1100000
 type SectionId = 'general' | 'ai' | 'model' | 'prompt' | 'knowledge' | 'behavior' | 'appearance' | 'advanced'
 type ConnectionState = 'idle' | 'loading' | 'success' | 'error'

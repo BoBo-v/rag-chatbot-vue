@@ -8,7 +8,7 @@
       <div class="knowledge-title">
         <span class="knowledge-mark"><img src="/favicon.svg" alt="AI Chat" /></span>
         <div>
-          <h1>知识库</h1>
+          <h1>技术知识库与评测</h1>
           <p>{{ files.length }} 个文件 · {{ totalChunks }} 个片段 · {{ formatNumber(totalChars) }} 字</p>
         </div>
       </div>

@@ -14,10 +14,10 @@ type AppMode = 'chat' | 'agent' | 'compare' | 'knowledge'
 const mode = ref<AppMode>('chat')
 const settingsOpen = ref(false)
 const modes: { value: AppMode; label: string; icon: Component }[] = [
-  { value: 'chat', label: '聊天', icon: MessageSquare },
-  { value: 'agent', label: 'Agent', icon: Bot },
+  { value: 'chat', label: '工单决策', icon: MessageSquare },
+  { value: 'agent', label: '排障 Agent', icon: Bot },
   { value: 'compare', label: '模型对比', icon: Columns2 },
-  { value: 'knowledge', label: '知识库', icon: Database },
+  { value: 'knowledge', label: '知识库 & 评测', icon: Database },
 ]
 
 let mediaQuery: MediaQueryList | null = null
@@ -52,8 +52,8 @@ watch(() => settings.theme, applyTheme)
 <template>
   <div class="app-shell">
     <aside class="app-rail" aria-label="主导航">
-      <div class="brand-mark" title="AI Chat">
-        <img src="/favicon.svg" alt="AI Chat" />
+      <div class="brand-mark" title="技术支持工单辅助决策台">
+        <img src="/favicon.svg" alt="技术支持工单辅助决策台" />
       </div>
 
       <nav class="rail-navigation" aria-label="工作区">
@@ -86,16 +86,16 @@ watch(() => settings.theme, applyTheme)
     </aside>
 
     <main class="app-stage">
-      <section v-show="mode === 'chat'" class="mode-page" aria-label="聊天工作区">
+      <section v-show="mode === 'chat'" class="mode-page" aria-label="工单决策工作区">
         <StyleChat />
       </section>
-      <section v-if="mode === 'agent'" class="mode-page" aria-label="Agent 工作区">
+      <section v-if="mode === 'agent'" class="mode-page" aria-label="排障 Agent 工作区">
         <AgentWorkspace />
       </section>
       <section v-show="mode === 'compare'" class="mode-page" aria-label="模型对比工作区">
         <CompareChat />
       </section>
-      <section v-show="mode === 'knowledge'" class="mode-page" aria-label="知识库工作区">
+      <section v-show="mode === 'knowledge'" class="mode-page" aria-label="知识库与评测工作区">
         <KnowledgeBase />
       </section>
     </main>

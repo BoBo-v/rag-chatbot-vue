@@ -736,6 +736,127 @@ export function useChatView() {
         }
     }
 
+    function isNonRetryableError(err: unknown): boolean {
+        if (err instanceof BackendChatRunClientError) {
+            if (err.status === 401 || err.status === 403 || err.status === 404) return true
+            if (err.code === 'GENERATION_RUN_NOT_FOUND' || err.code === 'CLIENT_ABORTED') return true
+            return false
+        }
+        if (err instanceof Error) {
+            const statusMatch = err.message.match(/(\d{3})/)
+            const status = statusMatch ? Number(statusMatch[1]) : undefined
+            if (status === 401 || status === 403 || status === 404) return true
+        }
+        return false
+    }
+
+    function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (signal?.aborted) {
+                reject(new DOMException('Aborted', 'AbortError'))
+                return
+            }
+            const timer = setTimeout(() => {
+                signal?.removeEventListener('abort', onAbort)
+                resolve()
+            }, ms)
+            const onAbort = () => {
+                clearTimeout(timer)
+                signal?.removeEventListener('abort', onAbort)
+                reject(new DOMException('Aborted', 'AbortError'))
+            }
+            signal?.addEventListener('abort', onAbort)
+        })
+    }
+
+    async function subscribeChatRunEventsWithRetry(
+        options: RunStreamOptions,
+        runId: string,
+        initialSequence: number,
+    ): Promise<void> {
+        const retryDelays = [1000, 2000, 4000, 8000, 15000]
+        let attempt = 0
+        let afterSequence = initialSequence
+
+        while (true) {
+            if (streamCtrl?.isAborted) return
+
+            // 若是重连轮次（attempt > 0），先拉取最新快照：若已完成则短路退出
+            if (attempt > 0) {
+                try {
+                    const snapshot = await getBackendChatRun(runId, { signal: streamCtrl?.controller.signal })
+                    updateMessage(options.aiMessageId, { generationRunStatus: snapshot.status })
+
+                    // 后端已经完成、失败或取消时，直接应用终态快照，无需再发起 SSE 连接！
+                    if (isTerminalRunStatus(snapshot.status)) {
+                        updateMessage(options.aiMessageId, { errorMessage: undefined })
+                        applyTerminalRunSnapshot(options.aiMessageId, snapshot)
+                        return
+                    }
+
+                    // 如果后端已生成的序号领先于本地，补齐已生成的正文与序号
+                    const currentMsg = messages.value.find(item => item.id === options.aiMessageId)
+                    const localSeq = currentMsg?.generationSequence ?? afterSequence
+                    if (snapshot.lastSequence > localSeq && snapshot.outputText) {
+                        afterSequence = snapshot.lastSequence
+                        updateMessage(options.aiMessageId, {
+                            content: snapshot.outputText,
+                            generationSequence: snapshot.lastSequence,
+                        })
+                    } else {
+                        afterSequence = localSeq
+                    }
+                } catch (snapErr) {
+                    if (isNonRetryableError(snapErr)) {
+                        throw snapErr
+                    }
+                }
+            } else {
+                const currentMsg = messages.value.find(item => item.id === options.aiMessageId)
+                if (currentMsg?.generationSequence !== undefined) {
+                    afterSequence = currentMsg.generationSequence
+                }
+            }
+
+            try {
+                await streamBackendChatRunEvents(runId, {
+                    afterSequence,
+                    signal: streamCtrl?.controller.signal,
+                    onEvent: async (event) => {
+                        // 成功接收到事件，重置重试计数器并清除重连提示
+                        if (attempt > 0) {
+                            attempt = 0
+                            updateMessage(options.aiMessageId, { errorMessage: undefined })
+                        }
+                        await handleBackendRunEvent(options, event)
+                    },
+                })
+                // 流正常完成
+                return
+            } catch (err: unknown) {
+                if (streamCtrl?.isAborted || (err instanceof BackendChatRunClientError && err.code === 'CLIENT_ABORTED')) {
+                    return
+                }
+
+                if (isNonRetryableError(err) || attempt >= retryDelays.length) {
+                    throw err
+                }
+
+                const baseDelay = retryDelays[attempt]
+                const jitter = Math.floor(Math.random() * 500)
+                const delay = baseDelay + jitter
+                attempt++
+
+                toast.show(`连接中断，正在恢复 (${attempt}/${retryDelays.length})...`, 'warning', 2500)
+                updateMessage(options.aiMessageId, {
+                    errorMessage: `连接中断，正在恢复 (${attempt}/${retryDelays.length})...`,
+                })
+
+                await sleepWithAbort(delay, streamCtrl?.controller.signal)
+            }
+        }
+    }
+
     async function runBackendStream(
         options: RunStreamOptions,
         requestMessages: Message[],
@@ -772,14 +893,11 @@ export function useChatView() {
         updateMessage(options.aiMessageId, {
             generationRunId: created.run.runId,
             generationRunStatus: created.run.status,
+            generationSequence: afterSequence,
         })
         await flushMessagePersist(options.aiMessageId, options.convId)
 
-        await streamBackendChatRunEvents(created.run.runId, {
-            afterSequence,
-            signal: streamCtrl?.controller.signal,
-            onEvent: async event => handleBackendRunEvent(options, event),
-        })
+        await subscribeChatRunEventsWithRetry(options, created.run.runId, afterSequence)
     }
 
     async function resumeBackendStream(options: RunStreamOptions, runId: string): Promise<void> {
@@ -800,25 +918,24 @@ export function useChatView() {
                 formattedContent: undefined,
                 generationSequence: snapshot.lastSequence,
             })
-        } else if (afterSequence === snapshot.lastSequence && message.content !== snapshot.outputText) {
+        } else if (message.content !== snapshot.outputText) {
             updateMessage(options.aiMessageId, {
                 content: snapshot.outputText,
                 formattedContent: undefined,
+                generationSequence: snapshot.lastSequence,
             })
+            afterSequence = snapshot.lastSequence
         }
         updateMessage(options.aiMessageId, { generationRunStatus: snapshot.status })
 
-        if (isTerminalRunStatus(snapshot.status) && afterSequence === snapshot.lastSequence) {
+        // 关键改动：只要后端已到达终态（completed / cancelled / failed），直接应用终态快照，短路退出，不再发多余的 /events SSE
+        if (isTerminalRunStatus(snapshot.status)) {
             applyTerminalRunSnapshot(options.aiMessageId, snapshot)
             return
         }
 
         await flushMessagePersist(options.aiMessageId, options.convId)
-        await streamBackendChatRunEvents(runId, {
-            afterSequence,
-            signal: streamCtrl?.controller.signal,
-            onEvent: async event => handleBackendRunEvent(options, event),
-        })
+        await subscribeChatRunEventsWithRetry(options, runId, afterSequence)
     }
 
     async function handleBackendRunEvent(options: RunStreamOptions, event: BackendChatRunEvent): Promise<void> {

@@ -73,7 +73,7 @@ export function useAuthStore() {
         } finally {
             state.isAuthenticated = false
             state.user = null
-            state.isAuthModalVisible = true
+            state.isAuthModalVisible = false
         }
     }
 

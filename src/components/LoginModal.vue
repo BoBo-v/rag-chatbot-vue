@@ -62,7 +62,6 @@
           <div class="auth-field">
             <div class="auth-label-row">
               <label for="auth-password" class="auth-label">登录密码</label>
-              <span v-if="isDev" class="auth-default-hint">开发默认: Admin@123456</span>
             </div>
             <div class="auth-input-wrapper">
               <Lock class="field-icon" :size="16" aria-hidden="true" />

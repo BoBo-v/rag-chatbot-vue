@@ -41,5 +41,20 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
         }
     }
 
+    // 403 强制首次改密全局拦截：使用 response.clone() 防止消费原始 body
+    if (response.status === 403) {
+        try {
+            const cloned = response.clone()
+            const data = await cloned.json().catch(() => null)
+            if (data?.code === 'PASSWORD_CHANGE_REQUIRED') {
+                const authStore = useAuthStore()
+                authStore.mustChangePassword.value = true
+                authStore.openChangePasswordModal()
+            }
+        } catch {
+            // 忽略非 JSON 响应解析失败
+        }
+    }
+
     return response
 }

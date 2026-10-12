@@ -293,7 +293,7 @@ v-for="(img, idx) in msg.images" :key="idx"
                        @click="openImagePreview(`data:${img.mediaType};base64,${img.base64}`)"
                   />
                 </div>
-                <div class="msg-content markdown-body" v-html="renderContent(msg)"></div>
+                <div class="msg-content markdown-body" @click="handleCodeBlockAction($event, msg.id)" v-html="renderContent(msg)"></div>
                 <template v-if="msg.status === 'aborted'">
                   <div class="abort-divider"></div>
                   <div class="abort-truncate-row">
@@ -709,7 +709,7 @@ const {
 void containerRef
 
 // 三个 composable 分别负责：消息 Markdown 渲染、侧边栏会话分组、侧边栏搜索。
-const { renderContent, handleCodeBlockCopy } = useMessageRenderer()
+const { renderContent, handleCodeBlockAction, handleCodeBlockCopy } = useMessageRenderer()
 const { groupedConversations, currentModelName } = useConversationGroups(conversations)
 const {
   conversationSearchDraft,

@@ -484,6 +484,7 @@ import {
   type AgentUsage,
 } from '../services/agent'
 import { renderMarkdown } from '../utils/markdown'
+import { useMessageRenderer } from '../composables/useMessageRenderer'
 
 interface AgentModelOption {
   key: string
@@ -553,36 +554,10 @@ function handleEditPrompt(content: string) {
   showToast('已载入问题到输入框', 'success', 2000)
 }
 
+const { handleCodeBlockAction } = useMessageRenderer()
+
 function handleFeedClick(e: MouseEvent) {
-  const target = e.target as HTMLElement
-
-  // 处理代码块复制
-  const copyBtn = target.closest('.code-copy-btn') as HTMLElement | null
-  if (copyBtn) {
-    const code = copyBtn.closest('.code-block-wrapper')?.querySelector('code')?.textContent ?? ''
-    navigator.clipboard.writeText(code).then(() => {
-      copyBtn.textContent = '已复制 ✓'
-      copyBtn.classList.add('copied')
-      setTimeout(() => {
-        copyBtn.textContent = '复制'
-        copyBtn.classList.remove('copied')
-      }, 2000)
-    })
-    return
-  }
-
-  // 处理代码块换行切换
-  const wrapBtn = target.closest('.code-wrap-btn') as HTMLElement | null
-  if (wrapBtn) {
-    const wrapper = wrapBtn.closest('.code-block-wrapper')
-    const pre = wrapper?.querySelector('pre')
-    if (pre) {
-      const isWrapped = pre.classList.toggle('wrap-text')
-      wrapBtn.textContent = isWrapped ? '滚动' : '换行'
-      wrapBtn.title = isWrapped ? '切换回横向滚动' : '切换自动折行'
-      wrapBtn.classList.toggle('active', isWrapped)
-    }
-  }
+  handleCodeBlockAction(e)
 }
 
 const agentSuggestions = [

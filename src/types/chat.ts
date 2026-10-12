@@ -53,6 +53,7 @@ export interface Message {
     status: MessageStatus
     time?: string
     canContinue?: boolean
+    formattedMarkdown?: string // 内存态 Prettier 格式化后的 Markdown 文本
     formattedContent?: string
     errorMessage?: string
     ragContext?: RagContextInfo

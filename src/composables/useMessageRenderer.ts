@@ -1,80 +1,96 @@
-import { renderMarkdown, getTrustedCodeBlock } from '../utils/markdown'
-import { sanitizeHtml } from '../utils/sanitize'
+import { renderMarkdownDocument, type CodeBlockEntry } from '../utils/markdown'
 import { useWebPreview } from './useWebPreview'
 import type { Message } from '../types/chat'
 
-// 针对已完成的静态消息（用户历史提问、完成的AI回复），使用内存缓存避免反复全量跑 markdown-it + katex 解析
-const renderCache = new Map<string, string>()
+interface MessageRenderSnapshot {
+    html: string
+    blocks: Map<string, CodeBlockEntry>
+    rawContent: string
+}
+
+// 内存中按消息生命周期维护的渲染快照表，随消息更新而更新，避免全局 FIFO 淘汰
+const messageSnapshots = new Map<string, MessageRenderSnapshot>()
 
 export function useMessageRenderer() {
-    // 根据消息状态决定显示什么 HTML：
-    // loading 显示三点动画；streaming 在 Markdown 后插入光标；done/error 渲染实际内容。
-    function renderContent(msg: Message) {
+    function renderContent(msg: Message): string {
         if (msg.status === 'loading') {
             return '<div class="thinking-dots"><span></span><span></span><span></span></div>'
         }
         if (msg.status === 'error' && !msg.content) {
             return ''
         }
-        if (msg.formattedContent) {
-            return sanitizeHtml(msg.formattedContent)
-        }
 
-
+        const rawText = msg.formattedMarkdown || msg.content || ''
         const isStatic = msg.status === 'done' || msg.status === 'aborted' || msg.status === 'error'
+
         if (isStatic) {
-            const cached = renderCache.get(msg.id)
-            if (cached !== undefined && renderCache.get(`${msg.id}:raw`) === msg.content) {
-                return cached
+            const cached = messageSnapshots.get(msg.id)
+            if (cached && cached.rawContent === rawText) {
+                return cached.html
             }
         }
 
-        const rendered = renderMarkdown(msg.content)
+        const result = renderMarkdownDocument(rawText, msg.id)
+        let htmlOutput = result.html
+
         if (msg.status === 'streaming') {
             const cursor = '<span class="cursor-blink">▋</span>'
-            const lastClose = rendered.lastIndexOf('</')
-            if (lastClose === -1) return rendered + cursor
-            return rendered.slice(0, lastClose) + cursor + rendered.slice(lastClose)
-        }
-
-        if (isStatic) {
-            if (renderCache.size > 800) {
-                renderCache.clear()
+            const lastClose = htmlOutput.lastIndexOf('</')
+            if (lastClose === -1) {
+                htmlOutput = htmlOutput + cursor
+            } else {
+                htmlOutput = htmlOutput.slice(0, lastClose) + cursor + htmlOutput.slice(lastClose)
             }
-            renderCache.set(msg.id, rendered)
-            renderCache.set(`${msg.id}:raw`, msg.content)
         }
 
-        return rendered
+        messageSnapshots.set(msg.id, {
+            html: result.html,
+            blocks: result.blocks,
+            rawContent: rawText,
+        })
+
+        return htmlOutput
     }
 
-    // 代码块操作按钮由 Markdown 渲染出来的 HTML 生成。
-    // 因此使用事件委托：基于渲染器记录表校验可信凭证并绑定动作。
-    function handleCodeBlockCopy(e: MouseEvent) {
+    function getCodeBlockFromSnapshot(blockId: string, ownerMessageId?: string): CodeBlockEntry | undefined {
+        if (ownerMessageId) {
+            const snapshot = messageSnapshots.get(ownerMessageId)
+            const entry = snapshot?.blocks.get(blockId)
+            if (entry) return entry
+        }
+        // 回退遍历所有消息快照查找（适用于未显式传入 ownerMessageId 的容器级事件委托）
+        for (const snapshot of messageSnapshots.values()) {
+            const entry = snapshot.blocks.get(blockId)
+            if (entry) return entry
+        }
+        return undefined
+    }
+
+    function handleCodeBlockAction(e: MouseEvent, ownerMessageId?: string): void {
         const target = e.target as HTMLElement
 
-        // 统一寻找代码块外层包裹容器并校验其是否在渲染器受信记录表中
+        // 统一寻找代码块外层包裹容器并校验其是否在对应消息的 blocks 记录中
         const wrapper = target.closest('.code-block-wrapper') as HTMLElement | null
         if (!wrapper || !wrapper.id) return
 
-        const trustedBlock = getTrustedCodeBlock(wrapper.id)
-        if (!trustedBlock) {
-            // 非渲染器登记的仿冒代码块，直接拒绝响应
+        const block = getCodeBlockFromSnapshot(wrapper.id, ownerMessageId)
+        if (!block) {
+            // 非当前渲染系统登记的受信代码块，直接拒绝响应
             return
         }
 
-        // 处理网页预览按钮
+        // 处理网页沙箱预览
         const previewBtn = target.closest('.code-preview-btn') as HTMLElement | null
         if (previewBtn) {
             const { openPreview } = useWebPreview()
-            openPreview(trustedBlock.code)
+            openPreview(block.code)
             return
         }
 
-        // 处理复制按钮
+        // 处理复制代码
         const copyBtn = target.closest('.code-copy-btn') as HTMLElement | null
         if (copyBtn) {
-            navigator.clipboard.writeText(trustedBlock.code).then(() => {
+            navigator.clipboard.writeText(block.code).then(() => {
                 copyBtn.textContent = '已复制 ✓'
                 copyBtn.classList.add('copied')
                 setTimeout(() => {
@@ -85,7 +101,7 @@ export function useMessageRenderer() {
             return
         }
 
-        // 处理代码块换行/滚动切换按钮
+        // 处理代码块自动折行 / 滚动切换
         const wrapBtn = target.closest('.code-wrap-btn') as HTMLElement | null
         if (wrapBtn) {
             const pre = wrapper.querySelector('pre')
@@ -98,6 +114,9 @@ export function useMessageRenderer() {
         }
     }
 
-    return { renderContent, handleCodeBlockCopy }
+    return {
+        renderContent,
+        handleCodeBlockAction,
+        handleCodeBlockCopy: handleCodeBlockAction, // 兼容现有别名
+    }
 }
-

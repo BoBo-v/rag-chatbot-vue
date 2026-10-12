@@ -57,9 +57,8 @@ async function formatCode(str: string, lang: string): Promise<string> {
     }
 }
 
-async function formatCodeBlocks(text: string): Promise<string> {
+export async function formatMarkdownAsync(text: string): Promise<string> {
     // 先找出所有 ```lang ... ``` 代码块，再逐个格式化。
-    // 这里只处理常见 fenced code block，不尝试实现完整 Markdown 解析器。
     const fence = /```(\w+)\n([\s\S]*?)```/g
     const jobs: Array<{ full: string; lang: string; code: string }> = []
 
@@ -68,16 +67,17 @@ async function formatCodeBlocks(text: string): Promise<string> {
         jobs.push({ full: match[0], lang: match[1], code: match[2] })
     }
 
+    let result = text
     for (const job of jobs) {
         const formatted = await formatCode(job.code, job.lang)
-        text = text.replace(job.full, `\`\`\`${job.lang}\n${formatted}\`\`\``)
+        result = result.replace(job.full, `\`\`\`${job.lang}\n${formatted}\`\`\``)
     }
 
-    return text
+    return result
 }
 
 export async function renderMarkdownAsync(text: string): Promise<string> {
     // AI 回复完成后再做异步格式化，避免流式输出过程中反复加载 prettier。
-    const formatted = await formatCodeBlocks(text)
+    const formatted = await formatMarkdownAsync(text)
     return renderMarkdown(formatted)
 }

@@ -341,8 +341,12 @@ export function useChatView() {
     async function formatFinishedMessage(msgId: string) {
         const msg = messages.value.find(m => m.id === msgId)
         if (!msg) return
-        const { renderMarkdownAsync } = await import('../utils/markdownAsync')
-        msg.formattedContent = await renderMarkdownAsync(msg.content)
+        const { formatMarkdownAsync } = await import('../utils/markdownAsync')
+        try {
+            msg.formattedMarkdown = await formatMarkdownAsync(msg.content)
+        } catch {
+            // 格式化异常时保留原始 Markdown
+        }
     }
 
     // 封装 AbortController，abort() 同时中断网络请求 + ReadableStream + 标记 isAborted
@@ -490,6 +494,7 @@ export function useChatView() {
                 .map(snapshotMessage)
             updateMessage(errMsg.id, {
                 content: '',
+                formattedMarkdown: undefined,
                 formattedContent: undefined,
                 status: 'loading',
                 canContinue: false,
@@ -537,6 +542,7 @@ export function useChatView() {
 
         updateMessage(targetMsg.id, {
             content: '',
+            formattedMarkdown: undefined,
             formattedContent: undefined,
             status: 'loading',
             errorMessage: undefined,
@@ -915,12 +921,14 @@ export function useChatView() {
             afterSequence = snapshot.lastSequence
             updateMessage(options.aiMessageId, {
                 content: snapshot.outputText,
+                formattedMarkdown: undefined,
                 formattedContent: undefined,
                 generationSequence: snapshot.lastSequence,
             })
         } else if (message.content !== snapshot.outputText) {
             updateMessage(options.aiMessageId, {
                 content: snapshot.outputText,
+                formattedMarkdown: undefined,
                 formattedContent: undefined,
                 generationSequence: snapshot.lastSequence,
             })

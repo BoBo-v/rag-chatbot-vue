@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
-import { Bot, Columns2, Database, MessageSquare, Settings2 } from 'lucide-vue-next'
+import { Bot, Columns2, Database, MessageSquare, Settings2, LogOut, User } from 'lucide-vue-next'
 import StyleChat from './views/StyleChat.vue'
 import CompareChat from './views/CompareChat.vue'
 import KnowledgeBase from './views/KnowledgeBase.vue'
 import AgentWorkspace from './views/AgentWorkspace.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
+import LoginModal from './components/LoginModal.vue'
 import { settings, type ThemeType } from './stores/settings'
+import { useAuthStore } from './stores/auth'
 
 type AppMode = 'chat' | 'agent' | 'compare' | 'knowledge'
 
 const mode = ref<AppMode>('chat')
 const settingsOpen = ref(false)
+const authStore = useAuthStore()
+const { isAuthenticated, user } = authStore
 const modes: { value: AppMode; label: string; icon: Component }[] = [
   { value: 'chat', label: '工单决策', icon: MessageSquare },
   { value: 'agent', label: '排障 Agent', icon: Bot },
@@ -37,6 +41,7 @@ function handleThemeMediaChange() {
 }
 
 onMounted(() => {
+  authStore.checkAuth()
   applyTheme(settings.theme)
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   mediaQuery.addEventListener('change', handleThemeMediaChange)
@@ -73,6 +78,28 @@ watch(() => settings.theme, applyTheme)
 
       <div class="rail-footer">
         <span class="workspace-state" title="本地工作区已就绪" aria-label="本地工作区已就绪"></span>
+        <button
+          v-if="isAuthenticated"
+          type="button"
+          class="rail-button"
+          :title="'已登录: ' + (user?.username || 'admin') + ' (点击退出登录)'"
+          aria-label="退出登录"
+          @click="authStore.logout()"
+        >
+          <LogOut :size="21" :stroke-width="1.7" aria-hidden="true" />
+          <span>登出</span>
+        </button>
+        <button
+          v-else
+          type="button"
+          class="rail-button"
+          title="点击登录管理员账号"
+          aria-label="管理员登录"
+          @click="authStore.openLoginModal()"
+        >
+          <User :size="21" :stroke-width="1.7" aria-hidden="true" />
+          <span>登录</span>
+        </button>
         <button
           type="button"
           class="rail-button"
@@ -120,6 +147,7 @@ watch(() => settings.theme, applyTheme)
 
     <SettingsPanel v-if="settingsOpen" @close="settingsOpen = false" />
     <ConfirmDialog />
+    <LoginModal />
   </div>
 </template>
 

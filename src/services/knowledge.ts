@@ -164,7 +164,9 @@ function subscribeUploadProgress(
     progressId: string,
     onProgress: (progress: UploadProgress) => void
 ): EventSource {
-    const events = new EventSource(apiUrl(`/api/upload/progress/${encodeURIComponent(progressId)}`))
+    const events = new EventSource(apiUrl(`/api/upload/progress/${encodeURIComponent(progressId)}`), {
+        withCredentials: true,
+    })
     events.addEventListener('progress', event => {
         const progress = JSON.parse(event.data) as UploadProgress
         onProgress(progress)

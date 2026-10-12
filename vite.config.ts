@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
@@ -117,4 +118,12 @@ export default defineConfig(({ mode }) => ({
         },
         vue(),
     ],
+    build: {
+        rollupOptions: {
+            input: {
+                main: resolve(__dirname, 'index.html'),
+                preview: resolve(__dirname, 'preview-isolated.html'),
+            },
+        },
+    },
 }))

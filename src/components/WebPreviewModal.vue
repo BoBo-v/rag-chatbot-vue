@@ -183,6 +183,7 @@ import {
   ChevronDown,
 } from 'lucide-vue-next'
 import { useWebPreview } from '../composables/useWebPreview'
+import { buildWebPreviewDocument } from '../utils/webPreviewDocument'
 
 const { isPreviewOpen, previewCode, previewTitle, closePreview } = useWebPreview()
 
@@ -201,72 +202,11 @@ interface ConsoleLog {
 }
 const consoleLogs = ref<ConsoleLog[]>([])
 
-// 控制台桥接注入脚本
-const makeConsoleBridge = (pid: string) => `
-<script>
-(function() {
-  var pid = "${pid}";
-  function post(level, args) {
-    try {
-      var arr = [];
-      for (var i = 0; i < args.length; i++) {
-        var a = args[i];
-        arr.push(typeof a === 'object' ? JSON.stringify(a) : String(a));
-      }
-      window.parent.postMessage({ type: 'SANDBOX_CONSOLE', previewId: pid, level: level, text: arr.join(' ') }, '*');
-    } catch(e) {}
-  }
-  var oldLog = console.log, oldWarn = console.warn, oldErr = console.error;
-  console.log = function() { post('info', arguments); if (oldLog) oldLog.apply(console, arguments); };
-  console.warn = function() { post('warn', arguments); if (oldWarn) oldWarn.apply(console, arguments); };
-  console.error = function() { post('error', arguments); if (oldErr) oldErr.apply(console, arguments); };
-})();
-<\/script>
-`
-
-function buildIsolatedSandboxHtml(userCode: string, options: { allowScripts: boolean; previewId: string }): string {
-  // 严密限制的 CSP：封堵任何外部请求与图片信标外发（img-src 严格限定于 data: 与 blob:，base-uri 限定 none）
-  const scriptPolicy = options.allowScripts ? "script-src 'unsafe-inline';" : "script-src 'none';"
-  const cspTag = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; connect-src 'none'; font-src data:; style-src 'unsafe-inline'; ${scriptPolicy} img-src data: blob:;">`
-  const bridge = options.allowScripts ? makeConsoleBridge(options.previewId) : ''
-
-  let bodyContent = userCode || ''
-  let userHead = ''
-
-  // 提取用户 <head> 内容（如果存在）
-  const headMatch = bodyContent.match(/<head[^>]*>([\s\S]*?)<\/head>/i)
-  if (headMatch) {
-    userHead = headMatch[1]
-    bodyContent = bodyContent.replace(/<head[^>]*>[\s\S]*?<\/head>/i, '')
-  }
-
-  // 移除用户自带的任何 CSP meta，防止策略被抢占或冲突
-  userHead = userHead.replace(/<meta[^>]*http-equiv=["']?Content-Security-Policy["']?[^>]*>/gi, '')
-
-  // 剥离用户可能自带的文档外壳，确保固定外壳先于一切不可信内容生效
-  bodyContent = bodyContent
-    .replace(/<!DOCTYPE[^>]*>/gi, '')
-    .replace(/<\/?html[^>]*>/gi, '')
-    .replace(/<\/?body[^>]*>/gi, '')
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  ${cspTag}
-  ${bridge}
-  ${userHead}
-</head>
-<body>
-  ${bodyContent}
-</body>
-</html>`
-}
-
 const compiledHtml = computed(() => {
-  return buildIsolatedSandboxHtml(previewCode.value || '', {
+  return buildWebPreviewDocument(previewCode.value || '', {
     allowScripts: allowScripts.value,
     previewId: previewId.value,
+    injectConsoleBridge: true,
   })
 })
 

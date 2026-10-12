@@ -62,7 +62,7 @@
           <div class="auth-field">
             <div class="auth-label-row">
               <label for="auth-password" class="auth-label">登录密码</label>
-              <span class="auth-default-hint">默认密码: Admin@123456</span>
+              <span v-if="isDev" class="auth-default-hint">开发默认: Admin@123456</span>
             </div>
             <div class="auth-input-wrapper">
               <Lock class="field-icon" :size="16" aria-hidden="true" />
@@ -133,7 +133,8 @@ import { useAuthStore } from '../stores/auth'
 const authStore = useAuthStore()
 const { isAuthModalVisible } = authStore
 
-const username = ref('admin')
+const isDev = import.meta.env.DEV
+const username = ref(isDev ? 'admin' : '')
 const password = ref('')
 const showPassword = ref(false)
 const loading = ref(false)

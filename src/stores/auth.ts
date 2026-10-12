@@ -65,15 +65,21 @@ export function useAuthStore() {
         }
     }
 
-    async function logout(): Promise<void> {
+    async function logout(): Promise<{ ok: boolean; error?: string }> {
         try {
-            await apiFetch('/api/auth/logout', { method: 'POST' })
+            const res = await apiFetch('/api/auth/logout', { method: 'POST' })
+            if (res.ok) {
+                state.isAuthenticated = false
+                state.user = null
+                state.isAuthModalVisible = false
+                return { ok: true }
+            } else {
+                const data = await res.json().catch(() => ({}))
+                const err = data.error || '退出登录失败，服务端未能成功撤销会话。'
+                return { ok: false, error: err }
+            }
         } catch {
-            // Ignore error
-        } finally {
-            state.isAuthenticated = false
-            state.user = null
-            state.isAuthModalVisible = false
+            return { ok: false, error: '网络异常，退出登录失败，会话仍有效。' }
         }
     }
 

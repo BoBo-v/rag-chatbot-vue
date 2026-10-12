@@ -53,10 +53,34 @@ export default defineConfig(({ mode }) => ({
                             if (key !== 'baseUrl') targetUrl.searchParams.append(key, value)
                         })
 
-                        // host/connection 是当前本地连接的头，转发到上游容易造成协议或域名不匹配。
-                        const headers = new Headers(req.headers as Record<string, string>)
-                        headers.delete('host')
-                        headers.delete('connection')
+                        // 严格请求头过滤：仅转发模型提供商所需的必要头，严禁泄漏 Cookie、应用会话与内部请求头
+                        const allowedExactHeaders = new Set([
+                            'accept',
+                            'accept-language',
+                            'authorization',
+                            'content-type',
+                            'user-agent',
+                            'x-api-key',
+                            'anthropic-version',
+                        ])
+                        const allowedHeaderPrefixes = ['x-stainless-', 'anthropic-']
+
+                        const headers = new Headers()
+                        for (const [key, val] of Object.entries(req.headers)) {
+                            if (!val) continue
+                            const lowerKey = key.toLowerCase()
+                            // 明确排除 Cookie、内部请求头以及本地连接头
+                            if (['cookie', 'x-requested-with', 'host', 'connection'].includes(lowerKey)) {
+                                continue
+                            }
+                            if (allowedExactHeaders.has(lowerKey) || allowedHeaderPrefixes.some(prefix => lowerKey.startsWith(prefix))) {
+                                if (Array.isArray(val)) {
+                                    for (const item of val) headers.append(key, item)
+                                } else {
+                                    headers.set(key, val)
+                                }
+                            }
+                        }
 
                         const proxyResponse = await fetch(targetUrl, {
                             method: req.method,

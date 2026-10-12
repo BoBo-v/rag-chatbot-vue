@@ -52,6 +52,13 @@ onBeforeUnmount(() => {
   mediaQuery?.removeEventListener('change', handleThemeMediaChange)
 })
 
+async function handleLogout() {
+  const res = await authStore.logout()
+  if (!res.ok) {
+    alert(res.error || '退出登录失败，服务端未能成功撤销会话。')
+  }
+}
+
 watch(() => settings.theme, applyTheme)
 </script>
 
@@ -85,7 +92,7 @@ watch(() => settings.theme, applyTheme)
           class="rail-button"
           :title="'已登录: ' + (user?.username || 'admin') + ' (点击退出登录)'"
           aria-label="退出登录"
-          @click="authStore.logout()"
+          @click="handleLogout"
         >
           <LogOut :size="21" :stroke-width="1.7" aria-hidden="true" />
           <span>登出</span>

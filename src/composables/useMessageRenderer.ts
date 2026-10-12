@@ -1,4 +1,4 @@
-import { renderMarkdown } from '../utils/markdown'
+import { renderMarkdown, getTrustedCodeBlock } from '../utils/markdown'
 import { sanitizeHtml } from '../utils/sanitize'
 import { useWebPreview } from './useWebPreview'
 import type { Message } from '../types/chat'
@@ -49,30 +49,32 @@ export function useMessageRenderer() {
     }
 
     // 代码块操作按钮由 Markdown 渲染出来的 HTML 生成。
-    // 因此使用事件委托：点击聊天区域时判断是复制操作还是折行切换操作。
+    // 因此使用事件委托：基于渲染器记录表校验可信凭证并绑定动作。
     function handleCodeBlockCopy(e: MouseEvent) {
         const target = e.target as HTMLElement
+
+        // 统一寻找代码块外层包裹容器并校验其是否在渲染器受信记录表中
+        const wrapper = target.closest('.code-block-wrapper') as HTMLElement | null
+        if (!wrapper || !wrapper.id) return
+
+        const trustedBlock = getTrustedCodeBlock(wrapper.id)
+        if (!trustedBlock) {
+            // 非渲染器登记的仿冒代码块，直接拒绝响应
+            return
+        }
 
         // 处理网页预览按钮
         const previewBtn = target.closest('.code-preview-btn') as HTMLElement | null
         if (previewBtn) {
-            const wrapper = previewBtn.closest('.code-block-wrapper[data-engine="trusted-code-block"]')
-            if (!wrapper) return
-
-            const code = wrapper.querySelector('pre.hljs code')?.textContent ?? ''
             const { openPreview } = useWebPreview()
-            openPreview(code)
+            openPreview(trustedBlock.code)
             return
         }
 
         // 处理复制按钮
         const copyBtn = target.closest('.code-copy-btn') as HTMLElement | null
         if (copyBtn) {
-            const wrapper = copyBtn.closest('.code-block-wrapper[data-engine="trusted-code-block"]')
-            if (!wrapper) return
-
-            const code = wrapper.querySelector('pre.hljs code')?.textContent ?? ''
-            navigator.clipboard.writeText(code).then(() => {
+            navigator.clipboard.writeText(trustedBlock.code).then(() => {
                 copyBtn.textContent = '已复制 ✓'
                 copyBtn.classList.add('copied')
                 setTimeout(() => {
@@ -86,9 +88,6 @@ export function useMessageRenderer() {
         // 处理代码块换行/滚动切换按钮
         const wrapBtn = target.closest('.code-wrap-btn') as HTMLElement | null
         if (wrapBtn) {
-            const wrapper = wrapBtn.closest('.code-block-wrapper[data-engine="trusted-code-block"]')
-            if (!wrapper) return
-
             const pre = wrapper.querySelector('pre')
             if (pre) {
                 const isWrapped = pre.classList.toggle('wrap-text')

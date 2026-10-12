@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>安全沙箱网页预览</title>
+  <title>安全独立沙箱网页预览</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -36,7 +36,7 @@
       border-radius: 9999px;
       font-weight: 500;
     }
-    .actions { display: flex; gap: 8px; }
+    .actions { display: flex; gap: 8px; align-items: center; }
     button {
       background: #334155;
       color: #f8fafc;
@@ -45,9 +45,14 @@
       border-radius: 6px;
       cursor: pointer;
       font-size: 12px;
-      transition: background 0.15s;
+      transition: background 0.15s, color 0.15s;
     }
     button:hover { background: #475569; }
+    button.active-toggle {
+      background: #f59e0b;
+      color: #0f172a;
+      font-weight: 600;
+    }
     main { flex: 1; position: relative; background: #ffffff; }
     iframe { width: 100%; height: 100%; border: none; }
   </style>
@@ -59,45 +64,106 @@
       <span class="badge">🔒 沙箱强隔离 · 无宿主存储访问权</span>
     </div>
     <div class="actions">
+      <button id="toggle-script-btn" onclick="toggleScripts()">交互脚本: 已关闭</button>
       <button onclick="reloadPreview()">重新加载</button>
       <button onclick="window.close()">关闭窗口</button>
     </div>
   </header>
   <main>
-    <!-- 严格沙箱隔离：无 allow-same-origin，无 allow-modals -->
-    <iframe id="sandbox-frame" sandbox="allow-scripts"></iframe>
+    <iframe id="sandbox-frame"></iframe>
   </main>
   <script>
-    const CSP_HEADER = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob: https:; script-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none';">`;
     let rawCode = '';
+    let allowScripts = false;
 
-    function renderCode(code) {
-      rawCode = code;
-      const iframe = document.getElementById('sandbox-frame');
-      let finalHtml = code;
-      if (finalHtml.includes('<head>')) {
-        finalHtml = finalHtml.replace('<head>', '<head>' + CSP_HEADER);
-      } else {
-        finalHtml = '<!DOCTYPE html><html><head>' + CSP_HEADER + '</head><body>' + finalHtml + '</body></html>';
+    function buildSandboxDoc(code, scriptsEnabled) {
+      const scriptPolicy = scriptsEnabled ? "script-src 'unsafe-inline';" : "script-src 'none';";
+      const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; connect-src 'none'; font-src data:; style-src 'unsafe-inline'; ${scriptPolicy} img-src data: blob:;">`;
+
+      let bodyContent = code || '';
+      let userHead = '';
+
+      const headMatch = bodyContent.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+      if (headMatch) {
+        userHead = headMatch[1];
+        bodyContent = bodyContent.replace(/<head[^>]*>[\s\S]*?<\/head>/i, '');
       }
-      iframe.srcdoc = finalHtml;
+
+      userHead = userHead.replace(/<meta[^>]*http-equiv=["']?Content-Security-Policy["']?[^>]*>/gi, '');
+      bodyContent = bodyContent
+        .replace(/<!DOCTYPE[^>]*>/gi, '')
+        .replace(/<\/?html[^>]*>/gi, '')
+        .replace(/<\/?body[^>]*>/gi, '');
+
+      return `<!DOCTYPE html><html><head><meta charset="UTF-8">${csp}${userHead}</head><body>${bodyContent}</body></html>`;
+    }
+
+    function renderCode(code, scriptsEnabled) {
+      rawCode = code;
+      allowScripts = scriptsEnabled;
+      const iframe = document.getElementById('sandbox-frame');
+      const toggleBtn = document.getElementById('toggle-script-btn');
+
+      if (scriptsEnabled) {
+        iframe.setAttribute('sandbox', 'allow-scripts');
+        toggleBtn.textContent = '交互脚本: 已启用';
+        toggleBtn.classList.add('active-toggle');
+      } else {
+        iframe.setAttribute('sandbox', '');
+        toggleBtn.textContent = '交互脚本: 已关闭';
+        toggleBtn.classList.remove('active-toggle');
+      }
+
+      iframe.srcdoc = buildSandboxDoc(code, scriptsEnabled);
+    }
+
+    function toggleScripts() {
+      renderCode(rawCode, !allowScripts);
     }
 
     function reloadPreview() {
-      if (rawCode) renderCode(rawCode);
+      if (rawCode) renderCode(rawCode, allowScripts);
     }
 
-    // 从 sessionStorage 读取一次性代码传递
+    // 从 URL hash 中解析一次性随机令牌，并从 localStorage 读取
     try {
-      const code = sessionStorage.getItem('isolated_preview_code');
-      if (code) {
-        renderCode(code);
-        sessionStorage.removeItem('isolated_preview_code');
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const token = hashParams.get('token');
+      let payload = null;
+
+      if (token) {
+        const stored = localStorage.getItem(token);
+        if (stored) {
+          try {
+            payload = JSON.parse(stored);
+          } catch(e) {}
+          // 阅后即焚：消费后立即销毁
+          localStorage.removeItem(token);
+        }
+      }
+
+      // 清理超过 10 分钟未被消费的陈旧预览标记
+      const now = Date.now();
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('prev_')) {
+          try {
+            const item = JSON.parse(localStorage.getItem(key) || '{}');
+            if (item.timestamp && now - item.timestamp > 600_000) {
+              localStorage.removeItem(key);
+            }
+          } catch(e) {}
+        }
+      }
+
+      if (payload && typeof payload.code === 'string') {
+        renderCode(payload.code, payload.allowScripts === true);
       } else {
-        renderCode('<div style="font-family:sans-serif;padding:24px;color:#64748b;">未检测到预览源码，请返回主页面重新点击“新标签页打开”。</div>');
+        renderCode('<div style="font-family:sans-serif;padding:24px;color:#64748b;">未检测到有效的一次性预览源码凭证，请返回主页面重新点击“新标签页打开”。</div>', false);
       }
     } catch (e) {
       console.error('无法读取预览代码', e);
+      renderCode('<div style="font-family:sans-serif;padding:24px;color:#ef4444;">预览数据读取失败。</div>', false);
     }
   </script>
 </body>

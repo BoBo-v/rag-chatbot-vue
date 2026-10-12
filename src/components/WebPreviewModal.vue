@@ -201,9 +201,6 @@ interface ConsoleLog {
 }
 const consoleLogs = ref<ConsoleLog[]>([])
 
-// CSP 策略 Meta 标签（严密拦截外发连接与外链表单）
-const CSP_TAG = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob: https:; script-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none';">`
-
 // 控制台桥接注入脚本
 const makeConsoleBridge = (pid: string) => `
 <script>
@@ -227,18 +224,50 @@ const makeConsoleBridge = (pid: string) => `
 <\/script>
 `
 
-const compiledHtml = computed(() => {
-  let code = previewCode.value || ''
-  const bridge = allowScripts.value ? makeConsoleBridge(previewId.value) : ''
+function buildIsolatedSandboxHtml(userCode: string, options: { allowScripts: boolean; previewId: string }): string {
+  // 严密限制的 CSP：封堵任何外部请求与图片信标外发（img-src 严格限定于 data: 与 blob:，base-uri 限定 none）
+  const scriptPolicy = options.allowScripts ? "script-src 'unsafe-inline';" : "script-src 'none';"
+  const cspTag = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; connect-src 'none'; font-src data:; style-src 'unsafe-inline'; ${scriptPolicy} img-src data: blob:;">`
+  const bridge = options.allowScripts ? makeConsoleBridge(options.previewId) : ''
 
-  if (code.includes('<head>')) {
-    code = code.replace('<head>', `<head>${CSP_TAG}${bridge}`)
-  } else if (code.includes('<html>')) {
-    code = code.replace('<html>', `<html><head>${CSP_TAG}${bridge}</head>`)
-  } else {
-    code = `<!DOCTYPE html><html><head>${CSP_TAG}${bridge}</head><body>${code}</body></html>`
+  let bodyContent = userCode || ''
+  let userHead = ''
+
+  // 提取用户 <head> 内容（如果存在）
+  const headMatch = bodyContent.match(/<head[^>]*>([\s\S]*?)<\/head>/i)
+  if (headMatch) {
+    userHead = headMatch[1]
+    bodyContent = bodyContent.replace(/<head[^>]*>[\s\S]*?<\/head>/i, '')
   }
-  return code
+
+  // 移除用户自带的任何 CSP meta，防止策略被抢占或冲突
+  userHead = userHead.replace(/<meta[^>]*http-equiv=["']?Content-Security-Policy["']?[^>]*>/gi, '')
+
+  // 剥离用户可能自带的文档外壳，确保固定外壳先于一切不可信内容生效
+  bodyContent = bodyContent
+    .replace(/<!DOCTYPE[^>]*>/gi, '')
+    .replace(/<\/?html[^>]*>/gi, '')
+    .replace(/<\/?body[^>]*>/gi, '')
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  ${cspTag}
+  ${bridge}
+  ${userHead}
+</head>
+<body>
+  ${bodyContent}
+</body>
+</html>`
+}
+
+const compiledHtml = computed(() => {
+  return buildIsolatedSandboxHtml(previewCode.value || '', {
+    allowScripts: allowScripts.value,
+    previewId: previewId.value,
+  })
 })
 
 function reloadFrame() {
@@ -264,8 +293,17 @@ function copySourceCode() {
 
 function openInNewTab() {
   try {
-    sessionStorage.setItem('isolated_preview_code', previewCode.value)
-    window.open('/preview-isolated.html', '_blank', 'noopener,noreferrer')
+    const token = 'prev_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+    const payload = {
+      code: previewCode.value || '',
+      allowScripts: allowScripts.value,
+      timestamp: Date.now(),
+    }
+    localStorage.setItem(token, JSON.stringify(payload))
+
+    const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '')
+    const targetUrl = `${baseUrl}/preview-isolated.html#token=${encodeURIComponent(token)}`
+    window.open(targetUrl, '_blank', 'noopener,noreferrer')
   } catch (err) {
     console.error('新标签页打开失败', err)
   }

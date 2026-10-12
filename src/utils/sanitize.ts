@@ -28,14 +28,24 @@ const ALLOWED_KATEX_STYLE_PROPERTIES = new Set([
   'border-right-width',
 ])
 
+// KaTeX 公式安全颜色属性
+const ALLOWED_KATEX_COLOR_PROPERTIES = new Set([
+  'color',
+  'border-color',
+  'background-color',
+])
+
 // 纯度量数值正则：严格限制为数值 + 单位（px, em, ex, %, rem, pt），绝不允许 url/expression/calc/quotes
 const SAFE_DIMENSION_VALUE_REGEX = /^[-+]?[0-9]*\.?[0-9]+(px|em|ex|%|rem|pt)?$/i
+
+// 安全颜色正则：支持十六进制(#rgb/#rrggbb/#rrggbbaa)、rgb/rgba/hsl/hsla 以及标准英文字名，杜绝 url/expression/javascript
+const SAFE_COLOR_REGEX = /^(#[0-9a-f]{3,8}|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*[\d.]+\s*)?\)|hsla?\(\s*\d+\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?(?:\s*,\s*[\d.]+\s*)?\)|[a-z]{3,20})$/i
 
 function sanitizeInlineStyle(element: Element): void {
   const rawStyle = element.getAttribute('style')
   if (!rawStyle) return
 
-  // 严格策略：仅当元素本身具有 katex 相关类名或位于 .katex 容器内时，才允许保留度量布局样式
+  // 严格策略：仅当元素本身具有 katex 相关类名或位于 .katex 容器内时，才允许保留度量布局样式与公式颜色
   const isKatexNode = element.classList.contains('katex') ||
     element.classList.contains('strut') ||
     element.classList.contains('vlist') ||
@@ -68,6 +78,10 @@ function sanitizeInlineStyle(element: Element): void {
       const allTokensSafe = tokens.length > 0 && tokens.every(token => SAFE_DIMENSION_VALUE_REGEX.test(token))
       if (allTokensSafe) {
         safeDeclarations.push(`${prop}:${tokens.join(' ')}`)
+      }
+    } else if (ALLOWED_KATEX_COLOR_PROPERTIES.has(prop)) {
+      if (SAFE_COLOR_REGEX.test(val)) {
+        safeDeclarations.push(`${prop}:${val}`)
       }
     }
   }
@@ -109,23 +123,8 @@ function ensurePurifyHooks(purify: typeof DOMPurify) {
       }
     }
 
-    // 3. 严格样式过滤（拦截普通标签 style，仅放行 KaTeX 度量属性）
+    // 3. 严格样式过滤（拦截普通标签 style，仅放行 KaTeX 度量属性与公式颜色）
     sanitizeInlineStyle(node)
-  })
-
-  purify.addHook('afterSanitizeElements', (node) => {
-    if (!(node instanceof Element)) return
-
-    // 4. 防伪造控件绑定：仅当代码块外层包裹器结构合法且完整时，赋予 trusted 标记
-    if (node.classList.contains('code-block-wrapper')) {
-      const hasHeader = Boolean(node.querySelector('.code-block-header .code-block-actions'))
-      const hasCode = Boolean(node.querySelector('pre.hljs code'))
-      if (hasHeader && hasCode) {
-        node.setAttribute('data-engine', 'trusted-code-block')
-      } else {
-        node.removeAttribute('data-engine')
-      }
-    }
   })
 }
 
@@ -150,9 +149,10 @@ export function sanitizeHtml(dirty: string): string {
       'class', 'id', 'title', 'alt', 'src', 'href',
       'type', 'checked', 'disabled',
       'aria-hidden', 'aria-label', 'role',
-      // SVG 属性
+      // SVG 属性（包含 \cancel{x} 所需的 x1/y1/x2/y2）
       'viewBox', 'preserveAspectRatio', 'd', 'width', 'height', 'fill', 'stroke', 'stroke-width', 'xmlns',
-      'style', // 允许 style 属性进入 Hook，由 Hook 执行严格的安全度量过滤
+      'x1', 'y1', 'x2', 'y2',
+      'style', // 允许 style 属性进入 Hook，由 Hook 执行严格的安全度量与公式颜色过滤
     ],
     ALLOW_DATA_ATTR: false,
     ADD_ATTR: ['target', 'rel'],

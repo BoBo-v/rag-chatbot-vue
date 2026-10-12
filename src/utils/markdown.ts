@@ -17,7 +17,10 @@ const md: MarkdownIt = new MarkdownIt({
         // markdown-it 的 highlight 回调只处理代码块内部。
         // 外层 wrapper/header 自定义拼装，提供语言标签、换行切换和一键复制代码。
         const langLabel = lang ? `<span class="code-lang">${md.utils.escapeHtml(lang)}</span>` : '<span class="code-lang">code</span>'
-        const actions = `<div class="code-block-actions"><button type="button" class="code-action-btn code-wrap-btn" title="切换自动换行">换行</button><button type="button" class="code-action-btn code-copy-btn" title="复制代码">复制</button></div>`
+        const normalizedLang = (lang || '').toLowerCase()
+        const isWebCode = ['html', 'htm', 'svg'].includes(normalizedLang)
+        const previewBtn = isWebCode ? '<button type="button" class="code-action-btn code-preview-btn" title="在安全沙箱中预览网页">预览网页</button>' : ''
+        const actions = `<div class="code-block-actions">${previewBtn}<button type="button" class="code-action-btn code-wrap-btn" title="切换自动换行">换行</button><button type="button" class="code-action-btn code-copy-btn" title="复制代码">复制</button></div>`
         const header = `<div class="code-block-header">${langLabel}${actions}</div>`
 
         if (lang && hljs.getLanguage(lang)) {

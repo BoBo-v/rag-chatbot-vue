@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>安全沙箱网页预览</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    header {
+      height: 48px;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 13px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-weight: 500;
+    }
+    .actions { display: flex; gap: 8px; }
+    button {
+      background: #334155;
+      color: #f8fafc;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.15s;
+    }
+    button:hover { background: #475569; }
+    main { flex: 1; position: relative; background: #ffffff; }
+    iframe { width: 100%; height: 100%; border: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <strong>安全独立预览包装页</strong>
+      <span class="badge">🔒 沙箱强隔离 · 无宿主存储访问权</span>
+    </div>
+    <div class="actions">
+      <button onclick="reloadPreview()">重新加载</button>
+      <button onclick="window.close()">关闭窗口</button>
+    </div>
+  </header>
+  <main>
+    <!-- 严格沙箱隔离：无 allow-same-origin，无 allow-modals -->
+    <iframe id="sandbox-frame" sandbox="allow-scripts"></iframe>
+  </main>
+  <script>
+    const CSP_HEADER = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob: https:; script-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none';">`;
+    let rawCode = '';
+
+    function renderCode(code) {
+      rawCode = code;
+      const iframe = document.getElementById('sandbox-frame');
+      let finalHtml = code;
+      if (finalHtml.includes('<head>')) {
+        finalHtml = finalHtml.replace('<head>', '<head>' + CSP_HEADER);
+      } else {
+        finalHtml = '<!DOCTYPE html><html><head>' + CSP_HEADER + '</head><body>' + finalHtml + '</body></html>';
+      }
+      iframe.srcdoc = finalHtml;
+    }
+
+    function reloadPreview() {
+      if (rawCode) renderCode(rawCode);
+    }
+
+    // 从 sessionStorage 读取一次性代码传递
+    try {
+      const code = sessionStorage.getItem('isolated_preview_code');
+      if (code) {
+        renderCode(code);
+        sessionStorage.removeItem('isolated_preview_code');
+      } else {
+        renderCode('<div style="font-family:sans-serif;padding:24px;color:#64748b;">未检测到预览源码，请返回主页面重新点击“新标签页打开”。</div>');
+      }
+    } catch (e) {
+      console.error('无法读取预览代码', e);
+    }
+  </script>
+</body>
+</html>

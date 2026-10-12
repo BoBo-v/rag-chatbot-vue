@@ -1,5 +1,6 @@
 import { renderMarkdown } from '../utils/markdown'
 import { sanitizeHtml } from '../utils/sanitize'
+import { useWebPreview } from './useWebPreview'
 import type { Message } from '../types/chat'
 
 // 针对已完成的静态消息（用户历史提问、完成的AI回复），使用内存缓存避免反复全量跑 markdown-it + katex 解析
@@ -51,6 +52,18 @@ export function useMessageRenderer() {
     // 因此使用事件委托：点击聊天区域时判断是复制操作还是折行切换操作。
     function handleCodeBlockCopy(e: MouseEvent) {
         const target = e.target as HTMLElement
+
+        // 处理网页预览按钮
+        const previewBtn = target.closest('.code-preview-btn') as HTMLElement | null
+        if (previewBtn) {
+            const wrapper = previewBtn.closest('.code-block-wrapper[data-engine="trusted-code-block"]')
+            if (!wrapper) return
+
+            const code = wrapper.querySelector('pre.hljs code')?.textContent ?? ''
+            const { openPreview } = useWebPreview()
+            openPreview(code)
+            return
+        }
 
         // 处理复制按钮
         const copyBtn = target.closest('.code-copy-btn') as HTMLElement | null

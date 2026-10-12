@@ -8,6 +8,7 @@ import AgentWorkspace from './views/AgentWorkspace.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import LoginModal from './components/LoginModal.vue'
+import WebPreviewModal from './components/WebPreviewModal.vue'
 import { settings, type ThemeType } from './stores/settings'
 import { useAuthStore } from './stores/auth'
 
@@ -148,6 +149,7 @@ watch(() => settings.theme, applyTheme)
     <SettingsPanel v-if="settingsOpen" @close="settingsOpen = false" />
     <ConfirmDialog />
     <LoginModal />
+    <WebPreviewModal />
   </div>
 </template>
 

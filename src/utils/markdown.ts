@@ -2,6 +2,7 @@ import MarkdownIt from 'markdown-it'
 import taskLists from 'markdown-it-task-lists'
 import hljs from 'highlight.js/lib/common'
 import { mathPlugin } from './math'
+import { sanitizeHtml } from './sanitize'
 import 'highlight.js/styles/github-dark.css'
 import 'katex/dist/katex.min.css'
 
@@ -35,5 +36,7 @@ md.use(taskLists, { enabled: true, label: true })
 md.use(mathPlugin)
 
 export function renderMarkdown(text: string): string {
-    return md.render(text)
+    const rawHtml = md.render(text)
+    return sanitizeHtml(rawHtml)
 }
+

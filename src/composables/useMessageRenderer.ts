@@ -1,4 +1,5 @@
 import { renderMarkdown } from '../utils/markdown'
+import { sanitizeHtml } from '../utils/sanitize'
 import type { Message } from '../types/chat'
 
 // 针对已完成的静态消息（用户历史提问、完成的AI回复），使用内存缓存避免反复全量跑 markdown-it + katex 解析
@@ -15,8 +16,9 @@ export function useMessageRenderer() {
             return ''
         }
         if (msg.formattedContent) {
-            return msg.formattedContent
+            return sanitizeHtml(msg.formattedContent)
         }
+
 
         const isStatic = msg.status === 'done' || msg.status === 'aborted' || msg.status === 'error'
         if (isStatic) {
@@ -53,7 +55,10 @@ export function useMessageRenderer() {
         // 处理复制按钮
         const copyBtn = target.closest('.code-copy-btn') as HTMLElement | null
         if (copyBtn) {
-            const code = copyBtn.closest('.code-block-wrapper')?.querySelector('code')?.textContent ?? ''
+            const wrapper = copyBtn.closest('.code-block-wrapper[data-engine="trusted-code-block"]')
+            if (!wrapper) return
+
+            const code = wrapper.querySelector('pre.hljs code')?.textContent ?? ''
             navigator.clipboard.writeText(code).then(() => {
                 copyBtn.textContent = '已复制 ✓'
                 copyBtn.classList.add('copied')
@@ -68,8 +73,10 @@ export function useMessageRenderer() {
         // 处理代码块换行/滚动切换按钮
         const wrapBtn = target.closest('.code-wrap-btn') as HTMLElement | null
         if (wrapBtn) {
-            const wrapper = wrapBtn.closest('.code-block-wrapper')
-            const pre = wrapper?.querySelector('pre')
+            const wrapper = wrapBtn.closest('.code-block-wrapper[data-engine="trusted-code-block"]')
+            if (!wrapper) return
+
+            const pre = wrapper.querySelector('pre')
             if (pre) {
                 const isWrapped = pre.classList.toggle('wrap-text')
                 wrapBtn.textContent = isWrapped ? '滚动' : '换行'
@@ -81,3 +88,4 @@ export function useMessageRenderer() {
 
     return { renderContent, handleCodeBlockCopy }
 }
+

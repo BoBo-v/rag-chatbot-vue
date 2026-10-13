@@ -779,18 +779,23 @@ export function useChatView() {
         options: RunStreamOptions,
         runId: string,
         initialSequence: number,
+        needInitialSnapshot = false,
     ): Promise<void> {
         const retryDelays = [1000, 2000, 4000, 8000, 15000]
         let attempt = 0
         let afterSequence = initialSequence
+        let shouldFetchSnapshot = needInitialSnapshot
 
         while (true) {
             if (streamCtrl?.isAborted) return
 
-            // 若是重连轮次（attempt > 0），先拉取最新快照：若已完成则短路退出
-            if (attempt > 0) {
+            // 若是重连轮次（attempt > 0）或需要初始同步，先拉取最新快照：若已完成则短路退出
+            if (attempt > 0 || shouldFetchSnapshot) {
                 try {
                     const snapshot = await getBackendChatRun(runId, { signal: streamCtrl?.controller.signal })
+                    if (snapshot.assistantMessageId !== options.aiMessageId || snapshot.conversationId !== String(options.convId)) {
+                        throw new Error('生成任务与当前聊天消息不匹配。')
+                    }
                     updateMessage(options.aiMessageId, { generationRunStatus: snapshot.status })
 
                     // 后端已经完成、失败或取消时，直接应用终态快照，无需再发起 SSE 连接！
@@ -809,13 +814,33 @@ export function useChatView() {
                             content: snapshot.outputText,
                             generationSequence: snapshot.lastSequence,
                         })
+                    } else if (snapshot.outputText && (!currentMsg?.content || currentMsg.content !== snapshot.outputText)) {
+                        updateMessage(options.aiMessageId, {
+                            content: snapshot.outputText,
+                            generationSequence: snapshot.lastSequence,
+                        })
+                        afterSequence = snapshot.lastSequence
                     } else {
                         afterSequence = localSeq
                     }
+                    shouldFetchSnapshot = false
                 } catch (snapErr) {
-                    if (isNonRetryableError(snapErr)) {
+                    if (streamCtrl?.isAborted) return
+                    if (isNonRetryableError(snapErr) || attempt >= retryDelays.length) {
                         throw snapErr
                     }
+                    const baseDelay = retryDelays[attempt]
+                    const jitter = Math.floor(Math.random() * 500)
+                    const delay = baseDelay + jitter
+                    attempt++
+
+                    toast.show(`连接中断，正在恢复 (${attempt}/${retryDelays.length})...`, 'warning', 2500)
+                    updateMessage(options.aiMessageId, {
+                        errorMessage: `连接中断，正在恢复 (${attempt}/${retryDelays.length})...`,
+                    })
+
+                    await sleepWithAbort(delay, streamCtrl?.controller.signal)
+                    continue
                 }
             } else {
                 const currentMsg = messages.value.find(item => item.id === options.aiMessageId)
@@ -911,39 +936,10 @@ export function useChatView() {
         if (!message) throw new Error('找不到待恢复的助手消息。')
 
         activeGenerationRunId = runId
-        const snapshot = await getBackendChatRun(runId, { signal: streamCtrl?.controller.signal })
-        if (snapshot.assistantMessageId !== options.aiMessageId || snapshot.conversationId !== String(options.convId)) {
-            throw new Error('生成任务与当前聊天消息不匹配。')
-        }
-
-        let afterSequence = message.generationSequence ?? 0
-        if (afterSequence > snapshot.lastSequence) {
-            afterSequence = snapshot.lastSequence
-            updateMessage(options.aiMessageId, {
-                content: snapshot.outputText,
-                formattedMarkdown: undefined,
-                formattedContent: undefined,
-                generationSequence: snapshot.lastSequence,
-            })
-        } else if (message.content !== snapshot.outputText) {
-            updateMessage(options.aiMessageId, {
-                content: snapshot.outputText,
-                formattedMarkdown: undefined,
-                formattedContent: undefined,
-                generationSequence: snapshot.lastSequence,
-            })
-            afterSequence = snapshot.lastSequence
-        }
-        updateMessage(options.aiMessageId, { generationRunStatus: snapshot.status })
-
-        // 关键改动：只要后端已到达终态（completed / cancelled / failed），直接应用终态快照，短路退出，不再发多余的 /events SSE
-        if (isTerminalRunStatus(snapshot.status)) {
-            applyTerminalRunSnapshot(options.aiMessageId, snapshot)
-            return
-        }
+        const afterSequence = message.generationSequence ?? 0
 
         await flushMessagePersist(options.aiMessageId, options.convId)
-        await subscribeChatRunEventsWithRetry(options, runId, afterSequence)
+        await subscribeChatRunEventsWithRetry(options, runId, afterSequence, true)
     }
 
     async function handleBackendRunEvent(options: RunStreamOptions, event: BackendChatRunEvent): Promise<void> {

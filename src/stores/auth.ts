@@ -25,6 +25,13 @@ const state = reactive<AuthState>({
 })
 
 export function useAuthStore() {
+    function invalidateSession(): void {
+        state.isAuthenticated = false
+        state.user = null
+        state.mustChangePassword = false
+        state.isChangePasswordModalVisible = false
+    }
+
     async function checkAuth(): Promise<boolean> {
         state.isChecking = true
         try {
@@ -40,17 +47,11 @@ export function useAuthStore() {
                 }
                 return true
             } else {
-                state.isAuthenticated = false
-                state.user = null
-                state.mustChangePassword = false
-                state.isChangePasswordModalVisible = false
+                invalidateSession()
                 return false
             }
         } catch {
-            state.isAuthenticated = false
-            state.user = null
-            state.mustChangePassword = false
-            state.isChangePasswordModalVisible = false
+            invalidateSession()
             return false
         } finally {
             state.isChecking = false
@@ -112,11 +113,8 @@ export function useAuthStore() {
         try {
             const res = await apiFetch('/api/auth/logout', { method: 'POST' })
             if (res.ok) {
-                state.isAuthenticated = false
-                state.user = null
-                state.mustChangePassword = false
+                invalidateSession()
                 state.isAuthModalVisible = false
-                state.isChangePasswordModalVisible = false
                 return { ok: true }
             } else {
                 const data = await res.json().catch(() => ({}))
@@ -151,6 +149,7 @@ export function useAuthStore() {
         login,
         logout,
         changePassword,
+        invalidateSession,
         openLoginModal,
         closeLoginModal,
         openChangePasswordModal,

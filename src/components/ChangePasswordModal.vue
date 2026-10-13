@@ -223,8 +223,18 @@ function handleClose() {
 async function handleLogout() {
   if (loading.value) return
   loading.value = true
-  await authStore.logout()
-  loading.value = false
+  errorMessage.value = ''
+  try {
+    const result = await authStore.logout()
+    if (!result.ok) {
+      errorMessage.value = result.error || '退出登录失败，请重试。'
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : '网络异常，退出登录失败。'
+    errorMessage.value = message
+  } finally {
+    loading.value = false
+  }
 }
 
 async function handleSubmit() {
@@ -261,16 +271,21 @@ async function handleSubmit() {
   }
 
   loading.value = true
-  const result = await authStore.changePassword(oldPassword.value, newPassword.value)
-  loading.value = false
-
-  if (result.ok) {
-    oldPassword.value = ''
-    newPassword.value = ''
-    confirmPassword.value = ''
-    errorMessage.value = ''
-  } else {
-    errorMessage.value = result.error || '修改密码失败，请核对原密码并重试。'
+  try {
+    const result = await authStore.changePassword(oldPassword.value, newPassword.value)
+    if (result.ok) {
+      oldPassword.value = ''
+      newPassword.value = ''
+      confirmPassword.value = ''
+      errorMessage.value = ''
+    } else {
+      errorMessage.value = result.error || '修改密码失败，请核对原密码并重试。'
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : '网络异常，修改密码请求未送达后端。'
+    errorMessage.value = message
+  } finally {
+    loading.value = false
   }
 }
 

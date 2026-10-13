@@ -33,8 +33,7 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
         const cleanPath = path.split('?')[0]
         if (cleanPath !== '/api/auth/login' && cleanPath !== '/api/auth/me') {
             const authStore = useAuthStore()
-            authStore.isAuthenticated.value = false
-            authStore.user.value = null
+            authStore.invalidateSession()
             if (!authStore.isAuthModalVisible.value) {
                 authStore.openLoginModal()
             }

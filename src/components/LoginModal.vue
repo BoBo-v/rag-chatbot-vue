@@ -367,6 +367,11 @@ watch(isAuthModalVisible, async (visible) => {
   color: var(--text-placeholder, #6f677c);
 }
 
+.auth-input::-ms-reveal,
+.auth-input::-ms-clear {
+  display: none;
+}
+
 .auth-input:hover:not(:disabled) {
   border-color: var(--border-strong, rgba(167, 139, 250, 0.38));
 }
@@ -388,6 +393,7 @@ watch(isAuthModalVisible, async (visible) => {
 .password-toggle-btn {
   position: absolute;
   right: 6px;
+  z-index: 2;
   width: 28px;
   height: 28px;
   display: grid;

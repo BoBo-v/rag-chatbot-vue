@@ -904,6 +904,36 @@
     min-width: 0;
 }
 
+.conv-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    margin-right: 4px;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.conv-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--accent, #a78bfa);
+    box-shadow: 0 0 6px var(--accent, #a78bfa);
+    animation: conv-dot-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes conv-dot-pulse {
+    0%, 100% {
+        opacity: 0.35;
+        transform: scale(0.85);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+
 .conv-del {
     flex-shrink: 0;
     width: 20px;

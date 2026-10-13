@@ -6,6 +6,23 @@ import type { Conversation } from '../types/chat'
 // conversations 用于侧边栏列表，currentId 表示当前正在打开的会话。
 const conversations = ref<Conversation[]>([])
 const currentId = ref<number | null>(null)
+const generatingConvIds = ref<Set<number>>(new Set())
+
+function markConversationGenerating(id: number) {
+    if (!generatingConvIds.value.has(id)) {
+        const next = new Set(generatingConvIds.value)
+        next.add(id)
+        generatingConvIds.value = next
+    }
+}
+
+function unmarkConversationGenerating(id: number) {
+    if (generatingConvIds.value.has(id)) {
+        const next = new Set(generatingConvIds.value)
+        next.delete(id)
+        generatingConvIds.value = next
+    }
+}
 
 export function useConversations() {
     // 从 IndexedDB 读取全部会话，并按更新时间倒序排列。
@@ -59,6 +76,9 @@ export function useConversations() {
     return {
         conversations,
         currentId,
+        generatingConvIds,
+        markConversationGenerating,
+        unmarkConversationGenerating,
         loadAll,
         createConversation,
         selectConversation,

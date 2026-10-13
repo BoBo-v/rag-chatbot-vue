@@ -56,7 +56,17 @@
               :class="{ active: result.conversationId === currentId }"
               @click="handleSearchResultClick(result.conversationId)"
           >
-            <div class="search-result-title">{{ result.title }}</div>
+            <div class="search-result-title">
+              {{ result.title }}
+              <span
+                  v-if="generatingConvIds.has(result.conversationId)"
+                  class="conv-status-badge"
+                  title="AI 回复中..."
+                  aria-label="AI 回复中"
+              >
+                <span class="conv-status-dot"></span>
+              </span>
+            </div>
             <div class="search-result-snippet">{{ result.snippet || '无内容预览' }}</div>
           </div>
           <div v-if="searchError" class="conv-empty search-empty">
@@ -113,6 +123,14 @@
                     :title="conv.title"
                     @dblclick.stop="startRenameConversation(conv.id, conv.title)"
                 >{{ conv.title }}</span>
+                <span
+                    v-if="generatingConvIds.has(conv.id)"
+                    class="conv-status-badge"
+                    title="AI 回复中..."
+                    aria-label="AI 回复中"
+                >
+                  <span class="conv-status-dot"></span>
+                </span>
                 <div class="conv-actions">
                   <button
                       class="conv-action-btn"
@@ -688,6 +706,7 @@ const {
   sidebarOpen,
   conversations,
   currentId,
+  generatingConvIds,
   toast,
   pendingImages,
   pendingFiles,

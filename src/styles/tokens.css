@@ -79,7 +79,9 @@
 
   /* Semantic content */
   --text-primary: #f4f1fa;
+  --text-bright: #f4f1fa;
   --text-secondary: #b8b1c5;
+  --text-normal: #b8b1c5;
   --text-muted: #81798f;
   --text-faint: #5e5769;
   --text-placeholder: #6f677c;
@@ -98,11 +100,14 @@
 
   /* Semantic brand and data colors */
   --accent: var(--violet-400);
+  --accent-light: var(--violet-300);
   --accent-deep: var(--violet-500);
+  --accent-dark: var(--violet-600);
   --accent-deeper: var(--violet-600);
   --accent-bg: rgba(139, 92, 246, 0.16);
   --accent-border: rgba(167, 139, 250, 0.36);
   --accent-glow: rgba(139, 92, 246, 0.28);
+  --accent-soft: rgba(167, 139, 250, 0.18);
   --accent-text: #c9b9ff;
   --data-accent: var(--cyan-400);
   --data-accent-bg: rgba(34, 211, 238, 0.10);
@@ -149,7 +154,9 @@
   --bg-sidebar-overlay: rgba(29, 23, 40, 0.32);
 
   --text-primary: #191424;
+  --text-bright: #191424;
   --text-secondary: #494154;
+  --text-normal: #494154;
   --text-muted: #6e657c;
   --text-faint: #91889e;
   --text-placeholder: #8b8198;
@@ -166,11 +173,14 @@
   --scrollbar-thumb: rgba(109, 40, 217, 0.22);
 
   --accent: var(--violet-600);
+  --accent-light: var(--violet-500);
   --accent-deep: var(--violet-600);
+  --accent-dark: var(--violet-700);
   --accent-deeper: var(--violet-700);
   --accent-bg: rgba(124, 58, 237, 0.09);
   --accent-border: rgba(124, 58, 237, 0.26);
   --accent-glow: rgba(124, 58, 237, 0.16);
+  --accent-soft: rgba(124, 58, 237, 0.14);
   --accent-text: #6d28d9;
   --data-accent: var(--cyan-600);
   --data-accent-bg: rgba(8, 145, 178, 0.09);

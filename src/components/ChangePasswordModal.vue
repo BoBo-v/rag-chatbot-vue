@@ -348,14 +348,14 @@ watch(isChangePasswordModalVisible, async (visible) => {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--accent-light, #c084fc);
+  color: var(--accent-text, #c4b5fd);
 }
 
 .auth-title {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: var(--text-bright, #f8fafc);
+  color: var(--text-primary, #f4f1fa);
   letter-spacing: -0.01em;
 }
 
@@ -363,7 +363,7 @@ watch(isChangePasswordModalVisible, async (visible) => {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted, #81798f);
 }
 
 .auth-close-btn {
@@ -373,7 +373,7 @@ watch(isChangePasswordModalVisible, async (visible) => {
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-secondary, #b8b1c5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -382,9 +382,9 @@ watch(isChangePasswordModalVisible, async (visible) => {
 }
 
 .auth-close-btn:hover {
-  background: var(--bg-hover, rgba(196, 181, 253, 0.08));
-  color: var(--text-bright, #f8fafc);
-  border-color: var(--border-subtle, rgba(196, 181, 253, 0.1));
+  background: var(--accent-bg, rgba(167, 139, 250, 0.12));
+  color: var(--accent-text, #c4b5fd);
+  border-color: var(--accent-border, rgba(167, 139, 250, 0.3));
 }
 
 .auth-form {
@@ -400,16 +400,16 @@ watch(isChangePasswordModalVisible, async (visible) => {
   gap: 8px;
   padding: 10px 14px;
   border-radius: var(--radius-md, 8px);
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  color: #fca5a5;
+  background: var(--danger-bg, rgba(239, 68, 68, 0.12));
+  border: 1px solid var(--danger-border, rgba(239, 68, 68, 0.35));
+  color: var(--danger, #fca5a5);
   font-size: 12px;
   line-height: 1.4;
 }
 
 .error-icon {
   flex-shrink: 0;
-  color: #ef4444;
+  color: var(--danger, #ef4444);
 }
 
 .auth-field {
@@ -427,12 +427,12 @@ watch(isChangePasswordModalVisible, async (visible) => {
 .auth-label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-normal, #cbd5e1);
+  color: var(--text-secondary, #b8b1c5);
 }
 
 .auth-requirement-hint {
   font-size: 11px;
-  color: var(--text-faint, #64748b);
+  color: var(--text-faint, #5e5769);
 }
 
 .auth-input-wrapper {
@@ -444,7 +444,7 @@ watch(isChangePasswordModalVisible, async (visible) => {
 .field-icon {
   position: absolute;
   left: 12px;
-  color: var(--text-faint, #64748b);
+  color: var(--text-placeholder, #6f677c);
   pointer-events: none;
 }
 
@@ -453,11 +453,12 @@ watch(isChangePasswordModalVisible, async (visible) => {
   height: 40px;
   padding: 0 14px 0 38px;
   font-size: 13px;
-  color: var(--text-bright, #f8fafc);
-  background: var(--bg-input, rgba(15, 23, 42, 0.6));
-  border: 1px solid var(--border, rgba(196, 181, 253, 0.2));
+  color: var(--text-primary, #f4f1fa);
+  background: var(--bg-input, #12101a);
+  border: 1px solid var(--border-subtle, rgba(196, 181, 253, 0.13));
   border-radius: var(--radius-md, 8px);
   outline: none;
+  font-family: var(--font-sans, inherit);
   transition: border-color var(--motion-fast, 140ms) ease, box-shadow var(--motion-fast, 140ms) ease;
 }
 
@@ -465,9 +466,18 @@ watch(isChangePasswordModalVisible, async (visible) => {
   padding-right: 38px;
 }
 
+.auth-input::placeholder {
+  color: var(--text-placeholder, #6f677c);
+}
+
+.auth-input::-ms-reveal,
+.auth-input::-ms-clear {
+  display: none;
+}
+
 .auth-input:focus {
-  border-color: var(--accent-light, #c084fc);
-  box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.15);
+  border-color: var(--accent, #a78bfa);
+  box-shadow: 0 0 0 2px var(--accent-soft, rgba(167, 139, 250, 0.18));
 }
 
 .auth-input:disabled {
@@ -477,7 +487,8 @@ watch(isChangePasswordModalVisible, async (visible) => {
 
 .password-toggle-btn {
   position: absolute;
-  right: 10px;
+  right: 8px;
+  z-index: 2;
   width: 26px;
   height: 26px;
   display: flex;
@@ -485,14 +496,14 @@ watch(isChangePasswordModalVisible, async (visible) => {
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--text-faint, #64748b);
+  color: var(--text-placeholder, #6f677c);
   border-radius: 4px;
   cursor: pointer;
   transition: color var(--motion-fast, 140ms) ease;
 }
 
 .password-toggle-btn:hover {
-  color: var(--text-bright, #f8fafc);
+  color: var(--text-primary, #f4f1fa);
 }
 
 .auth-actions {
@@ -520,8 +531,8 @@ watch(isChangePasswordModalVisible, async (visible) => {
 }
 
 .auth-cancel-btn:hover:not(:disabled) {
-  background: var(--bg-hover, rgba(196, 181, 253, 0.12));
-  color: var(--text-bright, #f8fafc);
+  background: var(--bg-surface-3, #1d1729);
+  color: var(--text-primary, #f4f1fa);
 }
 
 .auth-cancel-btn.logout-variant {

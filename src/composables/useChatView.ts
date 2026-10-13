@@ -51,7 +51,7 @@ export function useChatView() {
     } = useChat()
 
     const {
-        conversations, currentId,
+        conversations, currentId, generatingConvIds, markConversationGenerating, unmarkConversationGenerating,
         loadAll, createConversation, selectConversation, deleteConversation, renameConversation, refreshList,
     } = useConversations()
 
@@ -107,12 +107,13 @@ export function useChatView() {
     const detachedGenerationMessages = new Set<string>()
     let activeStreamTransport: 'direct' | 'backend' | null = null
     let activeStreamSettled: Promise<void> | null = null
-    let conversationNavigationPending = false
     let resumeCheckTimer: ReturnType<typeof setTimeout> | null = null
+    let switchSeq = 0
 
     // ── 会话切换 ─────────────────────────────────────────────
 
     watch(currentId, async (newId) => {
+        const currentSeq = ++switchSeq
         // currentId is the single source of truth for conversation switching.
         // When it changes, load that conversation's messages into the chat window.
         if (suppressConvWatch) {
@@ -124,6 +125,7 @@ export function useChatView() {
         } else {
             clearMessages()
         }
+        if (currentSeq !== switchSeq) return
         await nextTick()
         resetAfterConversationChange()
         if (newId !== null) void resumePendingGeneration(newId)
@@ -151,41 +153,29 @@ export function useChatView() {
 
     async function prepareForConversationNavigation(): Promise<boolean> {
         if (!isStreaming.value) return true
-        if (conversationNavigationPending) return false
 
-        conversationNavigationPending = true
-        try {
-            if (activeStreamTransport === 'backend') {
-                if (!streamCtrl || !activeGenerationRunId) {
-                    toast.show('后台任务正在建立，请稍后再切换会话', 'warning')
-                    return false
-                }
-
-                const messageId = streamCtrl.messageId
+        if (activeStreamTransport === 'backend') {
+            const messageId = streamCtrl?.messageId
+            if (messageId) {
                 const convId = streamMessageConversations.get(messageId)
-                if (convId !== undefined) await flushMessagePersist(messageId, convId)
-
+                if (convId !== undefined) void flushMessagePersist(messageId, convId)
                 detachedGenerationMessages.add(messageId)
-                streamCtrl.controller.abort()
-                await waitForActiveStreamToSettle()
+                streamCtrl?.controller.abort()
                 toast.show('回答已转到后台生成，返回该会话时会自动恢复', 'success')
-                return true
             }
-
-            const confirmed = await confirm({
-                title: '停止回答并切换会话？',
-                message: '当前为直连模式。切换会话会停止正在生成的回答，离开后无法自动恢复。',
-                confirmText: '停止并切换',
-                cancelText: '继续等待',
-            })
-            if (!confirmed) return false
-
-            handleStop()
-            await waitForActiveStreamToSettle()
             return true
-        } finally {
-            conversationNavigationPending = false
         }
+
+        const confirmed = await confirm({
+            title: '停止回答并切换会话？',
+            message: '当前为直连模式。切换会话会停止正在生成的回答，离开后无法自动恢复。',
+            confirmText: '停止并切换',
+            cancelText: '继续等待',
+        })
+        if (!confirmed) return false
+
+        handleStop()
+        return true
     }
 
     async function waitForActiveStreamToSettle(): Promise<void> {
@@ -204,6 +194,7 @@ export function useChatView() {
         })
         if (!confirmed) return
 
+        unmarkConversationGenerating(id)
         await deleteConversation(id)
         // Search index data is derived data. If cleanup fails, chat deletion should still succeed.
         void searchService.deleteConversation(id).catch(err => {
@@ -437,6 +428,8 @@ export function useChatView() {
             createdAt: userCreatedAt,
         })
         queueSearchIndex(userMessage, convId, userCreatedAt)
+        await db.conversations.update(convId, { updatedAt: userCreatedAt })
+        await refreshList()
 
         const aiMsg = createAssistantMessage()
         await scrollToBottom()
@@ -645,6 +638,7 @@ export function useChatView() {
         activeStreamTransport = options.resumeRunId ? 'backend' : runtime.transport
         streamCtrl = createStreamController(options.aiMessageId)
         isStreaming.value = true
+        markConversationGenerating(options.convId)
         await nextTick()
         scheduleScroll()
         const requestMessages = options.contextMessages ?? messages.value
@@ -668,6 +662,7 @@ export function useChatView() {
                     },
                     onDone: () => {
                         needsStatusFallback = false
+                        unmarkConversationGenerating(options.convId)
                         typewriter.markDone(options.aiMessageId)
                     },
                     signal: streamCtrl.controller.signal,
@@ -678,6 +673,7 @@ export function useChatView() {
                 needsStatusFallback = false
                 return
             }
+            unmarkConversationGenerating(options.convId)
             if (streamCtrl?.isAborted) {
                 needsStatusFallback = false
                 updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
@@ -709,9 +705,13 @@ export function useChatView() {
                 await typewriter.waitForPendingDone()
 
                 if (needsStatusFallback) {
-                    if (streamCtrl?.isAborted) {
+                    if (detachedGenerationMessages.has(options.aiMessageId)) {
+                        // 处于转入后台生成的任务，保留后台生成状态，绝不标记为 aborted 或 done
+                    } else if (streamCtrl?.isAborted) {
+                        unmarkConversationGenerating(options.convId)
                         updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
                     } else {
+                        unmarkConversationGenerating(options.convId)
                         updateMessage(options.aiMessageId, { status: 'done' })
                     }
                 }
@@ -722,11 +722,14 @@ export function useChatView() {
                 } else {
                     await flushMessagePersist(options.aiMessageId, options.convId)
                 }
-                const updatedAt = Date.now()
-                await db.conversations.update(options.convId, { updatedAt })
-                await refreshList()
-                if (aiMessage && (!aiMessage.generationRunId || isTerminalRunStatus(aiMessage.generationRunStatus))) {
-                    queueSearchIndex(aiMessage, options.convId, updatedAt, updatedAt)
+                const isDetached = detachedGenerationMessages.has(options.aiMessageId)
+                if (!isDetached) {
+                    const updatedAt = Date.now()
+                    await db.conversations.update(options.convId, { updatedAt })
+                    await refreshList()
+                    if (aiMessage && (!aiMessage.generationRunId || isTerminalRunStatus(aiMessage.generationRunStatus))) {
+                        queueSearchIndex(aiMessage, options.convId, updatedAt, updatedAt)
+                    }
                 }
             } finally {
                 detachedGenerationMessages.delete(options.aiMessageId)
@@ -801,7 +804,7 @@ export function useChatView() {
                     // 后端已经完成、失败或取消时，直接应用终态快照，无需再发起 SSE 连接！
                     if (isTerminalRunStatus(snapshot.status)) {
                         updateMessage(options.aiMessageId, { errorMessage: undefined })
-                        applyTerminalRunSnapshot(options.aiMessageId, snapshot)
+                        applyTerminalRunSnapshot(options.aiMessageId, snapshot, options.convId)
                         return
                     }
 
@@ -915,7 +918,7 @@ export function useChatView() {
             sourceUserMessageId,
             assistantMessageId: options.aiMessageId,
             regeneratedFromRunId: options.regeneratedFromRunId,
-        }, { signal: streamCtrl?.controller.signal })
+        })
 
         activeGenerationRunId = created.run.runId
         const afterSequence = message.generationRunId === created.run.runId
@@ -927,6 +930,11 @@ export function useChatView() {
             generationSequence: afterSequence,
         })
         await flushMessagePersist(options.aiMessageId, options.convId)
+        markConversationGenerating(options.convId)
+
+        if (detachedGenerationMessages.has(options.aiMessageId) || streamCtrl?.isAborted) {
+            return
+        }
 
         await subscribeChatRunEventsWithRetry(options, created.run.runId, afterSequence)
     }
@@ -970,11 +978,13 @@ export function useChatView() {
             }
             case 'run_completed':
                 needsStatusFallback = false
+                unmarkConversationGenerating(options.convId)
                 updateMessage(options.aiMessageId, { ...baseChanges, generationRunStatus: 'completed' })
                 typewriter.markDone(options.aiMessageId)
                 break
             case 'run_failed': {
                 needsStatusFallback = false
+                unmarkConversationGenerating(options.convId)
                 const errorMessage = typeof event.data.message === 'string' ? event.data.message : '生成任务失败。'
                 updateMessage(options.aiMessageId, {
                     ...baseChanges,
@@ -987,6 +997,7 @@ export function useChatView() {
             }
             case 'run_cancelled':
                 needsStatusFallback = false
+                unmarkConversationGenerating(options.convId)
                 updateMessage(options.aiMessageId, {
                     ...baseChanges,
                     status: 'aborted',
@@ -1014,8 +1025,12 @@ export function useChatView() {
     function applyTerminalRunSnapshot(
         messageId: string,
         snapshot: Awaited<ReturnType<typeof getBackendChatRun>>,
+        convId?: number,
     ): void {
         needsStatusFallback = false
+        if (convId !== undefined) {
+            unmarkConversationGenerating(convId)
+        }
         if (snapshot.status === 'completed') {
             updateMessage(messageId, {
                 content: snapshot.outputText,
@@ -1050,6 +1065,8 @@ export function useChatView() {
     }
 
     async function resumePendingGeneration(convId: number): Promise<void> {
+        if (currentId.value !== convId) return
+        await waitForActiveStreamToSettle()
         if (isStreaming.value || currentId.value !== convId) return
         const pending = [...messages.value].reverse().find(message =>
             message.role === 'assistant'
@@ -1106,6 +1123,20 @@ export function useChatView() {
         void searchService.ensureIndex().catch(err => {
             console.warn('[search] 初始化索引失败', err)
         })
+        try {
+            const unfinishedRuns = await db.messages.filter(msg =>
+                msg.role === 'assistant'
+                && Boolean(msg.generationRunId)
+                && !isTerminalRunStatus(msg.generationRunStatus)
+            ).toArray()
+            for (const msg of unfinishedRuns) {
+                if (typeof msg.conversationId === 'number') {
+                    markConversationGenerating(msg.conversationId)
+                }
+            }
+        } catch (e) {
+            console.warn('[generatingConvIds] 恢复未完成状态失败', e)
+        }
         if (conversations.value.length > 0 && currentId.value === null) {
             const latestId = conversations.value[0].id!
             selectConversation(latestId)
@@ -1151,6 +1182,7 @@ export function useChatView() {
         sidebarOpen,
         conversations,
         currentId,
+        generatingConvIds,
         toast,
         pendingImages,
         pendingFiles,

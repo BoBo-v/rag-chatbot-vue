@@ -362,9 +362,24 @@ export function useChatView() {
     function handleStop() {
         // 后端 Run 必须显式 DELETE 才会停止模型；中断 SSE 本身不会取消后台任务。
         if (!streamCtrl) return
+        const msgId = streamCtrl.messageId
         const runId = activeGenerationRunId
-        typewriter.abort(streamCtrl.messageId)
+        const convId = streamMessageConversations.get(msgId) ?? currentId.value
+
+        typewriter.abort(msgId)
         streamCtrl.abort()
+
+        // 立即在内存与界面将该消息设为取消终态，防止切换会话后被误恢复
+        updateMessage(msgId, {
+            status: 'aborted',
+            canContinue: true,
+            generationRunStatus: 'cancelled',
+        })
+        if (convId !== null) {
+            unmarkConversationGenerating(convId)
+            void flushMessagePersist(msgId, convId)
+        }
+
         if (runId) {
             void cancelBackendChatRun(runId).catch(err => {
                 console.warn('[chat] 取消后端生成任务失败', err)
@@ -709,7 +724,11 @@ export function useChatView() {
                         // 处于转入后台生成的任务，保留后台生成状态，绝不标记为 aborted 或 done
                     } else if (streamCtrl?.isAborted) {
                         unmarkConversationGenerating(options.convId)
-                        updateMessage(options.aiMessageId, { status: 'aborted', canContinue: true })
+                        updateMessage(options.aiMessageId, {
+                            status: 'aborted',
+                            canContinue: true,
+                            generationRunStatus: 'cancelled',
+                        })
                     } else {
                         unmarkConversationGenerating(options.convId)
                         updateMessage(options.aiMessageId, { status: 'done' })
@@ -924,6 +943,20 @@ export function useChatView() {
         const afterSequence = message.generationRunId === created.run.runId
             ? message.generationSequence ?? 0
             : 0
+
+        // 检查在建单接口返回的这几十毫秒内，用户是否已经点击了停止
+        if (streamCtrl?.isAborted) {
+            void cancelBackendChatRun(created.run.runId).catch(() => undefined)
+            updateMessage(options.aiMessageId, {
+                generationRunId: created.run.runId,
+                generationRunStatus: 'cancelled',
+                status: 'aborted',
+                canContinue: true,
+            })
+            await flushMessagePersist(options.aiMessageId, options.convId)
+            return
+        }
+
         updateMessage(options.aiMessageId, {
             generationRunId: created.run.runId,
             generationRunStatus: created.run.status,
@@ -932,7 +965,7 @@ export function useChatView() {
         await flushMessagePersist(options.aiMessageId, options.convId)
         markConversationGenerating(options.convId)
 
-        if (detachedGenerationMessages.has(options.aiMessageId) || streamCtrl?.isAborted) {
+        if (detachedGenerationMessages.has(options.aiMessageId)) {
             return
         }
 
@@ -1071,6 +1104,7 @@ export function useChatView() {
         const pending = [...messages.value].reverse().find(message =>
             message.role === 'assistant'
             && Boolean(message.generationRunId)
+            && message.status !== 'aborted'
             && !isTerminalRunStatus(message.generationRunStatus)
         )
         if (!pending?.generationRunId) return
@@ -1127,6 +1161,7 @@ export function useChatView() {
             const unfinishedRuns = await db.messages.filter(msg =>
                 msg.role === 'assistant'
                 && Boolean(msg.generationRunId)
+                && msg.status !== 'aborted'
                 && !isTerminalRunStatus(msg.generationRunStatus)
             ).toArray()
             for (const msg of unfinishedRuns) {

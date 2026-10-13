@@ -230,7 +230,7 @@
       </header>
 
       <!-- ── 消息区 ── -->
-      <div ref="containerRef" class="chat" @click="handleCodeBlockCopy">
+      <div ref="containerRef" class="chat">
         <div class="messages-inner">
 
           <!-- 空状态 -->
@@ -709,7 +709,17 @@ const {
 void containerRef
 
 // 三个 composable 分别负责：消息 Markdown 渲染、侧边栏会话分组、侧边栏搜索。
-const { renderContent, handleCodeBlockAction, handleCodeBlockCopy } = useMessageRenderer()
+const { renderContent, handleCodeBlockAction, clearSnapshots, retainMessages } = useMessageRenderer()
+
+watch(currentId, () => {
+  clearSnapshots()
+})
+
+watch(messages, (newMessages) => {
+  if (Array.isArray(newMessages)) {
+    retainMessages(newMessages.map((m) => m.id))
+  }
+}, { deep: false })
 const { groupedConversations, currentModelName } = useConversationGroups(conversations)
 const {
   conversationSearchDraft,

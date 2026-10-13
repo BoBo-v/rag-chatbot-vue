@@ -3,8 +3,6 @@ import taskLists from 'markdown-it-task-lists'
 import hljs from 'highlight.js/lib/common'
 import { mathPlugin } from './math'
 import { sanitizeHtml } from './sanitize'
-import 'highlight.js/styles/github-dark.css'
-import 'katex/dist/katex.min.css'
 
 export interface CodeBlockEntry {
     id: string
@@ -30,14 +28,21 @@ const md: MarkdownIt = new MarkdownIt({
 md.use(taskLists, { enabled: true, label: true })
 md.use(mathPlugin)
 
+function generateSecurePrefix(ownerMessageId?: string): string {
+    const randomSuffix = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+        : Math.random().toString(36).slice(2, 10)
+    return ownerMessageId
+        ? `cb_${ownerMessageId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${randomSuffix}_`
+        : `cb_${randomSuffix}_`
+}
+
 export function renderMarkdownDocument(source: string, ownerMessageId?: string): MarkdownRenderResult {
     const blocks = new Map<string, CodeBlockEntry>()
     let blockIndex = 0
 
-    // 生成当前渲染周期专用的前缀，避免与其他消息 ID 碰撞
-    const safePrefix = ownerMessageId
-        ? `cb_${ownerMessageId.replace(/[^a-zA-Z0-9_-]/g, '_')}_`
-        : `cb_${Math.random().toString(36).slice(2, 9)}_`
+    // 生成当前渲染周期不可伪造的专有随机前缀
+    const safePrefix = generateSecurePrefix(ownerMessageId)
 
     md.options.highlight = (str: string, lang: string): string => {
         blockIndex++
@@ -60,15 +65,14 @@ export function renderMarkdownDocument(source: string, ownerMessageId?: string):
             codeHtml = md.utils.escapeHtml(str)
         }
 
-        // 输出纯净 wrapper 容器与代码，控制按钮稍后在 DOMPurify 净化后精准安全注入
-        return `<div class="code-block-wrapper" id="${blockId}"><pre class="hljs"><code>${codeHtml}</code></pre></div>`
+        // 先输出干净的占位容器，无 code-block-wrapper 样式类，防止被混淆
+        return `<div id="${blockId}"><pre class="hljs"><code>${codeHtml}</code></pre></div>`
     }
 
     const rawHtml = md.render(source || '')
     const sanitizedHtml = sanitizeHtml(rawHtml)
 
-    // DOMPurify 净化完毕后，仅在经由本次渲染登记的受信代码块容器中注入控制按钮
-    // 这样既防止任何未授权的伪造代码块按钮，又避免按钮被 DOMPurify 误杀或属性丢失
+    // DOMPurify 净化完毕后，仅在经由本次渲染登记的受信容器中赋权 wrapper 类名并注入操作按钮
     let finalHtml = sanitizedHtml
     for (const [blockId, block] of blocks.entries()) {
         const langLabel = block.lang
@@ -81,11 +85,11 @@ export function renderMarkdownDocument(source: string, ownerMessageId?: string):
         const actions = `<div class="code-block-actions">${previewBtn}<button type="button" class="code-action-btn code-wrap-btn" title="切换自动换行">换行</button><button type="button" class="code-action-btn code-copy-btn" title="复制代码">复制</button></div>`
         const header = `<div class="code-block-header">${langLabel}${actions}</div>`
 
-        const targetOpenTag = `<div class="code-block-wrapper" id="${blockId}">`
+        const targetOpenTag = `<div id="${blockId}">`
         const targetIndex = finalHtml.indexOf(targetOpenTag)
         if (targetIndex !== -1) {
-            const insertPos = targetIndex + targetOpenTag.length
-            finalHtml = finalHtml.slice(0, insertPos) + header + finalHtml.slice(insertPos)
+            const replacement = `<div class="code-block-wrapper" id="${blockId}">${header}`
+            finalHtml = finalHtml.slice(0, targetIndex) + replacement + finalHtml.slice(targetIndex + targetOpenTag.length)
         }
     }
 

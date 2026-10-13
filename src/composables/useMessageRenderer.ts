@@ -53,29 +53,39 @@ export function useMessageRenderer() {
     }
 
     function getCodeBlockFromSnapshot(blockId: string, ownerMessageId?: string): CodeBlockEntry | undefined {
-        if (ownerMessageId) {
-            const snapshot = messageSnapshots.get(ownerMessageId)
-            const entry = snapshot?.blocks.get(blockId)
-            if (entry) return entry
+        if (!ownerMessageId) return undefined
+        const snapshot = messageSnapshots.get(ownerMessageId)
+        return snapshot?.blocks.get(blockId)
+    }
+
+    function releaseMessage(id: string): void {
+        messageSnapshots.delete(id)
+    }
+
+    function retainMessages(ids: string[]): void {
+        const idSet = new Set(ids)
+        for (const key of messageSnapshots.keys()) {
+            if (!idSet.has(key)) {
+                messageSnapshots.delete(key)
+            }
         }
-        // 回退遍历所有消息快照查找（适用于未显式传入 ownerMessageId 的容器级事件委托）
-        for (const snapshot of messageSnapshots.values()) {
-            const entry = snapshot.blocks.get(blockId)
-            if (entry) return entry
-        }
-        return undefined
+    }
+
+    function clearSnapshots(): void {
+        messageSnapshots.clear()
     }
 
     function handleCodeBlockAction(e: MouseEvent, ownerMessageId?: string): void {
+        if (!ownerMessageId) return
         const target = e.target as HTMLElement
 
-        // 统一寻找代码块外层包裹容器并校验其是否在对应消息的 blocks 记录中
+        // 统一寻找代码块外层包裹容器并严格校验其是否在对应消息的 blocks 记录中
         const wrapper = target.closest('.code-block-wrapper') as HTMLElement | null
         if (!wrapper || !wrapper.id) return
 
         const block = getCodeBlockFromSnapshot(wrapper.id, ownerMessageId)
         if (!block) {
-            // 非当前渲染系统登记的受信代码块，直接拒绝响应
+            // 非当前消息登记的受信代码块，拒绝响应
             return
         }
 
@@ -118,5 +128,8 @@ export function useMessageRenderer() {
         renderContent,
         handleCodeBlockAction,
         handleCodeBlockCopy: handleCodeBlockAction, // 兼容现有别名
+        releaseMessage,
+        retainMessages,
+        clearSnapshots,
     }
 }

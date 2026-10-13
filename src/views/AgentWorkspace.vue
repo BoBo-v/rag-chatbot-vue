@@ -174,7 +174,7 @@
       </aside>
 
       <section class="agent-conversation" aria-label="Agent 对话">
-        <div ref="messageFeed" class="agent-message-feed" aria-live="polite" @click="handleFeedClick">
+        <div ref="messageFeed" class="agent-message-feed" aria-live="polite">
           <!-- 空状态引导卡片 -->
           <div v-if="messages.length === 0 && !agent.isRunning.value" class="agent-empty">
             <div class="agent-empty-hero">
@@ -217,6 +217,7 @@
               <div
                 v-if="message.role === 'assistant'"
                 class="markdown-body agent-markdown-bubble"
+                @click="handleCodeBlockAction($event, message.id)"
                 v-html="message.renderedContent"
               ></div>
               <p v-else class="agent-user-bubble">{{ message.content }}</p>
@@ -483,7 +484,7 @@ import {
   type AgentRunRequest,
   type AgentUsage,
 } from '../services/agent'
-import { renderMarkdown } from '../utils/markdown'
+import type { Message } from '../types/chat'
 import { useMessageRenderer } from '../composables/useMessageRenderer'
 
 interface AgentModelOption {
@@ -554,11 +555,13 @@ function handleEditPrompt(content: string) {
   showToast('已载入问题到输入框', 'success', 2000)
 }
 
-const { handleCodeBlockAction } = useMessageRenderer()
+const { handleCodeBlockAction, renderContent, clearSnapshots, retainMessages } = useMessageRenderer()
 
-function handleFeedClick(e: MouseEvent) {
-  handleCodeBlockAction(e)
-}
+watch(messages, (newMsgs) => {
+  if (Array.isArray(newMsgs)) {
+    retainMessages(newMsgs.map((m) => m.id))
+  }
+}, { deep: false })
 
 const agentSuggestions = [
   {
@@ -752,11 +755,17 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
   await agent.run(request, accessKey.value)
 
   if (agent.status.value === 'completed' && agent.answer.value.trim()) {
+    const assistantMessageId = crypto.randomUUID()
     const assistantMessage: WorkspaceMessage = {
-      id: crypto.randomUUID(),
+      id: assistantMessageId,
       role: 'assistant',
       content: agent.answer.value,
-      renderedContent: renderMarkdown(agent.answer.value),
+      renderedContent: renderContent({
+        id: assistantMessageId,
+        role: 'assistant',
+        content: agent.answer.value,
+        status: 'done',
+      } as Message),
       createdAt: Date.now(),
     }
     messages.value.push(assistantMessage)
@@ -775,6 +784,7 @@ function clearWorkspace(): void {
   lastRequest.value = null
   prompt.value = ''
   agent.reset()
+  clearSnapshots()
 }
 
 async function restoreAgentHistory(): Promise<void> {
@@ -813,10 +823,18 @@ async function openAgentSession(sessionId: string): Promise<void> {
     return
   }
 
+  clearSnapshots()
   activeSessionId.value = session.id
   messages.value = session.messages.map(message => ({
     ...message,
-    renderedContent: message.role === 'assistant' ? renderMarkdown(message.content) : undefined,
+    renderedContent: message.role === 'assistant'
+      ? renderContent({
+          id: message.id,
+          role: 'assistant',
+          content: message.content,
+          status: 'done',
+        } as Message)
+      : undefined,
   }))
   lastRequest.value = null
   prompt.value = ''

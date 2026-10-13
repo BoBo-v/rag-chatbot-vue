@@ -1,5 +1,7 @@
 import { createApp } from 'vue'
 import '@bobocn/element/style.css'
+import 'highlight.js/styles/github-dark.css'
+import 'katex/dist/katex.min.css'
 import './styles/tokens.css'
 import './styles/markdown.css'
 import './style.css'

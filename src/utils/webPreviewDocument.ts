@@ -36,6 +36,27 @@ function stripExistingCspMetaTags(node: Node): void {
 }
 
 /**
+ * 移除 head 中已有的所有 charset 或 content-type meta 标签，避免多重声明或编码冲突
+ */
+function stripExistingCharsetMetaTags(headElement: Element): void {
+  const children = [...(adapter.getChildNodes(headElement) || [])]
+  for (const child of children) {
+    if (adapter.isElementNode(child) && adapter.getTagName(child).toLowerCase() === 'meta') {
+      const attrs = adapter.getAttrList(child)
+      const isCharset = attrs.some((a) => a.name.toLowerCase() === 'charset')
+      const isHttpEquivContentType = attrs.some(
+        (a) =>
+          a.name.toLowerCase() === 'http-equiv' &&
+          a.value.trim().toLowerCase() === 'content-type'
+      )
+      if (isCharset || isHttpEquivContentType) {
+        adapter.detachNode(child)
+      }
+    }
+  }
+}
+
+/**
  * 生成控制台日志拦截脚本，将 iframe 沙箱内的输出安全桥接到父页面
  */
 function createConsoleBridgeScript(previewId: string): string {
@@ -63,7 +84,7 @@ function createConsoleBridgeScript(previewId: string): string {
  * 基于 parse5 AST 构建具备强隔离安全策略的独立预览文档
  * - 避免正则或字符串替换对 JS/CSS 字符串字面量中 HTML 标签的误删
  * - 强制注入严格的 CSP（完全封堵外部网络请求，图片严格限制于 data: 与 blob:）
- * - 移除用户自带的 CSP，确保安全策略不被篡改
+ * - 强制将 <meta charset="UTF-8"> 与严格 CSP 置于 <head> 最前列，绝对优先于所有不可信用户标签与脚本
  */
 export function buildWebPreviewDocument(
   userCode: string,
@@ -118,58 +139,41 @@ export function buildWebPreviewDocument(
     }
   }
 
-  // 4. 确保 <meta charset="UTF-8">
-  const headChildren = adapter.getChildNodes(headElement)
-  let charsetNode = headChildren.find((child) => {
-    if (adapter.isElementNode(child) && adapter.getTagName(child).toLowerCase() === 'meta') {
-      return adapter.getAttrList(child).some((a) => a.name.toLowerCase() === 'charset')
-    }
-    return false
-  })
-
-  if (!charsetNode) {
-    charsetNode = adapter.createElement('meta', htmlElement.namespaceURI, [
-      { name: 'charset', value: 'UTF-8' },
-    ])
-    const headFirst = adapter.getFirstChild(headElement)
-    if (headFirst) {
-      adapter.insertBefore(headElement, charsetNode, headFirst)
-    } else {
-      adapter.appendChild(headElement, charsetNode)
-    }
-  }
+  // 4. 清理用户已存在的冲突或旧 charset/content-type meta 标签
+  stripExistingCharsetMetaTags(headElement)
 
   // 5. 严格限制的 CSP：封堵任何外部请求与图片信标外发（img-src 严格限定于 data: 与 blob:，base-uri 限定 none）
   const scriptPolicy = options.allowScripts ? "script-src 'unsafe-inline';" : "script-src 'none';"
   const cspContent = `default-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; connect-src 'none'; font-src data:; style-src 'unsafe-inline'; ${scriptPolicy} img-src data: blob:; media-src data: blob:;`
+
+  const canonicalCharsetMeta = adapter.createElement('meta', htmlElement.namespaceURI, [
+    { name: 'charset', value: 'UTF-8' },
+  ])
 
   const cspMeta = adapter.createElement('meta', htmlElement.namespaceURI, [
     { name: 'http-equiv', value: 'Content-Security-Policy' },
     { name: 'content', value: cspContent },
   ])
 
-  // 将 CSP meta 紧随 charsetMeta 插入，确保策略在不可信脚本与内容前生效
-  const updatedHeadChildren = adapter.getChildNodes(headElement)
-  const charsetIndex = updatedHeadChildren.indexOf(charsetNode)
-  const afterCharsetNode = updatedHeadChildren[charsetIndex + 1]
-  if (afterCharsetNode) {
-    adapter.insertBefore(headElement, cspMeta, afterCharsetNode)
-  } else {
-    adapter.appendChild(headElement, cspMeta)
-  }
-
-  // 6. 控制台桥接注入（在沙箱启用脚本且要求注入时生效）
+  let bridgeElement: Element | null = null
   if (options.allowScripts && options.injectConsoleBridge && options.previewId) {
     const bridgeScript = createConsoleBridgeScript(options.previewId)
-    const bridgeElement = adapter.createElement('script', htmlElement.namespaceURI, [])
+    bridgeElement = adapter.createElement('script', htmlElement.namespaceURI, [])
     adapter.appendChild(bridgeElement, adapter.createTextNode(bridgeScript))
+  }
 
-    const headAfterCsp = adapter.getChildNodes(headElement)
-    const cspIndexInHead = headAfterCsp.indexOf(cspMeta)
-    const afterCspNode = headAfterCsp[cspIndexInHead + 1]
-    if (afterCspNode) {
-      adapter.insertBefore(headElement, bridgeElement, afterCspNode)
-    } else {
+  // 6. 强制前置：安全节点必须严格排在 <head> 最前列，用户所有外部资源、脚本、样式及其他标签排在安全节点之后
+  const originalFirstChild = adapter.getFirstChild(headElement)
+  if (originalFirstChild) {
+    adapter.insertBefore(headElement, canonicalCharsetMeta, originalFirstChild)
+    adapter.insertBefore(headElement, cspMeta, originalFirstChild)
+    if (bridgeElement) {
+      adapter.insertBefore(headElement, bridgeElement, originalFirstChild)
+    }
+  } else {
+    adapter.appendChild(headElement, canonicalCharsetMeta)
+    adapter.appendChild(headElement, cspMeta)
+    if (bridgeElement) {
       adapter.appendChild(headElement, bridgeElement)
     }
   }

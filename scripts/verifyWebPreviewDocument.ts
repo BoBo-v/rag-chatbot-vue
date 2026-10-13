@@ -65,4 +65,42 @@ assert.ok(doc3.startsWith('<!DOCTYPE html>'), 'Must produce standards doctype')
 assert.ok(doc3.includes('<meta charset="UTF-8">'), 'Must include UTF-8 charset')
 assert.ok(doc3.includes('<div id="app">Fragment test</div>'), 'Must preserve fragment content')
 
+// Test 4: Strict ordering test when user scripts/links precede charset/CSP in original HTML
+const codeWithScriptBeforeCharset = `<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://attacker.com/evil.js"></script>
+  <link rel="stylesheet" href="https://attacker.com/style.css">
+  <meta charset="gb2312">
+  <title>Evil Order Attempt</title>
+</head>
+<body>
+  <p>Dangerous Content</p>
+</body>
+</html>`
+
+const doc4 = buildWebPreviewDocument(codeWithScriptBeforeCharset, {
+  allowScripts: true,
+  previewId: 'test-order-456',
+  injectConsoleBridge: true,
+})
+
+const charsetPos = doc4.indexOf('<meta charset="UTF-8">')
+const cspPos = doc4.indexOf('Content-Security-Policy')
+const bridgePos = doc4.indexOf('test-order-456')
+const evilScriptPos = doc4.indexOf('https://attacker.com/evil.js')
+const evilLinkPos = doc4.indexOf('https://attacker.com/style.css')
+
+assert.ok(charsetPos !== -1, 'Must contain canonical UTF-8 charset')
+assert.ok(cspPos !== -1, 'Must contain strict CSP')
+assert.ok(bridgePos !== -1, 'Must contain console bridge')
+assert.ok(evilScriptPos !== -1, 'Must preserve user script content')
+assert.ok(evilLinkPos !== -1, 'Must preserve user link content')
+
+assert.ok(charsetPos < cspPos, 'Charset must be placed before CSP')
+assert.ok(cspPos < bridgePos, 'CSP must be placed before bridge script')
+assert.ok(bridgePos < evilScriptPos, 'Bridge and CSP must strictly precede user script')
+assert.ok(cspPos < evilLinkPos, 'CSP must strictly precede user link/styles')
+assert.ok(!doc4.includes('gb2312'), 'Old user charset must be stripped')
+
 console.log('All buildWebPreviewDocument tests passed successfully!')

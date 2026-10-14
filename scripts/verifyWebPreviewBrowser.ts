@@ -7,7 +7,7 @@ console.log('=== [Playwright 真实浏览器] 验证沙箱隔离与安全档位 
 
 // 1. 启动轻量本地真实 HTTP 宿主服务器，提供真实的同源/跨源网络宿主环境
 const hostPort = 39871
-const server = http.createServer((req, res) => {
+const server = http.createServer((_req, res) => {
     res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
         'Set-Cookie': 'host_secret_cookie=SUPER_SENSITIVE_SESSION_TOKEN_12345; Path=/; SameSite=Lax',

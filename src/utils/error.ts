@@ -149,16 +149,17 @@ export function isRetryableError(err: unknown): boolean {
             if (status >= 500 && status < 600) return true
         }
 
-        if (
-            err instanceof TypeError
-            || msg.includes('Failed to fetch')
+        const isNetworkMessage = (
+            msg.includes('Failed to fetch')
             || msg.includes('fetch failed')
             || msg.includes('NetworkError')
             || msg.includes('network error')
             || msg.includes('ECONNRESET')
             || msg.includes('ETIMEDOUT')
             || msg.includes('terminated')
-        ) {
+        )
+
+        if (isNetworkMessage) {
             return true
         }
     }

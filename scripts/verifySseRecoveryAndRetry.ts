@@ -59,6 +59,9 @@ const nonRetryableErrors = [
     new Error('HTTP 400 Bad Request'),
     new Error('CHAT_RUN_PROTOCOL_ERROR: missing fields'),
     new Error('Some random SyntaxError in client rendering'),
+    new TypeError('local callback bug'),
+    new TypeError('Cannot read properties of undefined (reading "title")'),
+    new ReferenceError('x is not defined'),
     null,
     undefined,
 ]

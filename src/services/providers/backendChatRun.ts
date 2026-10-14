@@ -180,16 +180,23 @@ export async function streamBackendChatRunEvents(
     const decoder = new TextDecoder()
     try {
         while (true) {
-            const { value, done } = await reader.read()
+            let chunkResult: ReadableStreamReadResult<Uint8Array>
+            try {
+                chunkResult = await reader.read()
+            } catch (networkError) {
+                throw normalizeNetworkError(networkError, options.signal)
+            }
+            const { value, done } = chunkResult
             if (done) break
             await parser.push(decoder.decode(value, { stream: true }))
         }
         await parser.push(decoder.decode())
         await parser.finish()
-    } catch (error) {
-        await reader.cancel().catch(() => undefined)
-        throw normalizeNetworkError(error, options.signal)
+
+
+
     } finally {
+        await reader.cancel().catch(() => undefined)
         reader.releaseLock()
     }
 }

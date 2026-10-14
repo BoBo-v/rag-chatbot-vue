@@ -29,14 +29,31 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
 
     const response = await fetch(apiUrl(path), mergedInit)
 
-    // 401 统一拦截防抖：排除登录接口本身与探活静默接口
+    // 401 统一拦截防抖：排除登录接口本身、探活静默接口以及 Agent 密钥鉴权（Agent 独立弹窗录入）
     if (response.status === 401) {
         const cleanPath = path.split('?')[0]
-        if (cleanPath !== '/api/auth/login' && cleanPath !== '/api/auth/me') {
-            const authStore = useAuthStore()
-            authStore.invalidateSession()
-            if (!authStore.isAuthModalVisible.value) {
-                authStore.openLoginModal()
+        if (
+            cleanPath !== '/api/auth/login'
+            && cleanPath !== '/api/auth/me'
+            && !cleanPath.startsWith('/api/agent')
+        ) {
+            let isAgentUnauthorized = false
+            try {
+                const cloned = response.clone()
+                const data = await cloned.json().catch(() => null)
+                if (data?.code === 'AGENT_UNAUTHORIZED') {
+                    isAgentUnauthorized = true
+                }
+            } catch {
+                // ignore
+            }
+
+            if (!isAgentUnauthorized) {
+                const authStore = useAuthStore()
+                authStore.invalidateSession()
+                if (!authStore.isAuthModalVisible.value) {
+                    authStore.openLoginModal()
+                }
             }
         }
     }

@@ -16,7 +16,7 @@ export interface MarkdownRenderResult {
 }
 
 // 兼容旧接口定义
-export interface TrustedCodeBlock extends CodeBlockEntry {}
+export type TrustedCodeBlock = CodeBlockEntry
 
 interface RenderEnv {
     blocks?: Map<string, CodeBlockEntry>
@@ -58,16 +58,15 @@ md.renderer.rules.fence = (tokens, idx, _options, env, _slf): string => {
         lang: normalizedLang,
     })
 
-    let codeHtml = ''
-    if (normalizedLang && hljs.getLanguage(normalizedLang)) {
-        try {
-            codeHtml = hljs.highlight(str, { language: normalizedLang }).value
-        } catch {
-            codeHtml = md.utils.escapeHtml(str)
-        }
-    } else {
-        codeHtml = md.utils.escapeHtml(str)
-    }
+    const codeHtml = (normalizedLang && hljs.getLanguage(normalizedLang))
+        ? (() => {
+            try {
+                return hljs.highlight(str, { language: normalizedLang }).value
+            } catch {
+                return md.utils.escapeHtml(str)
+            }
+        })()
+        : md.utils.escapeHtml(str)
 
     // 输出干净且唯一的占位结构，无伪造类名，包含单层 pre.hljs > code
     return `<div id="${blockId}"><pre class="hljs"><code>${codeHtml}</code></pre></div>\n`

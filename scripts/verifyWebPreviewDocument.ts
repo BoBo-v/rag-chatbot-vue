@@ -28,6 +28,7 @@ assert.ok(doc1.includes("script-src 'none';"), 'CSP should disallow scripts when
 assert.ok(doc1.includes("default-src 'none';"), 'CSP must include default-src none')
 assert.ok(doc1.includes("base-uri 'none';"), 'CSP must include base-uri none')
 assert.ok(doc1.includes("connect-src 'none';"), 'CSP must include connect-src none')
+assert.ok(doc1.includes("navigate-to 'none';"), 'CSP must include navigate-to none')
 assert.ok(doc1.includes("img-src data: blob:;"), 'CSP must restrict img-src to data: and blob: only')
 
 // Test 2: Strips user-injected CSP meta tags
@@ -143,6 +144,8 @@ const doc6Interactive = buildWebPreviewDocument(codeWithRefreshAndLinks, {
 
 assert.ok(!doc6Interactive.includes('http-equiv="refresh"'), 'Interactive mode must also strip meta refresh tags')
 assert.ok(doc6Interactive.includes('沙箱环境已拦截外部链接跳转'), 'Interactive mode must inject navigation guard')
+assert.ok(doc6Interactive.includes('沙箱环境已拦截 location.href 外部跳转'), 'Interactive mode must intercept location.href')
+assert.ok(doc6Interactive.includes('沙箱环境已拦截 location.assign 外部跳转'), 'Interactive mode must intercept location.assign')
 assert.ok(doc6Interactive.includes('onclick="alert(\'click\')"'), 'Interactive mode must preserve inline event handlers')
 
 console.log('All buildWebPreviewDocument tests passed successfully!')

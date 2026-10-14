@@ -132,12 +132,59 @@ function createConsoleBridgeScript(previewId: string): string {
 }
 
 /**
- * 生成导航防护脚本：禁止 window.open 弹窗逃逸，并在交互运行模式下拦截外部跳转，仅允许页内锚点跳转
+ * 生成导航防护脚本：禁止 window.open 弹窗逃逸，并在交互运行模式下拦截 location 与链接外部跳转，仅允许页内锚点跳转
  */
 function createNavigationGuardScript(): string {
   return `(function() {
   try {
-    window.open = function() { console.warn('沙箱环境已拦截 window.open 调用'); return null; };
+    // 1. 拦截 window.open 弹窗逃逸
+    window.open = function() {
+      console.warn('沙箱环境已拦截 window.open 调用');
+      return null;
+    };
+
+    // 2. 拦截 location.assign 与 location.replace 外部导航
+    try {
+      if (window.location) {
+        window.location.assign = function(url) {
+          if (typeof url === 'string' && url.startsWith('#')) {
+            window.location.hash = url;
+          } else {
+            console.warn('沙箱环境已拦截 location.assign 外部跳转: ' + url);
+          }
+        };
+        window.location.replace = function(url) {
+          if (typeof url === 'string' && url.startsWith('#')) {
+            window.location.hash = url;
+          } else {
+            console.warn('沙箱环境已拦截 location.replace 外部跳转: ' + url);
+          }
+        };
+      }
+    } catch(e) {}
+
+    // 3. 拦截 Location.prototype.href 赋值
+    try {
+      var proto = window.Location ? window.Location.prototype : (window.location ? Object.getPrototypeOf(window.location) : null);
+      var desc = proto ? Object.getOwnPropertyDescriptor(proto, 'href') : null;
+      if (desc && desc.set) {
+        var origSet = desc.set;
+        Object.defineProperty(proto, 'href', {
+          set: function(val) {
+            if (typeof val === 'string' && val.startsWith('#')) {
+              origSet.call(this, val);
+            } else {
+              console.warn('沙箱环境已拦截 location.href 外部跳转: ' + val);
+            }
+          },
+          get: desc.get,
+          configurable: true,
+          enumerable: true
+        });
+      }
+    } catch(e) {}
+
+    // 4. 拦截页面内所有链接点击（含动态生成的 a 标签及代码触发的 click）
     document.addEventListener('click', function(e) {
       var target = e.target;
       while (target && target.tagName !== 'A') {
@@ -151,6 +198,13 @@ function createNavigationGuardScript(): string {
           console.warn('沙箱环境已拦截外部链接跳转: ' + href);
         }
       }
+    }, true);
+
+    // 5. 拦截表单提交向外发送数据
+    document.addEventListener('submit', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.warn('沙箱环境已拦截表单提交外部导航');
     }, true);
   } catch(e) {}
 })();`
@@ -229,7 +283,7 @@ export function buildWebPreviewDocument(
 
   // 7. 严格限制的 CSP：封堵任何外部请求与图片信标外发（img-src 严格限定于 data: 与 blob:，base-uri 限定 none）
   const scriptPolicy = options.allowScripts ? "script-src 'unsafe-inline';" : "script-src 'none';"
-  const cspContent = `default-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; connect-src 'none'; font-src data:; style-src 'unsafe-inline'; ${scriptPolicy} img-src data: blob:; media-src data: blob:;`
+  const cspContent = `default-src 'none'; base-uri 'none'; form-action 'none'; navigate-to 'none'; object-src 'none'; frame-src 'none'; connect-src 'none'; font-src data:; style-src 'unsafe-inline'; ${scriptPolicy} img-src data: blob:; media-src data: blob:;`
 
   const canonicalCharsetMeta = adapter.createElement('meta', htmlElement.namespaceURI, [
     { name: 'charset', value: 'UTF-8' },

@@ -200,10 +200,20 @@
     background: var(--accent);
 }
 
-.markdown-body pre.wrap-text {
+.markdown-body pre.wrap-text,
+.markdown-body .code-block-wrapper > pre.wrap-text {
     white-space: pre-wrap !important;
-    word-break: break-word !important;
+    word-break: break-all !important;
+    overflow-wrap: anywhere !important;
     overflow-x: hidden !important;
+}
+
+.markdown-body pre.wrap-text code,
+.markdown-body .code-block-wrapper > pre.wrap-text > code {
+    white-space: pre-wrap !important;
+    min-width: 0 !important;
+    word-break: break-all !important;
+    overflow-wrap: anywhere !important;
 }
 
 .markdown-body pre code {

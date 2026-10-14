@@ -18,6 +18,12 @@ export interface MarkdownRenderResult {
 // 兼容旧接口定义
 export interface TrustedCodeBlock extends CodeBlockEntry {}
 
+interface RenderEnv {
+    blocks?: Map<string, CodeBlockEntry>
+    safePrefix?: string
+    blockIndex?: number
+}
+
 const md: MarkdownIt = new MarkdownIt({
     html: true,
     linkify: true,
@@ -27,6 +33,45 @@ const md: MarkdownIt = new MarkdownIt({
 
 md.use(taskLists, { enabled: true, label: true })
 md.use(mathPlugin)
+
+// 重写 fence 规则：直接由 fence 输出单层 pre/code 占位，避免默认规则双层嵌套
+md.renderer.rules.fence = (tokens, idx, _options, env, _slf): string => {
+    const token = tokens[idx]
+    const info = token.info ? md.utils.unescapeAll(token.info).trim() : ''
+    const lang = info ? info.split(/\s+/)[0] : ''
+    const normalizedLang = (lang || '').trim()
+    const str = token.content
+
+    const renderEnv = (env || {}) as RenderEnv
+    if (!renderEnv.blocks) {
+        renderEnv.blocks = new Map<string, CodeBlockEntry>()
+    }
+    if (!renderEnv.safePrefix) {
+        renderEnv.safePrefix = `cb_${Math.random().toString(36).slice(2, 10)}_`
+    }
+    renderEnv.blockIndex = (renderEnv.blockIndex ?? 0) + 1
+    const blockId = `${renderEnv.safePrefix}${renderEnv.blockIndex}`
+
+    renderEnv.blocks.set(blockId, {
+        id: blockId,
+        code: str,
+        lang: normalizedLang,
+    })
+
+    let codeHtml = ''
+    if (normalizedLang && hljs.getLanguage(normalizedLang)) {
+        try {
+            codeHtml = hljs.highlight(str, { language: normalizedLang }).value
+        } catch {
+            codeHtml = md.utils.escapeHtml(str)
+        }
+    } else {
+        codeHtml = md.utils.escapeHtml(str)
+    }
+
+    // 输出干净且唯一的占位结构，无伪造类名，包含单层 pre.hljs > code
+    return `<div id="${blockId}"><pre class="hljs"><code>${codeHtml}</code></pre></div>\n`
+}
 
 function generateSecurePrefix(ownerMessageId?: string): string {
     const randomSuffix = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -39,40 +84,18 @@ function generateSecurePrefix(ownerMessageId?: string): string {
 
 export function renderMarkdownDocument(source: string, ownerMessageId?: string): MarkdownRenderResult {
     const blocks = new Map<string, CodeBlockEntry>()
-    let blockIndex = 0
-
-    // 生成当前渲染周期不可伪造的专有随机前缀
     const safePrefix = generateSecurePrefix(ownerMessageId)
 
-    md.options.highlight = (str: string, lang: string): string => {
-        blockIndex++
-        const blockId = `${safePrefix}${blockIndex}`
-        const normalizedLang = (lang || '').trim()
-        blocks.set(blockId, {
-            id: blockId,
-            code: str,
-            lang: normalizedLang,
-        })
-
-        let codeHtml = ''
-        if (normalizedLang && hljs.getLanguage(normalizedLang)) {
-            try {
-                codeHtml = hljs.highlight(str, { language: normalizedLang }).value
-            } catch {
-                codeHtml = md.utils.escapeHtml(str)
-            }
-        } else {
-            codeHtml = md.utils.escapeHtml(str)
-        }
-
-        // 先输出干净的占位容器，无 code-block-wrapper 样式类，防止被混淆
-        return `<div id="${blockId}"><pre class="hljs"><code>${codeHtml}</code></pre></div>`
+    const env: RenderEnv = {
+        blocks,
+        safePrefix,
+        blockIndex: 0,
     }
 
-    const rawHtml = md.render(source || '')
+    const rawHtml = md.render(source || '', env)
     const sanitizedHtml = sanitizeHtml(rawHtml)
 
-    // DOMPurify 净化完毕后，仅在经由本次渲染登记的受信容器中赋权 wrapper 类名并注入操作按钮
+    // DOMPurify 净化后，针对本次登记的受信任代码块精确组装包装层与工具栏
     let finalHtml = sanitizedHtml
     for (const [blockId, block] of blocks.entries()) {
         const langLabel = block.lang
@@ -86,10 +109,11 @@ export function renderMarkdownDocument(source: string, ownerMessageId?: string):
         const header = `<div class="code-block-header">${langLabel}${actions}</div>`
 
         const targetOpenTag = `<div id="${blockId}">`
-        const targetIndex = finalHtml.indexOf(targetOpenTag)
-        if (targetIndex !== -1) {
+        const firstIdx = finalHtml.indexOf(targetOpenTag)
+        const lastIdx = finalHtml.lastIndexOf(targetOpenTag)
+        if (firstIdx !== -1 && firstIdx === lastIdx) {
             const replacement = `<div class="code-block-wrapper" id="${blockId}">${header}`
-            finalHtml = finalHtml.slice(0, targetIndex) + replacement + finalHtml.slice(targetIndex + targetOpenTag.length)
+            finalHtml = finalHtml.slice(0, firstIdx) + replacement + finalHtml.slice(firstIdx + targetOpenTag.length)
         }
     }
 

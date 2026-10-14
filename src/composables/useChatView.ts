@@ -9,11 +9,11 @@ import {
     createBackendChatRun,
     getBackendChatRun,
     ragContextFromRunEvent,
-    streamBackendChatRunEvents,
     type BackendChatRunEvent,
 } from '../services/providers/backendChatRun'
 import { db } from '../db'
-import { classifyError, isRetryableError } from '../utils/error'
+import { classifyError } from '../utils/error'
+import { runBackendChatRunRecoveryCoordinator } from '../services/providers/backendChatRunCoordinator'
 import { useToast } from './useToast'
 import { settings } from '../stores/settings'
 import { searchService } from '../search/SearchService'
@@ -764,137 +764,53 @@ export function useChatView() {
         }
     }
 
-    function isBusinessPayloadEvent(event: BackendChatRunEvent): boolean {
-        // 心跳事件不视为业务有效载荷，不能用于重置重连 attempt 计数
-        return event.type !== 'heartbeat'
-    }
-
-    function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
-        return new Promise((resolve, reject) => {
-            if (signal?.aborted) {
-                reject(new DOMException('Aborted', 'AbortError'))
-                return
-            }
-            const timer = setTimeout(() => {
-                signal?.removeEventListener('abort', onAbort)
-                resolve()
-            }, ms)
-            const onAbort = () => {
-                clearTimeout(timer)
-                signal?.removeEventListener('abort', onAbort)
-                reject(new DOMException('Aborted', 'AbortError'))
-            }
-            signal?.addEventListener('abort', onAbort)
-        })
-    }
-
     async function subscribeChatRunEventsWithRetry(
         options: RunStreamOptions,
         runId: string,
         initialSequence: number,
         needInitialSnapshot = false,
     ): Promise<void> {
-        const retryDelays = [1000, 2000, 4000, 8000, 15000]
-        let attempt = 0
-        let afterSequence = initialSequence
-        let shouldFetchSnapshot = needInitialSnapshot
-
-        while (true) {
-            if (streamCtrl?.isAborted) return
-
-            // 若是重连轮次（attempt > 0）或需要初始同步，先拉取最新快照：若已完成则短路退出
-            if (attempt > 0 || shouldFetchSnapshot) {
-                try {
-                    const snapshot = await getBackendChatRun(runId, { signal: streamCtrl?.controller.signal })
-                    if (snapshot.assistantMessageId !== options.aiMessageId || snapshot.conversationId !== String(options.convId)) {
-                        throw new Error('生成任务与当前聊天消息不匹配。')
-                    }
-                    updateMessage(options.aiMessageId, { generationRunStatus: snapshot.status })
-
-                    // 后端已经完成、失败或取消时，直接应用终态快照，无需再发起 SSE 连接！
-                    if (isTerminalRunStatus(snapshot.status)) {
-                        updateMessage(options.aiMessageId, { errorMessage: undefined })
-                        applyTerminalRunSnapshot(options.aiMessageId, snapshot, options.convId)
-                        return
-                    }
-
-                    // 统一恢复使用后端权威快照：
-                    // 无论是序号回退、空输出、还是内容变更，强行同步为后端的权威状态，并清理格式化缓存
-                    afterSequence = snapshot.lastSequence
-                    updateMessage(options.aiMessageId, {
-                        content: snapshot.outputText,
-                        generationSequence: snapshot.lastSequence,
-                        formattedMarkdown: undefined,
-                        formattedContent: undefined,
-                    })
-                    shouldFetchSnapshot = false
-                } catch (snapErr) {
-                    if (streamCtrl?.isAborted) return
-                    if (!isRetryableError(snapErr) || attempt >= retryDelays.length) {
-                        throw snapErr
-                    }
-                    const baseDelay = retryDelays[attempt]
-                    const jitter = Math.floor(Math.random() * 500)
-                    const delay = baseDelay + jitter
-                    attempt++
-
-                    toast.show(`连接中断，正在恢复 (${attempt}/${retryDelays.length})...`, 'warning', 2500)
-                    updateMessage(options.aiMessageId, {
-                        errorMessage: `连接中断，正在恢复 (${attempt}/${retryDelays.length})...`,
-                    })
-
-                    await sleepWithAbort(delay, streamCtrl?.controller.signal)
-                    continue
-                }
-            } else {
+        await runBackendChatRunRecoveryCoordinator({
+            runId,
+            initialSequence,
+            needInitialSnapshot,
+            signal: streamCtrl?.controller.signal,
+            getCurrentSequence: () => {
                 const currentMsg = messages.value.find(item => item.id === options.aiMessageId)
-                if (currentMsg?.generationSequence !== undefined) {
-                    afterSequence = currentMsg.generationSequence
+                return currentMsg?.generationSequence ?? initialSequence
+            },
+            onSnapshotFetch: (snapshot) => {
+                if (snapshot.assistantMessageId !== options.aiMessageId || snapshot.conversationId !== String(options.convId)) {
+                    throw new Error('生成任务与当前聊天消息不匹配。')
                 }
-            }
-
-            try {
-                await streamBackendChatRunEvents(runId, {
-                    afterSequence,
-                    signal: streamCtrl?.controller.signal,
-                    onHeartbeat: () => {
-                        // 收到心跳仅作为连接保持信号，绝对不重置 attempt 计数器
-                    },
-                    onEvent: async (event) => {
-                        // 只有收到包含业务有效载荷的事件时，才重置 attempt = 0 并清除重试错误提示
-                        if (isBusinessPayloadEvent(event)) {
-                            if (attempt > 0) {
-                                attempt = 0
-                                updateMessage(options.aiMessageId, { errorMessage: undefined })
-                            }
-                        }
-                        await handleBackendRunEvent(options, event)
-                    },
-                })
-                // 流正常完成
-                return
-            } catch (err: unknown) {
-                if (streamCtrl?.isAborted || (err instanceof BackendChatRunClientError && err.code === 'CLIENT_ABORTED')) {
-                    return
+                updateMessage(options.aiMessageId, { generationRunStatus: snapshot.status })
+                if (isTerminalRunStatus(snapshot.status)) {
+                    updateMessage(options.aiMessageId, { errorMessage: undefined })
+                    applyTerminalRunSnapshot(options.aiMessageId, snapshot, options.convId)
+                    return true
                 }
-
-                if (!isRetryableError(err) || attempt >= retryDelays.length) {
-                    throw err
-                }
-
-                const baseDelay = retryDelays[attempt]
-                const jitter = Math.floor(Math.random() * 500)
-                const delay = baseDelay + jitter
-                attempt++
-
-                toast.show(`连接中断，正在恢复 (${attempt}/${retryDelays.length})...`, 'warning', 2500)
+            },
+            onSnapshotSync: (snapshot) => {
                 updateMessage(options.aiMessageId, {
-                    errorMessage: `连接中断，正在恢复 (${attempt}/${retryDelays.length})...`,
+                    content: snapshot.outputText,
+                    generationSequence: snapshot.lastSequence,
+                    formattedMarkdown: undefined,
+                    formattedContent: undefined,
                 })
-
-                await sleepWithAbort(delay, streamCtrl?.controller.signal)
-            }
-        }
+            },
+            onProgress: () => {
+                updateMessage(options.aiMessageId, { errorMessage: undefined })
+            },
+            onRetryNotice: (attempt, maxAttempts) => {
+                toast.show(`连接中断，正在恢复 (${attempt}/${maxAttempts})...`, 'warning', 2500)
+                updateMessage(options.aiMessageId, {
+                    errorMessage: `连接中断，正在恢复 (${attempt}/${maxAttempts})...`,
+                })
+            },
+            onEvent: async (event) => {
+                await handleBackendRunEvent(options, event)
+            },
+        })
     }
 
     async function runBackendStream(

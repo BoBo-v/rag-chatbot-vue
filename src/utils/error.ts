@@ -43,18 +43,10 @@ export function classifyError(err: unknown): ChatError {
         return { type: 'server', message: err.message || '生成任务执行失败', status: err.status }
     }
 
-    if (err instanceof TypeError && err.message.includes('fetch')) {
-        return { type: 'network', message: '无法连接到服务器，请检查网络或后端服务状态' }
-    }
-
     if (err instanceof Error) {
-        const msg = err.message
+        const msg = err.message || ''
 
-        if (msg.includes('Failed to fetch') || msg.includes('fetch failed') || msg.includes('NetworkError')) {
-            return { type: 'network', message: '无法连接到服务器，请检查网络或后端服务状态' }
-        }
-
-        const statusMatch = msg.match(/(\d{3})/)
+        const statusMatch = msg.match(/\b([45]\d{2})\b/)
         const status = statusMatch ? Number(statusMatch[1]) : undefined
 
         if (status === 401 || status === 403) {
@@ -74,50 +66,34 @@ export function classifyError(err: unknown): ChatError {
             return { type: 'timeout', message: '请求超时，请检查网络连接后重试' }
         }
 
-        return { type: 'unknown', message: msg, status }
+        return { type: 'unknown', message: msg || '执行异常，请重试', status }
     }
 
     return { type: 'unknown', message: '发生未知错误' }
 }
 
 /**
- * 基于白名单策略判定错误是否允许进行 SSE / 接口重试。
+ * 基于严格结构化策略判定错误是否允许进行 SSE / 任务恢复重试。
  *
- * 允许重试（白名单）：
- * - 网络故障：TypeError (fetch failed, Failed to fetch, NetworkError, ECONNRESET, ETIMEDOUT, terminated 等)
- * - 常见瞬态服务端错误：500, 502, 503, 504
- * - 超时或限流：408, 429
- * - 明确的业务网络错误码：CHAT_RUN_NETWORK_ERROR, CHAT_RUN_STREAM_INCOMPLETE
- *
- * 绝对不可重试（黑名单/默认禁止）：
- * - 客户端主动取消：DOMException (AbortError), CLIENT_ABORTED
- * - 协议/状态异常：CHAT_RUN_PROTOCOL_ERROR, CHAT_RUN_SEQUENCE_INVALID
- * - 任务未找到或过期：GENERATION_RUN_NOT_FOUND
- * - 客户端请求错误：400, 401, 403, 404 (以及其它 4xx)
- * - 消息不匹配、未知错误
+ * 核心规则：
+ * 1. 严格仅依据明确的错误类 (BackendChatRunClientError)、结构化错误码 (code) 和 HTTP 状态码 (status)；
+ * 2. 彻底移除任何基于 message 字符串的模糊子串匹配或正则嗅探；
+ * 3. 任何未被标准化的异常（包括业务回调抛出的本地 TypeError、语法错误等）默认不可重试。
  */
 export function isRetryableError(err: unknown): boolean {
     if (!err) return false
 
     // 1. 客户端主动中断/取消：绝对不可重试
     if (err instanceof DOMException && err.name === 'AbortError') return false
-    if (err instanceof BackendChatRunClientError && err.code === 'CLIENT_ABORTED') return false
 
-    // 2. 结构化后端错误白名单判断
+    // 2. 严格依赖结构化后端错误白名单判断
     if (err instanceof BackendChatRunClientError) {
-        if (
-            err.code === 'CHAT_RUN_PROTOCOL_ERROR'
-            || err.code === 'GENERATION_RUN_NOT_FOUND'
-            || err.code === 'CHAT_RUN_SEQUENCE_INVALID'
-            || err.code === 'CLIENT_ABORTED'
-        ) {
+        if (err.code === 'CLIENT_ABORTED') return false
+        if (typeof err.status === 'number') {
+            if ([408, 429].includes(err.status) || (err.status >= 500 && err.status < 600)) {
+                return true
+            }
             return false
-        }
-        if (err.status !== undefined) {
-            if ([400, 401, 403, 404].includes(err.status)) return false
-            if ([408, 429, 500, 502, 503, 504].includes(err.status)) return true
-            if (err.status >= 400 && err.status < 500) return false
-            if (err.status >= 500 && err.status < 600) return true
         }
         if (err.code === 'CHAT_RUN_NETWORK_ERROR' || err.code === 'CHAT_RUN_STREAM_INCOMPLETE') {
             return true
@@ -125,44 +101,6 @@ export function isRetryableError(err: unknown): boolean {
         return false
     }
 
-    if (err instanceof Error) {
-        const msg = err.message || ''
-
-        if (
-            err.name === 'AbortError'
-            || msg.includes('Aborted')
-            || msg.includes('aborted')
-            || msg.includes('不匹配')
-            || msg.includes('CHAT_RUN_PROTOCOL_ERROR')
-            || msg.includes('GENERATION_RUN_NOT_FOUND')
-            || msg.includes('CHAT_RUN_SEQUENCE_INVALID')
-        ) {
-            return false
-        }
-
-        const statusMatch = msg.match(/\b([45]\d{2})\b/)
-        if (statusMatch) {
-            const status = Number(statusMatch[1])
-            if ([400, 401, 403, 404].includes(status)) return false
-            if ([408, 429, 500, 502, 503, 504].includes(status)) return true
-            if (status >= 400 && status < 500) return false
-            if (status >= 500 && status < 600) return true
-        }
-
-        const isNetworkMessage = (
-            msg.includes('Failed to fetch')
-            || msg.includes('fetch failed')
-            || msg.includes('NetworkError')
-            || msg.includes('network error')
-            || msg.includes('ECONNRESET')
-            || msg.includes('ETIMEDOUT')
-            || msg.includes('terminated')
-        )
-
-        if (isNetworkMessage) {
-            return true
-        }
-    }
-
+    // 其余非结构化异常（包含本地回调 Bug、原生 TypeError、SyntaxError 等）一律不可重试
     return false
 }

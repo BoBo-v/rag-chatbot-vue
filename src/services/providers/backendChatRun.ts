@@ -116,8 +116,8 @@ export async function createBackendChatRun(
         signal: options.signal,
     }, options.signal)
 
-    if (!response.ok) throw await toApiError(response)
-    const payload = await readJson(response)
+    if (!response.ok) throw await toApiError(response, options.signal)
+    const payload = await readJson(response, options.signal)
     if (!isRecord(payload) || typeof payload.created !== 'boolean') {
         throw protocolError('创建生成任务接口返回格式不正确。')
     }
@@ -135,8 +135,8 @@ export async function getBackendChatRun(
         headers: buildHeaders(options.accessKey),
         signal: options.signal,
     }, options.signal)
-    if (!response.ok) throw await toApiError(response)
-    const payload = await readJson(response)
+    if (!response.ok) throw await toApiError(response, options.signal)
+    const payload = await readJson(response, options.signal)
     if (!isRecord(payload)) throw protocolError('生成任务快照接口返回格式不正确。')
     return parseRunSnapshot(payload.run)
 }
@@ -150,8 +150,8 @@ export async function cancelBackendChatRun(
         headers: buildHeaders(options.accessKey),
         signal: options.signal,
     }, options.signal)
-    if (!response.ok) throw await toApiError(response)
-    const payload = await readJson(response)
+    if (!response.ok) throw await toApiError(response, options.signal)
+    const payload = await readJson(response, options.signal)
     if (!isRecord(payload)) throw protocolError('取消生成任务接口返回格式不正确。')
     return parseRunSnapshot(payload.run)
 }
@@ -169,7 +169,7 @@ export async function streamBackendChatRunEvents(
         headers,
         signal: options.signal,
     }, options.signal)
-    if (!response.ok) throw await toApiError(response)
+    if (!response.ok) throw await toApiError(response, options.signal)
     if (!response.headers.get('content-type')?.includes('text/event-stream')) {
         throw protocolError('生成任务事件接口没有返回预期的 SSE 流。')
     }
@@ -337,17 +337,41 @@ async function request(url: string, init: RequestInit, signal?: AbortSignal): Pr
     }
 }
 
-async function toApiError(response: Response): Promise<BackendChatRunClientError> {
-    const payload = await readJson(response)
-    const code = isRecord(payload) && typeof payload.code === 'string' ? payload.code : `HTTP_${response.status}`
-    const message = isRecord(payload) && typeof payload.error === 'string'
-        ? payload.error
-        : `生成任务请求失败，HTTP ${response.status}。`
-    return new BackendChatRunClientError(code, message, response.status)
+async function toApiError(response: Response, signal?: AbortSignal): Promise<BackendChatRunClientError> {
+    let text: string
+    try {
+        text = await response.text()
+    } catch (networkError) {
+        throw normalizeNetworkError(networkError, signal)
+    }
+    if (!text) {
+        return new BackendChatRunClientError(`HTTP_${response.status}`, `生成任务请求失败，HTTP ${response.status}。`, response.status)
+    }
+    try {
+        const payload = JSON.parse(text)
+        const code = isRecord(payload) && typeof payload.code === 'string' ? payload.code : `HTTP_${response.status}`
+        const message = isRecord(payload) && typeof payload.error === 'string'
+            ? payload.error
+            : `生成任务请求失败，HTTP ${response.status}。`
+        return new BackendChatRunClientError(code, message, response.status)
+    } catch {
+        // 非 JSON 响应体（如网关 502/504 返回的 HTML 错误页）：
+        // 关键保护：绝不抛出 CHAT_RUN_PROTOCOL_ERROR，严格保留原始 HTTP 状态码与默认文案以供重试器识别
+        return new BackendChatRunClientError(
+            `HTTP_${response.status}`,
+            `生成任务请求失败，HTTP ${response.status}。`,
+            response.status,
+        )
+    }
 }
 
-async function readJson(response: Response): Promise<unknown> {
-    const text = await response.text()
+async function readJson(response: Response, signal?: AbortSignal): Promise<unknown> {
+    let text: string
+    try {
+        text = await response.text()
+    } catch (networkError) {
+        throw normalizeNetworkError(networkError, signal)
+    }
     if (!text) return null
     try {
         return JSON.parse(text)

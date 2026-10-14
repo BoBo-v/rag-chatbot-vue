@@ -1,7 +1,8 @@
 import { settings } from '../stores/settings'
 import { useAuthStore } from '../stores/auth'
 
-const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? ''
+const env = (import.meta as { env?: Record<string, any> }).env
+const configuredBaseUrl = (env?.VITE_API_BASE_URL as string | undefined)?.trim() ?? ''
 
 function normalizeBaseUrl(value: string): string {
     const trimmed = value.trim().replace(/\/+$/, '')

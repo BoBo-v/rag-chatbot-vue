@@ -9,7 +9,8 @@ export type BackendChatProviderType = 'ollama' | 'openai' | 'anthropic'
 export type BackendRagMode = 'auto' | 'off' | 'force'
 export type TransportMode = 'direct' | 'backend'
 
-const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? ''
+const env = (import.meta as { env?: Record<string, any> }).env
+const configuredApiBaseUrl = (env?.VITE_API_BASE_URL as string | undefined)?.trim() ?? ''
 
 export interface AppSettings {
     transport: TransportMode

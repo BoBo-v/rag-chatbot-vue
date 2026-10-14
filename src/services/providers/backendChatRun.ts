@@ -10,6 +10,7 @@ export type BackendChatRunEventType =
     | 'run_started'
     | 'rag_context'
     | 'text_delta'
+    | 'heartbeat'
     | 'run_completed'
     | 'run_failed'
     | 'run_cancelled'
@@ -68,6 +69,7 @@ export interface BackendChatRunRequestOptions {
 export interface StreamBackendChatRunOptions extends BackendChatRunRequestOptions {
     afterSequence?: number
     onEvent: (event: BackendChatRunEvent) => void | Promise<void>
+    onHeartbeat?: () => void
 }
 
 export class BackendChatRunClientError extends Error {
@@ -86,6 +88,7 @@ const eventTypes = new Set<BackendChatRunEventType>([
     'run_started',
     'rag_context',
     'text_delta',
+    'heartbeat',
     'run_completed',
     'run_failed',
     'run_cancelled',
@@ -172,7 +175,7 @@ export async function streamBackendChatRunEvents(
     }
     if (!response.body) throw protocolError('生成任务事件接口返回了空响应流。')
 
-    const parser = new BackendChatRunSseParser(runId, afterSequence, options.onEvent)
+    const parser = new BackendChatRunSseParser(runId, afterSequence, options.onEvent, options.onHeartbeat)
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     try {
@@ -213,15 +216,18 @@ class BackendChatRunSseParser {
     private terminalReceived = false
     private readonly runId: string
     private readonly onEvent: StreamBackendChatRunOptions['onEvent']
+    private readonly onHeartbeat?: StreamBackendChatRunOptions['onHeartbeat']
 
     constructor(
         runId: string,
         afterSequence: number,
         onEvent: StreamBackendChatRunOptions['onEvent'],
+        onHeartbeat?: StreamBackendChatRunOptions['onHeartbeat'],
     ) {
         this.runId = runId
         this.lastSequence = afterSequence
         this.onEvent = onEvent
+        this.onHeartbeat = onHeartbeat
     }
 
     async push(chunk: string): Promise<void> {
@@ -240,7 +246,11 @@ class BackendChatRunSseParser {
     }
 
     private async consume(block: string): Promise<void> {
-        if (!block.trim() || block.trimStart().startsWith(':') || this.terminalReceived) return
+        if (!block.trim() || this.terminalReceived) return
+        if (block.trimStart().startsWith(':')) {
+            this.onHeartbeat?.()
+            return
+        }
         const lines = block.split(/\r?\n/)
         const rawId = lines.find(line => line.startsWith('id:'))?.slice(3).trim()
         const eventType = lines.find(line => line.startsWith('event:'))?.slice(6).trim()

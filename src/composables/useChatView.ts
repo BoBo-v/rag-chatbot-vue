@@ -13,7 +13,7 @@ import {
     type BackendChatRunEvent,
 } from '../services/providers/backendChatRun'
 import { db } from '../db'
-import { classifyError } from '../utils/error'
+import { classifyError, isRetryableError } from '../utils/error'
 import { useToast } from './useToast'
 import { settings } from '../stores/settings'
 import { searchService } from '../search/SearchService'
@@ -764,18 +764,9 @@ export function useChatView() {
         }
     }
 
-    function isNonRetryableError(err: unknown): boolean {
-        if (err instanceof BackendChatRunClientError) {
-            if (err.status === 401 || err.status === 403 || err.status === 404) return true
-            if (err.code === 'GENERATION_RUN_NOT_FOUND' || err.code === 'CLIENT_ABORTED') return true
-            return false
-        }
-        if (err instanceof Error) {
-            const statusMatch = err.message.match(/(\d{3})/)
-            const status = statusMatch ? Number(statusMatch[1]) : undefined
-            if (status === 401 || status === 403 || status === 404) return true
-        }
-        return false
+    function isBusinessPayloadEvent(event: BackendChatRunEvent): boolean {
+        // 心跳事件不视为业务有效载荷，不能用于重置重连 attempt 计数
+        return event.type !== 'heartbeat'
     }
 
     function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
@@ -827,28 +818,19 @@ export function useChatView() {
                         return
                     }
 
-                    // 如果后端已生成的序号领先于本地，补齐已生成的正文与序号
-                    const currentMsg = messages.value.find(item => item.id === options.aiMessageId)
-                    const localSeq = currentMsg?.generationSequence ?? afterSequence
-                    if (snapshot.lastSequence > localSeq && snapshot.outputText) {
-                        afterSequence = snapshot.lastSequence
-                        updateMessage(options.aiMessageId, {
-                            content: snapshot.outputText,
-                            generationSequence: snapshot.lastSequence,
-                        })
-                    } else if (snapshot.outputText && (!currentMsg?.content || currentMsg.content !== snapshot.outputText)) {
-                        updateMessage(options.aiMessageId, {
-                            content: snapshot.outputText,
-                            generationSequence: snapshot.lastSequence,
-                        })
-                        afterSequence = snapshot.lastSequence
-                    } else {
-                        afterSequence = localSeq
-                    }
+                    // 统一恢复使用后端权威快照：
+                    // 无论是序号回退、空输出、还是内容变更，强行同步为后端的权威状态，并清理格式化缓存
+                    afterSequence = snapshot.lastSequence
+                    updateMessage(options.aiMessageId, {
+                        content: snapshot.outputText,
+                        generationSequence: snapshot.lastSequence,
+                        formattedMarkdown: undefined,
+                        formattedContent: undefined,
+                    })
                     shouldFetchSnapshot = false
                 } catch (snapErr) {
                     if (streamCtrl?.isAborted) return
-                    if (isNonRetryableError(snapErr) || attempt >= retryDelays.length) {
+                    if (!isRetryableError(snapErr) || attempt >= retryDelays.length) {
                         throw snapErr
                     }
                     const baseDelay = retryDelays[attempt]
@@ -875,11 +857,16 @@ export function useChatView() {
                 await streamBackendChatRunEvents(runId, {
                     afterSequence,
                     signal: streamCtrl?.controller.signal,
+                    onHeartbeat: () => {
+                        // 收到心跳仅作为连接保持信号，绝对不重置 attempt 计数器
+                    },
                     onEvent: async (event) => {
-                        // 成功接收到事件，重置重试计数器并清除重连提示
-                        if (attempt > 0) {
-                            attempt = 0
-                            updateMessage(options.aiMessageId, { errorMessage: undefined })
+                        // 只有收到包含业务有效载荷的事件时，才重置 attempt = 0 并清除重试错误提示
+                        if (isBusinessPayloadEvent(event)) {
+                            if (attempt > 0) {
+                                attempt = 0
+                                updateMessage(options.aiMessageId, { errorMessage: undefined })
+                            }
                         }
                         await handleBackendRunEvent(options, event)
                     },
@@ -891,7 +878,7 @@ export function useChatView() {
                     return
                 }
 
-                if (isNonRetryableError(err) || attempt >= retryDelays.length) {
+                if (!isRetryableError(err) || attempt >= retryDelays.length) {
                     throw err
                 }
 
@@ -1072,6 +1059,8 @@ export function useChatView() {
                 status: 'done',
                 canContinue: false,
                 errorMessage: undefined,
+                formattedMarkdown: undefined,
+                formattedContent: undefined,
             })
             void formatFinishedMessage(messageId)
             return
@@ -1084,6 +1073,8 @@ export function useChatView() {
                 status: 'aborted',
                 canContinue: true,
                 errorMessage: undefined,
+                formattedMarkdown: undefined,
+                formattedContent: undefined,
             })
             return
         }
@@ -1094,6 +1085,8 @@ export function useChatView() {
             status: 'error',
             canContinue: false,
             errorMessage: snapshot.errorMessage ?? '生成任务失败。',
+            formattedMarkdown: undefined,
+            formattedContent: undefined,
         })
     }
 

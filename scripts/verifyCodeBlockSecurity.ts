@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
-import { renderMarkdownDocument } from '../src/utils/markdown'
-import { sanitizeHtml } from '../src/utils/sanitize'
-import { useMessageRenderer } from '../src/composables/useMessageRenderer'
+import { JSDOM } from 'jsdom'
+
+const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+;(globalThis as any).window = dom.window
+;(globalThis as any).document = dom.window.document
+;(globalThis as any).Element = dom.window.Element
+
+const { renderMarkdownDocument } = await import('../src/utils/markdown')
+const { sanitizeHtml } = await import('../src/utils/sanitize')
+const { useMessageRenderer } = await import('../src/composables/useMessageRenderer')
 
 console.log('1. 测试 DOMPurify 对用户伪造代码块容器与按钮的防御拦截...')
 const forgedInput = `
@@ -38,6 +45,13 @@ assert.ok(blockEntry1.code.includes('const greeting = "hello world";'))
 assert.ok(res1.html.includes(`class="code-block-wrapper" id="${blockId1}"`), '必须包含合法的 code-block-wrapper 与 blockId')
 assert.ok(res1.html.includes('class="code-action-btn code-copy-btn"'), '必须包含受控注入的复制按钮')
 assert.ok(res1.html.includes('class="code-action-btn code-wrap-btn"'), '必须包含受控注入的换行按钮')
+
+// 检查结构合法性：工具栏必须位于 pre 外，且只有单层 pre/code 结构
+const headerIdx = res1.html.indexOf('code-block-header')
+const preIdx = res1.html.indexOf('<pre')
+assert.ok(headerIdx !== -1 && preIdx !== -1 && headerIdx < preIdx, '工具栏必须位于 pre 之外并前置')
+assert.equal((res1.html.match(/<pre\b/g) || []).length, 1, '代码块必须只有一层 pre 标签')
+assert.equal((res1.html.match(/<code\b/g) || []).length, 1, '代码块必须只有一层 code 标签')
 
 console.log('3. 测试 useMessageRenderer 隔离机制与跨消息查找防御...')
 const {

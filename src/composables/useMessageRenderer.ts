@@ -8,10 +8,9 @@ interface MessageRenderSnapshot {
     rawContent: string
 }
 
-// 内存中按消息生命周期维护的渲染快照表，随消息更新而更新，避免全局 FIFO 淘汰
-const messageSnapshots = new Map<string, MessageRenderSnapshot>()
-
 export function useMessageRenderer() {
+    // 实例级持有的渲染快照表，各视图（如 StyleChat、AgentWorkspace）独立持有，避免跨视图串扰
+    const messageSnapshots = new Map<string, MessageRenderSnapshot>()
     function renderContent(msg: Message): string {
         if (msg.status === 'loading') {
             return '<div class="thinking-dots"><span></span><span></span><span></span></div>'

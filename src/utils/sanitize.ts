@@ -1,9 +1,4 @@
 import DOMPurify from 'dompurify'
-import { parseFragment, serialize, defaultTreeAdapter as adapter } from 'parse5'
-import type { DefaultTreeAdapterMap } from 'parse5'
-
-type Node = DefaultTreeAdapterMap['node']
-type ParentNode = DefaultTreeAdapterMap['parentNode']
 
 // 纯度量样式白名单属性（KaTeX HTML 布局必需）
 const ALLOWED_KATEX_STYLE_PROPERTIES = new Set([
@@ -46,18 +41,22 @@ const SAFE_DIMENSION_VALUE_REGEX = /^[-+]?[0-9]*\.?[0-9]+(px|em|ex|%|rem|pt)?$/i
 // 安全颜色正则：支持十六进制(#rgb/#rrggbb/#rrggbbaa)、rgb/rgba/hsl/hsla 以及标准英文字名，杜绝 url/expression/javascript
 const SAFE_COLOR_REGEX = /^(#[0-9a-f]{3,8}|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*[\d.]+\s*)?\)|hsla?\(\s*\d+\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?(?:\s*,\s*[\d.]+\s*)?\)|[a-z]{3,20})$/i
 
-function sanitizeInlineStyle(element: Element): void {
-  const rawStyle = element.getAttribute('style')
+function sanitizeInlineStyle(element: any): void {
+  const rawStyle = element.getAttribute?.('style')
   if (!rawStyle) return
 
   // 严格策略：仅当元素本身具有 katex 相关类名或位于 .katex 容器内时，才允许保留度量布局样式与公式颜色
-  const isKatexNode = element.classList.contains('katex') ||
-    element.classList.contains('strut') ||
-    element.classList.contains('vlist') ||
-    element.classList.contains('svg-align') ||
-    element.classList.contains('pstrut') ||
-    element.classList.contains('hide-tail') ||
-    Boolean(element.closest('.katex'))
+  const classList = element.classList
+  const hasKatexClass = classList && (
+    classList.contains('katex') ||
+    classList.contains('strut') ||
+    classList.contains('vlist') ||
+    classList.contains('svg-align') ||
+    classList.contains('pstrut') ||
+    classList.contains('hide-tail')
+  )
+  const isInsideKatex = typeof element.closest === 'function' ? Boolean(element.closest('.katex')) : false
+  const isKatexNode = hasKatexClass || isInsideKatex
 
   if (!isKatexNode) {
     element.removeAttribute('style')
@@ -80,7 +79,7 @@ function sanitizeInlineStyle(element: Element): void {
 
     if (ALLOWED_KATEX_STYLE_PROPERTIES.has(prop)) {
       const tokens = val.split(/\s+/).filter(Boolean)
-      const allTokensSafe = tokens.length > 0 && tokens.every(token => SAFE_DIMENSION_VALUE_REGEX.test(token))
+      const allTokensSafe = tokens.length > 0 && tokens.every((token: string) => SAFE_DIMENSION_VALUE_REGEX.test(token))
       if (allTokensSafe) {
         safeDeclarations.push(`${prop}:${tokens.join(' ')}`)
       }
@@ -98,14 +97,11 @@ function sanitizeInlineStyle(element: Element): void {
   }
 }
 
-let isHookRegistered = false
-
-function ensurePurifyHooks(purify: any) {
-  if (isHookRegistered || !purify?.addHook) return
-  isHookRegistered = true
+function setupPurifyHooks(purify: any): void {
+  if (!purify?.addHook) return
 
   purify.addHook('afterSanitizeAttributes', (node: any) => {
-    if (!(node instanceof Element)) return
+    if (!node || typeof node !== 'object' || node.nodeType !== 1) return
 
     // 0. 防伪造：清除用户输入中假冒的代码块包装与控制按钮 class，确保只有渲染器在净化后注入的结构生效
     const forgedClasses = [
@@ -117,17 +113,19 @@ function ensurePurifyHooks(purify: any) {
       'code-wrap-btn',
       'code-preview-btn',
     ]
-    for (const cls of forgedClasses) {
-      if (node.classList.contains(cls)) {
-        node.classList.remove(cls)
+    if (node.classList) {
+      for (const cls of forgedClasses) {
+        if (node.classList.contains(cls)) {
+          node.classList.remove(cls)
+        }
       }
-    }
-    if (node.classList.length === 0 && node.hasAttribute('class')) {
-      node.removeAttribute('class')
+      if (node.classList.length === 0 && node.hasAttribute('class')) {
+        node.removeAttribute('class')
+      }
     }
 
     // 1. 链接标签加固：强制外部安全链接并校验安全协议
-    if (node.tagName.toLowerCase() === 'a') {
+    if (node.tagName && node.tagName.toLowerCase() === 'a') {
       const href = node.getAttribute('href') || ''
       if (/^\s*(javascript|data|vbscript):/i.test(href)) {
         node.removeAttribute('href')
@@ -138,7 +136,7 @@ function ensurePurifyHooks(purify: any) {
     }
 
     // 2. 表单元素控制：仅保留禁用的复选框（Markdown 任务列表），移除其他输入框
-    if (node.tagName.toLowerCase() === 'input') {
+    if (node.tagName && node.tagName.toLowerCase() === 'input') {
       if (node.getAttribute('type') === 'checkbox') {
         node.setAttribute('disabled', 'true')
       } else {
@@ -152,93 +150,49 @@ function ensurePurifyHooks(purify: any) {
   })
 }
 
+// 基于 WeakMap 管理 DOMPurify 实例缓存，支持多窗口隔离与连续调用复用
+const purifyInstanceCache = new WeakMap<object, any>()
+
 function getPurifyInstance(): any {
+  let targetWindow: any = null
   if (typeof window !== 'undefined') {
-    return typeof DOMPurify === 'function' ? (DOMPurify as any)(window) : DOMPurify
+    targetWindow = window
+  } else if (typeof globalThis !== 'undefined' && (globalThis as any).window) {
+    targetWindow = (globalThis as any).window
   }
-  if (typeof globalThis !== 'undefined' && (globalThis as any).window) {
-    return typeof DOMPurify === 'function' ? (DOMPurify as any)((globalThis as any).window) : DOMPurify
+
+  if (!targetWindow || typeof targetWindow !== 'object') {
+    return null
   }
-  return null
+
+  const cached = purifyInstanceCache.get(targetWindow)
+  if (cached) {
+    return cached
+  }
+
+  const purify = typeof DOMPurify === 'function' ? (DOMPurify as any)(targetWindow) : DOMPurify
+  if (purify) {
+    setupPurifyHooks(purify)
+    purifyInstanceCache.set(targetWindow, purify)
+  }
+  return purify
 }
 
-const ALLOWED_TAGS_SET = new Set([
-  'p', 'br', 'hr',
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  'strong', 'b', 'em', 'i', 'del', 's', 'sub', 'sup', 'mark',
-  'blockquote', 'code', 'pre',
-  'ul', 'ol', 'li',
-  'table', 'thead', 'tbody', 'tr', 'th', 'td',
-  'a', 'img', 'span', 'div',
-  'input',
-  'svg', 'path', 'line',
-])
-
-const FORGED_CLASSES_SET = new Set([
-  'code-block-wrapper',
-  'code-block-header',
-  'code-block-actions',
-  'code-action-btn',
-  'code-copy-btn',
-  'code-wrap-btn',
-  'code-preview-btn',
-])
-
-function sanitizeWithParse5(dirty: string): string {
-  const fragment = parseFragment(dirty)
-  function walk(node: Node): void {
-    const children = [...(adapter.getChildNodes(node as ParentNode) || [])]
-    for (const child of children) {
-      if (adapter.isElementNode(child)) {
-        const tagName = adapter.getTagName(child).toLowerCase()
-        if (!ALLOWED_TAGS_SET.has(tagName)) {
-          adapter.detachNode(child)
-          continue
-        }
-        const attrs = adapter.getAttrList(child)
-        const safeAttrs: Array<{ name: string; value: string }> = []
-        for (const attr of attrs) {
-          const name = attr.name.toLowerCase()
-          const val = attr.value
-          if (name === 'class') {
-            const classes = val.split(/\s+/).filter(c => !FORGED_CLASSES_SET.has(c))
-            if (classes.length > 0) {
-              safeAttrs.push({ name: 'class', value: classes.join(' ') })
-            }
-          } else if (name === 'href' && tagName === 'a') {
-            if (!/^\s*(javascript|data|vbscript):/i.test(val)) {
-              safeAttrs.push({ name: 'href', value: val })
-            }
-          } else if (name === 'type' && tagName === 'input') {
-            if (val === 'checkbox') {
-              safeAttrs.push({ name: 'type', value: 'checkbox' })
-              safeAttrs.push({ name: 'disabled', value: 'true' })
-            }
-          } else if (['id', 'title', 'alt', 'src', 'checked', 'disabled', 'aria-hidden', 'aria-label', 'role', 'viewbox', 'preserveaspectratio', 'd', 'width', 'height', 'fill', 'stroke', 'stroke-width', 'xmlns', 'x1', 'y1', 'x2', 'y2'].includes(name)) {
-            safeAttrs.push(attr)
-          }
-        }
-        if (tagName === 'a') {
-          safeAttrs.push({ name: 'target', value: '_blank' })
-          safeAttrs.push({ name: 'rel', value: 'noopener noreferrer' })
-        }
-        child.attrs = safeAttrs
-        walk(child)
-      }
-    }
-  }
-  walk(fragment)
-  return serialize(fragment)
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 export function sanitizeHtml(dirty: string): string {
   if (!dirty) return ''
   const purify = getPurifyInstance()
   if (!purify) {
-    return sanitizeWithParse5(dirty)
+    return escapeHtml(dirty)
   }
-
-  ensurePurifyHooks(purify)
 
   return purify.sanitize(dirty, {
     ALLOWED_TAGS: [

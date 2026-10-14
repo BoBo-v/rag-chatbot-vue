@@ -648,7 +648,7 @@ v-if="speechSupported"
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   BookUp2,
   Bot,
@@ -734,11 +734,15 @@ watch(currentId, () => {
   clearSnapshots()
 })
 
-watch(messages, (newMessages) => {
-  if (Array.isArray(newMessages)) {
-    retainMessages(newMessages.map((m) => m.id))
-  }
-}, { deep: false })
+watch(
+  () => messages.value.map(message => message.id),
+  ids => retainMessages(ids),
+  { immediate: true },
+)
+
+onUnmounted(() => {
+  clearSnapshots()
+})
 const { groupedConversations, currentModelName } = useConversationGroups(conversations)
 const {
   conversationSearchDraft,

@@ -430,7 +430,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   Activity,
   Bot,
@@ -557,11 +557,15 @@ function handleEditPrompt(content: string) {
 
 const { handleCodeBlockAction, renderContent, clearSnapshots, retainMessages } = useMessageRenderer()
 
-watch(messages, (newMsgs) => {
-  if (Array.isArray(newMsgs)) {
-    retainMessages(newMsgs.map((m) => m.id))
-  }
-}, { deep: false })
+watch(
+  () => messages.value.map(message => message.id),
+  ids => retainMessages(ids),
+  { immediate: true },
+)
+
+onUnmounted(() => {
+  clearSnapshots()
+})
 
 const agentSuggestions = [
   {

@@ -14,6 +14,7 @@ const {
     runBackendChatRunRecoveryCoordinator,
 } = await import('../src/services/providers/backendChatRunCoordinator')
 type BackendChatRunSnapshot = import('../src/services/providers/backendChatRun').BackendChatRunSnapshot
+type BackendChatRunClientErrorType = import('../src/services/providers/backendChatRun').BackendChatRunClientError
 
 console.log('=== [1/3] 验证 isRetryableError 纯结构化白名单判定 ===')
 
@@ -49,8 +50,12 @@ const nonRetryableErrors = [
     new DOMException('Aborted', 'AbortError'),
     new BackendChatRunClientError('CLIENT_ABORTED', '客户端主动终止生成'),
     new BackendChatRunClientError('GENERATION_RUN_NOT_FOUND', '任务不存在或已过期', 404),
+    new BackendChatRunClientError('GENERATION_RUN_NOT_FOUND', '任务不存在或已过期（即使携带 500）', 500),
     new BackendChatRunClientError('CHAT_RUN_PROTOCOL_ERROR', '协议格式不符合规范'),
+    new BackendChatRunClientError('CHAT_RUN_PROTOCOL_ERROR', '协议格式不符合规范（即使携带 500）', 500),
     new BackendChatRunClientError('CHAT_RUN_SEQUENCE_INVALID', '序号不连续'),
+    new BackendChatRunClientError('IDEMPOTENCY_KEY_MISMATCH', '幂等键不匹配（即使携带 500）', 500),
+    new BackendChatRunClientError('AUTH_INVALID_TOKEN', '认证失败（即使携带 500）', 500),
     new BackendChatRunClientError('HTTP_400', 'Bad Request', 400),
     new BackendChatRunClientError('HTTP_401', 'Unauthorized', 401),
     new BackendChatRunClientError('HTTP_403', 'Forbidden', 403),
@@ -511,6 +516,90 @@ console.log('✅ 场景 8：重连快照已完成直接应用终态，不再订�
     assert.strictEqual(syncedSequence, 12, '同步序号保持一致')
 }
 console.log('✅ 场景 9：快照序号回退、空输出及缓存清理正确同步并通过！')
+
+// 场景 10：业务 onProgress 抛出结构化网络错误 -> 必须原样抛出，严禁被当作传输错误重试
+{
+    let streamCalls = 0
+    let sleepCalled = false
+    let caught: unknown = null
+
+    try {
+        await runBackendChatRunRecoveryCoordinator({
+            runId: 'run-progress-err',
+            initialSequence: 0,
+            onSnapshotSync: () => {},
+            onProgress: () => {
+                // 模拟业务回调内发起其它请求并抛出具备网络特征的结构化异常
+                throw new BackendChatRunClientError('CHAT_RUN_NETWORK_ERROR', '业务 onProgress 内部网络异常')
+            },
+            onEvent: async () => {},
+            deps: {
+                getSnapshot: async () => ({
+                    status: 'running',
+                    lastSequence: 1,
+                    outputText: '',
+                } as any),
+                streamEvents: async (_id, opts) => {
+                    streamCalls++
+                    if (streamCalls === 1) {
+                        // 首次触发网络重试，使得 attempt > 0
+                        throw new BackendChatRunClientError('CHAT_RUN_NETWORK_ERROR', '首轮断流')
+                    }
+                    // 第二轮重试收到有效载荷，触发 options.onProgress()
+                    await opts.onEvent({ type: 'text_delta', sequence: 2 } as any)
+                },
+                sleep: async () => {
+                    sleepCalled = true
+                },
+            },
+        })
+    } catch (err) {
+        caught = err
+    }
+
+    assert.ok(caught instanceof BackendChatRunClientError, '必须原样抛出 onProgress 的异常')
+    assert.strictEqual((caught as BackendChatRunClientErrorType).message, '业务 onProgress 内部网络异常')
+    assert.strictEqual(streamCalls, 2, '第二轮 onProgress 抛错后绝不可开启第三轮重连')
+    assert.strictEqual(sleepCalled, true, '首轮网络断流经历过一次退避')
+}
+console.log('✅ 场景 10：业务 onProgress 即使抛出结构化网络错误也绝不重连并通过！')
+
+// 场景 11：业务 onSnapshotSync / onSnapshotFetch 抛出结构化网络错误 -> 快照拉取成功后绝不触发快照重试
+{
+    let snapshotCalls = 0
+    let sleepCalls = 0
+    let caught: unknown = null
+
+    try {
+        await runBackendChatRunRecoveryCoordinator({
+            runId: 'run-snapsync-err',
+            initialSequence: 0,
+            needInitialSnapshot: true,
+            onSnapshotSync: () => {
+                throw new BackendChatRunClientError('CHAT_RUN_NETWORK_ERROR', '快照消费业务同步异常')
+            },
+            onEvent: async () => {},
+            deps: {
+                getSnapshot: async () => {
+                    snapshotCalls++
+                    return { status: 'running', lastSequence: 5, outputText: 'ok' } as any
+                },
+                streamEvents: async () => {},
+                sleep: async () => {
+                    sleepCalls++
+                },
+            },
+        })
+    } catch (err) {
+        caught = err
+    }
+
+    assert.ok(caught instanceof BackendChatRunClientError, '必须原样抛出 onSnapshotSync 的异常')
+    assert.strictEqual((caught as BackendChatRunClientErrorType).message, '快照消费业务同步异常')
+    assert.strictEqual(snapshotCalls, 1, '快照成功拉取后，消费回调抛错绝不重新拉取快照')
+    assert.strictEqual(sleepCalls, 0, '消费异常绝不进入重试退避等待')
+}
+console.log('✅ 场景 11：快照消费回调抛出结构化网络错误绝不被快照重试吞没并通过！')
 
 console.log('\n========================================')
 console.log('🎉 所有 SSE 错误分类与恢复协调器测试全部通过！')

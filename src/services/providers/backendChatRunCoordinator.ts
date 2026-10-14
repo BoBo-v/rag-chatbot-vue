@@ -83,18 +83,11 @@ export async function runBackendChatRunRecoveryCoordinator(
     while (true) {
         if (options.signal?.aborted) return
 
-        // 1. 若是重试轮次或显式要求，先获取后端权威快照
+        // 1. 若是重试轮次或显式要求，先获取后端权威快照（严格仅对传输层捕获重试）
         if (attempt > 0 || shouldFetchSnapshot) {
+            let snapshot
             try {
-                const snapshot = await getSnapshotFn(options.runId, options.signal)
-                if (options.signal?.aborted) return
-
-                const earlyTerminate = await options.onSnapshotFetch?.(snapshot)
-                if (earlyTerminate) return
-
-                afterSequence = snapshot.lastSequence
-                options.onSnapshotSync(snapshot)
-                shouldFetchSnapshot = false
+                snapshot = await getSnapshotFn(options.runId, options.signal)
             } catch (snapErr) {
                 if (options.signal?.aborted) return
                 if (!isRetryableError(snapErr) || attempt >= retryDelays.length) {
@@ -107,12 +100,22 @@ export async function runBackendChatRunRecoveryCoordinator(
                 await sleepFn(delay, options.signal)
                 continue
             }
+
+            if (options.signal?.aborted) return
+
+            // 本地快照消费回调隔离：快照拉取成功后执行，任何本地异常绝不误判为传输故障，直接原样抛出
+            const earlyTerminate = await options.onSnapshotFetch?.(snapshot)
+            if (earlyTerminate) return
+
+            afterSequence = snapshot.lastSequence
+            options.onSnapshotSync(snapshot)
+            shouldFetchSnapshot = false
         } else if (options.getCurrentSequence) {
             afterSequence = options.getCurrentSequence()
         }
 
-        // 2. 订阅后端事件流，并严格监控回调错误来源
-        let callbackError: unknown = null
+        // 2. 订阅后端事件流，并严格监控消费回调（onEvent / onProgress / onHeartbeat）错误来源
+        let callbackError: { error: unknown } | null = null
         try {
             await streamEventsFn(options.runId, {
                 afterSequence,
@@ -121,21 +124,21 @@ export async function runBackendChatRunRecoveryCoordinator(
                     try {
                         options.onHeartbeat?.()
                     } catch (err) {
-                        callbackError = err
+                        callbackError = { error: err }
                         throw err
                     }
                 },
                 onEvent: async (event) => {
-                    if (isBusinessPayloadEvent(event)) {
-                        if (attempt > 0) {
-                            attempt = 0
-                            options.onProgress?.()
-                        }
-                    }
                     try {
+                        if (isBusinessPayloadEvent(event)) {
+                            if (attempt > 0) {
+                                options.onProgress?.()
+                                attempt = 0
+                            }
+                        }
                         await options.onEvent(event)
                     } catch (err) {
-                        callbackError = err
+                        callbackError = { error: err }
                         throw err
                     }
                 },
@@ -147,9 +150,10 @@ export async function runBackendChatRunRecoveryCoordinator(
                 return
             }
 
-            // 核心安全规则：如果异常来源于业务消费回调（onEvent / onHeartbeat），绝不重连，原样抛出
-            if (callbackError !== null && callbackError === err) {
-                throw err
+            // 核心安全规则：如果异常来源于业务消费回调（onEvent / onProgress / onHeartbeat），绝不重连，原样抛出
+            const userCallbackError = callbackError as { error: unknown } | null
+            if (userCallbackError !== null) {
+                throw userCallbackError.error
             }
 
             // 传输层可重试判断

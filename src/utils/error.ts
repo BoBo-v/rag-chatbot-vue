@@ -73,12 +73,37 @@ export function classifyError(err: unknown): ChatError {
 }
 
 /**
+ * 永久不可重试的业务错误码（无论 HTTP 状态码为何，均绝对不进行重试）
+ * 核心契约：业务错误码优先级绝对高于 HTTP 状态码（例如 CHAT_RUN_PROTOCOL_ERROR / GENERATION_RUN_NOT_FOUND 即使携带 500 也严禁重试）
+ */
+const PERMANENT_NON_RETRYABLE_CODES = new Set([
+    'CLIENT_ABORTED',
+    'CHAT_RUN_PROTOCOL_ERROR',
+    'CHAT_RUN_SEQUENCE_INVALID',
+    'GENERATION_RUN_NOT_FOUND',
+    'CHAT_RUN_INVALID_REQUEST',
+    'IDEMPOTENCY_KEY_REQUIRED',
+    'IDEMPOTENCY_KEY_MISMATCH',
+    'AUTH_TOKEN_MISSING',
+    'AUTH_INVALID_TOKEN',
+    'AUTH_EXPIRED_TOKEN',
+    'AUTH_FORBIDDEN',
+    'CSRF_PROTECTION_FAILED',
+])
+
+const RETRYABLE_NETWORK_CODES = new Set([
+    'CHAT_RUN_NETWORK_ERROR',
+    'CHAT_RUN_STREAM_INCOMPLETE',
+])
+
+/**
  * 基于严格结构化策略判定错误是否允许进行 SSE / 任务恢复重试。
  *
  * 核心规则：
- * 1. 严格仅依据明确的错误类 (BackendChatRunClientError)、结构化错误码 (code) 和 HTTP 状态码 (status)；
- * 2. 彻底移除任何基于 message 字符串的模糊子串匹配或正则嗅探；
- * 3. 任何未被标准化的异常（包括业务回调抛出的本地 TypeError、语法错误等）默认不可重试。
+ * 1. 业务错误码优先级绝对高于 HTTP 状态码；
+ * 2. 严格仅依据明确的错误类 (BackendChatRunClientError)、结构化错误码 (code) 和 HTTP 状态码 (status)；
+ * 3. 彻底移除任何基于 message 字符串的模糊子串匹配或正则嗅探；
+ * 4. 任何未被标准化的异常（包括业务回调抛出的本地 TypeError、语法错误等）默认不可重试。
  */
 export function isRetryableError(err: unknown): boolean {
     if (!err) return false
@@ -88,16 +113,24 @@ export function isRetryableError(err: unknown): boolean {
 
     // 2. 严格依赖结构化后端错误白名单判断
     if (err instanceof BackendChatRunClientError) {
-        if (err.code === 'CLIENT_ABORTED') return false
+        // 关键安全契约：业务错误码绝对优先！协议错误、任务不存在等终态错误即便带有 500 也严禁重试
+        if (PERMANENT_NON_RETRYABLE_CODES.has(err.code)) {
+            return false
+        }
+
+        // 显式声明的传输层重试错误码
+        if (RETRYABLE_NETWORK_CODES.has(err.code)) {
+            return true
+        }
+
+        // 仅在非终态错误码的前提下，依据 HTTP 状态码判断瞬时故障（408/429/5xx）
         if (typeof err.status === 'number') {
             if ([408, 429].includes(err.status) || (err.status >= 500 && err.status < 600)) {
                 return true
             }
             return false
         }
-        if (err.code === 'CHAT_RUN_NETWORK_ERROR' || err.code === 'CHAT_RUN_STREAM_INCOMPLETE') {
-            return true
-        }
+
         return false
     }
 

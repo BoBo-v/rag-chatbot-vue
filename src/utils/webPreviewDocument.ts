@@ -218,6 +218,13 @@ function createNavigationGuardScript(): string {
       e.stopPropagation();
       console.warn('沙箱环境已拦截表单提交外部导航');
     }, true);
+
+    // 6. 监听 beforeunload，尽最大努力感知并记录外部重定向
+    try {
+      window.addEventListener('beforeunload', function() {
+        console.warn('沙箱环境检测到页面卸载/重定向事件');
+      });
+    } catch(e) {}
   } catch(e) {}
 })();`
 }
@@ -225,9 +232,22 @@ function createNavigationGuardScript(): string {
 /**
  * 基于 parse5 AST 构建具备强隔离安全策略的独立预览文档
  * - 避免正则或字符串替换对 JS/CSS 字符串字面量中 HTML 标签的误删
- * - 强制注入严格的 CSP（完全封堵外部网络请求，图片严格限制于 data: 与 blob:）
+ * - 强制注入严格的 CSP（限制外部网络请求 connect-src 'none'、base-uri 'none'、form-action 'none'，图片严格限制于 data: 与 blob:）
  * - 强制将 <meta charset="UTF-8"> 与严格 CSP 置于 <head> 最前列，绝对优先于所有不可信用户标签与脚本
  * - 剥离 refresh meta 自动重定向，并对超链接执行页内锚点白名单限制
+ *
+ * 【安全边界与两档策略说明】：
+ * 1. 默认安全静态模式 (allowScripts: false)：
+ *    - sandbox=""（无 allow-scripts / 无 allow-same-origin）
+ *    - CSP script-src 'none' 且 AST 级剥离所有内联事件（onclick 等）
+ *    - 100% 绝对阻断任何脚本执行与外联跳转。
+ * 2. 受限沙箱交互模式 (allowScripts: true)：
+ *    - sandbox="allow-scripts"（严禁 allow-same-origin）
+ *    - 核心安全保证：宿主凭据完全隔离（沙箱 Origin 为 null，浏览器原生 SecurityError 阻断访问 parent.document/cookie/localStorage）
+ *    - 外联限制：CSP 阻断常规 fetch/XHR/WebSocket，脚本拦截 window.open / a 链接 / form 提交 / location.assign / location.replace / Location.prototype.href
+ *    - 边界局限声明：根据 Web IDL 规范，window.location 具有 [LegacyUnforgeable] 特性且 Chromium 尚未原生支持 CSP navigate-to 'none'，
+ *      因此通过直接赋值 `window.location = 'http://...'` 仍可使 iframe 容器自身发生外部导航。
+ *      因此交互模式定性为“隔离宿主凭据 · 限制常规外联”，不可对外宣称为“完全禁止外联”。若需彻底消除 URL 泄露风险，必须通过网络层代理出站拦截。
  */
 export function buildWebPreviewDocument(
   userCode: string,

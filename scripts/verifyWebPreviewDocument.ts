@@ -103,4 +103,46 @@ assert.ok(bridgePos < evilScriptPos, 'Bridge and CSP must strictly precede user 
 assert.ok(cspPos < evilLinkPos, 'CSP must strictly precede user link/styles')
 assert.ok(!doc4.includes('gb2312'), 'Old user charset must be stripped')
 
+// Test 5: Strips meta refresh and ensures external links are blocked while in-page anchors are preserved
+const codeWithRefreshAndLinks = `<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="refresh" content="5;url=https://evil.com/phishing">
+  <meta HTTP-EQUIV="Refresh" content="0;URL=http://malicious.org">
+  <title>Redirect Attack</title>
+</head>
+<body>
+  <a id="nav-anchor" href="#section-2">跳转到第二节</a>
+  <a id="nav-external" href="https://evil.com/hack" target="_blank">外部钓鱼网站</a>
+  <a id="nav-js" href="javascript:alert('pwned')">伪协议链接</a>
+  <button onclick="alert('click')">点击我</button>
+  <div id="section-2"><h2>第二节</h2></div>
+</body>
+</html>`
+
+const doc5Static = buildWebPreviewDocument(codeWithRefreshAndLinks, {
+  allowScripts: false,
+})
+
+assert.ok(!doc5Static.includes('http-equiv="refresh"'), 'Must strip meta refresh tags')
+assert.ok(!doc5Static.includes('HTTP-EQUIV="Refresh"'), 'Must strip case-insensitive meta refresh tags')
+assert.ok(!doc5Static.includes('https://evil.com/phishing'), 'Must not contain meta refresh target URLs')
+assert.ok(doc5Static.includes('href="#section-2"'), 'In-page anchor href must be preserved intact')
+assert.ok(!doc5Static.includes('href="https://evil.com/hack"'), 'External link href must be blocked')
+assert.ok(doc5Static.includes('href="#blocked"'), 'Blocked links must use #blocked placeholder')
+assert.ok(doc5Static.includes('data-blocked-url="https://evil.com/hack"'), 'Original external URL should be preserved in data attribute for reference')
+assert.ok(!doc5Static.includes('href="javascript:alert'), 'Dangerous javascript: pseudo-protocol must be blocked')
+assert.ok(!doc5Static.includes('onclick='), 'Inline event handlers must be stripped in static mode')
+
+// Test 6: Interactive mode preserves onclick and injects navigation guard
+const doc6Interactive = buildWebPreviewDocument(codeWithRefreshAndLinks, {
+  allowScripts: true,
+  previewId: 'guard-test',
+  injectConsoleBridge: true,
+})
+
+assert.ok(!doc6Interactive.includes('http-equiv="refresh"'), 'Interactive mode must also strip meta refresh tags')
+assert.ok(doc6Interactive.includes('沙箱环境已拦截外部链接跳转'), 'Interactive mode must inject navigation guard')
+assert.ok(doc6Interactive.includes('onclick="alert(\'click\')"'), 'Interactive mode must preserve inline event handlers')
+
 console.log('All buildWebPreviewDocument tests passed successfully!')

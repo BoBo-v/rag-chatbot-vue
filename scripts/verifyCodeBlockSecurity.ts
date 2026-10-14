@@ -88,7 +88,7 @@ const idB = matchB[1]
 
 // 模拟事件对象
 // 3.1 跨消息尝试访问：用 msg-B 的 ownerMessageId 试图触发 msg-A 的代码块 -> 必须被拒绝！
-let mockEventWrongOwner = {
+const mockEventWrongOwner = {
   target: {
     closest: (selector: string) => {
       if (selector === '.code-block-wrapper') return { id: idA }
@@ -108,7 +108,7 @@ console.log('4. 测试渲染快照生命周期管理 (releaseMessage, retainMess
 retainMessages(['msg-A'])
 // retainMessages 保留了 msg-A，删除了 msg-B
 // 尝试用 msg-B 访问自己的代码块 -> 因为已淘汰，无法响应
-let mockEventB = {
+const mockEventB = {
   target: {
     closest: (selector: string) => {
       if (selector === '.code-block-wrapper') return { id: idB }
@@ -121,7 +121,7 @@ handleCodeBlockAction(mockEventB, 'msg-B')
 
 // releaseMessage 删除 msg-A
 releaseMessage('msg-A')
-let mockEventA = {
+const mockEventA = {
   target: {
     closest: (selector: string) => {
       if (selector === '.code-block-wrapper') return { id: idA }

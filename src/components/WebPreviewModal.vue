@@ -7,7 +7,7 @@
           <div class="preview-info">
             <span class="preview-badge" :class="{ interactive: allowScripts }">
               <ShieldCheck :size="15" aria-hidden="true" />
-              <span>{{ allowScripts ? '沙箱脚本已启用 (严格隔离)' : '安全静态预览 (无脚本)' }}</span>
+              <span>{{ allowScripts ? '受限沙箱交互 (隔离宿主凭据 · 限制外联)' : '默认安全静态预览 (禁止脚本 · 限制外联)' }}</span>
             </span>
             <span id="preview-title" class="preview-title">{{ previewTitle }}</span>
           </div>

@@ -8,6 +8,7 @@ export function renderCode(code: string, scriptsEnabled: boolean): void {
   allowScripts = scriptsEnabled
   const iframe = document.getElementById('sandbox-frame') as HTMLIFrameElement | null
   const toggleBtn = document.getElementById('toggle-script-btn') as HTMLButtonElement | null
+  const badge = document.getElementById('sandbox-badge') as HTMLSpanElement | null
 
   if (!iframe) return
 
@@ -17,11 +18,17 @@ export function renderCode(code: string, scriptsEnabled: boolean): void {
       toggleBtn.textContent = '交互脚本: 已启用'
       toggleBtn.classList.add('active-toggle')
     }
+    if (badge) {
+      badge.textContent = '🔒 受限沙箱交互 · 隔离宿主凭据 · 限制外联'
+    }
   } else {
     iframe.setAttribute('sandbox', '')
     if (toggleBtn) {
       toggleBtn.textContent = '交互脚本: 已关闭'
       toggleBtn.classList.remove('active-toggle')
+    }
+    if (badge) {
+      badge.textContent = '🔒 默认安全静态预览 · 禁止脚本 · 限制外联'
     }
   }
 

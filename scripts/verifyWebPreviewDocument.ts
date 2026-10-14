@@ -11,7 +11,7 @@ const codeWithEmbeddedTags = `<!DOCTYPE html>
     const str1 = '<body>';
     const str2 = '</body></html>';
     const template = \`<div>\${str1}</div>\`;
-  <\/script>
+  </script>
 </head>
 <body>
   <h1>Safe Sandbox</h1>
@@ -116,6 +116,11 @@ const codeWithRefreshAndLinks = `<!DOCTYPE html>
   <a id="nav-anchor" href="#section-2">跳转到第二节</a>
   <a id="nav-external" href="https://evil.com/hack" target="_blank">外部钓鱼网站</a>
   <a id="nav-js" href="javascript:alert('pwned')">伪协议链接</a>
+  <map name="workmap">
+    <area shape="rect" coords="34,44,270,350" alt="External Area" href="https://evil.com/map" target="_blank">
+    <area shape="rect" coords="290,172,333,250" alt="Anchor Area" href="#map-anchor">
+  </map>
+  <form action="https://evil.com/post" method="POST"><button type="submit">提交</button></form>
   <button onclick="alert('click')">点击我</button>
   <div id="section-2"><h2>第二节</h2></div>
 </body>
@@ -133,6 +138,11 @@ assert.ok(!doc5Static.includes('href="https://evil.com/hack"'), 'External link h
 assert.ok(doc5Static.includes('href="#blocked"'), 'Blocked links must use #blocked placeholder')
 assert.ok(doc5Static.includes('data-blocked-url="https://evil.com/hack"'), 'Original external URL should be preserved in data attribute for reference')
 assert.ok(!doc5Static.includes('href="javascript:alert'), 'Dangerous javascript: pseudo-protocol must be blocked')
+assert.ok(!doc5Static.includes('href="https://evil.com/map"'), 'External area href must be blocked')
+assert.ok(doc5Static.includes('href="#map-anchor"'), 'In-page area anchor must be preserved')
+assert.ok(!doc5Static.includes('action="https://evil.com/post"'), 'External form action must be blocked')
+assert.ok(doc5Static.includes('action="#blocked"'), 'Blocked form action must use #blocked placeholder')
+assert.ok(doc5Static.includes('data-blocked-form-url="https://evil.com/post"'), 'Form action URL preserved in data attribute')
 assert.ok(!doc5Static.includes('onclick='), 'Inline event handlers must be stripped in static mode')
 
 // Test 6: Interactive mode preserves onclick and injects navigation guard

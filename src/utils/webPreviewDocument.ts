@@ -57,17 +57,19 @@ function stripExistingCharsetMetaTags(headElement: Element): void {
 }
 
 /**
- * 遍历并处理超链接 <a> 标签：
+ * 遍历并处理可产生导航的元素（<a>、<area> 及 <form> 标签）：
  * - 允许页内锚点跳转（以 # 开头的链接，如 href="#section"）
  * - 拦截并阻止所有外部导航（如 http://, https://, //）和危险伪协议（javascript:, data: 等）
  * - 移除非法链接的 target 属性，避免在新窗口或顶层弹出不受控页面
  */
-function sanitizeAnchors(node: Node): void {
+function sanitizeNavigationTargets(node: Node): void {
   const children = [...(adapter.getChildNodes(node as ParentNode) || [])]
   for (const child of children) {
     if (adapter.isElementNode(child)) {
-      if (adapter.getTagName(child).toLowerCase() === 'a') {
-        const attrs = adapter.getAttrList(child)
+      const tag = adapter.getTagName(child).toLowerCase()
+      const attrs = adapter.getAttrList(child)
+
+      if (tag === 'a' || tag === 'area') {
         const hrefAttr = attrs.find((a) => a.name.toLowerCase() === 'href')
         if (hrefAttr) {
           const val = hrefAttr.value.trim()
@@ -82,8 +84,18 @@ function sanitizeAnchors(node: Node): void {
             attrs.push({ name: 'title', value: `已拦截外部跳转: ${val}` })
           }
         }
+      } else if (tag === 'form') {
+        const actionAttr = attrs.find((a) => a.name.toLowerCase() === 'action')
+        if (actionAttr) {
+          const val = actionAttr.value.trim()
+          if (!val.startsWith('#')) {
+            actionAttr.value = '#blocked'
+            attrs.push({ name: 'data-blocked-form-url', value: val })
+          }
+        }
       }
-      sanitizeAnchors(child)
+
+      sanitizeNavigationTargets(child)
     }
   }
 }
@@ -227,8 +239,8 @@ export function buildWebPreviewDocument(
   // 1. 递归移除所有用户自行注入的 CSP、refresh 等危险 meta 标签
   stripDisallowedMetaTags(document)
 
-  // 2. 遍历并处理超链接，阻止非页内锚点跳转
-  sanitizeAnchors(document)
+  // 2. 遍历并处理导航目标标签（a、area、form），阻止非页内锚点跳转
+  sanitizeNavigationTargets(document)
 
   // 3. 在静态无脚本模式下，清理所有内联事件监听器
   if (!options.allowScripts) {

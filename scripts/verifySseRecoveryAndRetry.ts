@@ -176,8 +176,8 @@ console.log('\n=== [3/3] 验证生产级恢复协调器状态机完整执行逻�
 
 // 场景 1：流读取失败 -> 触发退避重试，连续失败最多 5 次后抛出
 {
-    let attemptsObserved: number[] = []
-    let sleepCalls: number[] = []
+    const attemptsObserved: number[] = []
+    const sleepCalls: number[] = []
     let streamCalls = 0
 
     let caught: unknown = null
@@ -349,7 +349,7 @@ console.log('✅ 场景 5：快照读取中断按传输错误进入重试并通�
 
 // 场景 6：收到心跳后再次断流 -> 失败计数继续增加，绝不被清零
 {
-    let retryCounts: number[] = []
+    const retryCounts: number[] = []
     let streamCalls = 0
 
     try {

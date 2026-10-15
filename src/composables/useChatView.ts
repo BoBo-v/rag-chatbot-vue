@@ -23,7 +23,8 @@ import { useAttachments } from './useAttachments'
 import { useChatScroll } from './useChatScroll'
 import { useTypewriterStream } from './useTypewriterStream'
 import { useConfirm } from './useConfirm'
-import type {Message, StreamController} from "../types/chat.ts";
+import type { Message, StreamController } from "../types/chat.ts"
+import type { ModelRuntimeConfig } from '../types/model'
 
 /**
  * 聊天页面核心逻辑 composable

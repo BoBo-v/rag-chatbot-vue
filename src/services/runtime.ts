@@ -6,7 +6,7 @@ import { resolveActiveConnection } from './activeConnection'
 export function createRuntimeFromSettings(
     appSettings: AppSettings,
     catalogOrProviders?: BackendProvidersCatalog | BackendChatProvider[]
-): Readonly<ModelRuntimeConfig> {
+): ModelRuntimeConfig {
     const active = resolveActiveConnection(appSettings, catalogOrProviders)
     const common = {
         transport: active.transport,
@@ -16,7 +16,7 @@ export function createRuntimeFromSettings(
     }
 
     if (active.transport === 'backend') {
-        return Object.freeze({
+        return {
             ...common,
             provider: active.providerId,
             label: active.summaryLabel,
@@ -25,38 +25,42 @@ export function createRuntimeFromSettings(
             backendRagMode: appSettings.ragMode,
             backendProvider: (active.providerId === 'claude' ? 'anthropic' : active.providerId) as import('../stores/settings').BackendChatProviderType,
             backendModel: active.model,
-        })
+        }
     }
 
     switch (active.providerId) {
         case 'openai':
-            return Object.freeze({
+            return {
                 ...common,
                 provider: 'openai',
                 label: active.summaryLabel,
                 model: active.model,
                 baseUrl: active.baseUrl,
                 apiKey: appSettings.openai.apiKey,
-            })
+            }
         case 'claude':
-            return Object.freeze({
+            return {
                 ...common,
                 provider: 'claude',
                 label: active.summaryLabel,
                 model: active.model,
                 baseUrl: active.baseUrl,
                 apiKey: appSettings.claude.apiKey,
-            })
+            }
         case 'ollama':
         default:
-            return Object.freeze({
+            return {
                 ...common,
                 provider: 'ollama',
                 label: active.summaryLabel,
                 model: active.model,
                 baseUrl: active.baseUrl,
-            })
+            }
     }
+}
+
+export function freezeRuntime(runtime: ModelRuntimeConfig): Readonly<ModelRuntimeConfig> {
+    return Object.freeze({ ...runtime })
 }
 
 export function getRuntimeDisplayName(runtime: ModelRuntimeConfig): string {

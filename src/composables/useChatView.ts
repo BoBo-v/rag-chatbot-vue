@@ -2,7 +2,8 @@ import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useChat } from '../stores/chat'
 import { useConversations } from '../stores/conversations'
 import { generateStreamWithContext } from '../services/stream'
-import { createRuntimeFromSettings } from '../services/runtime'
+import { createRuntimeFromSettings, freezeRuntime } from '../services/runtime'
+import { getCachedBackendProvidersCatalog } from '../services/knowledge'
 import {
     cancelBackendChatRun,
     BackendChatRunClientError,
@@ -415,10 +416,21 @@ export function useChatView() {
         const files = pendingFiles.value.length > 0
             ? pendingFiles.value.map(f => ({ name: f.name, content: f.content, size: f.size }))
             : undefined
-        inputValue.value = ''
-        clearAttachments()
 
         if (!userText && !images?.length && !files?.length) return
+
+        // 统一在清空输入、保存消息及发起异步操作前校验连接状态与有效候选
+        const catalog = getCachedBackendProvidersCatalog(settings.backend?.url)
+        const active = resolveActiveConnection(settings, catalog)
+        if (!active.isConfigured) {
+            toast.show(active.error || '当前模型服务未就绪或未配置，无法发送消息', 'warning')
+            return
+        }
+
+        const runtimeSnapshot = freezeRuntime(createRuntimeFromSettings(settings, catalog))
+
+        inputValue.value = ''
+        clearAttachments()
 
         if (images?.length && settings.provider === 'ollama') {
             const model = settings.ollama.model.toLowerCase()
@@ -465,6 +477,7 @@ export function useChatView() {
             prompt: promptText,
             convId,
             sourceUserMessageId: userMsgId,
+            runtime: runtimeSnapshot,
         })
     }
 
@@ -507,6 +520,14 @@ export function useChatView() {
         }
 
         if (errMsg.generationTurnId && !errMsg.generationRunId) {
+            const catalog = getCachedBackendProvidersCatalog(settings.backend?.url)
+            const active = resolveActiveConnection(settings, catalog)
+            if (!active.isConfigured) {
+                toast.show(active.error || '当前模型服务未就绪或未配置，无法重试', 'warning')
+                return
+            }
+            const runtimeSnapshot = freezeRuntime(createRuntimeFromSettings(settings, catalog))
+
             const contextMessages = messages.value
                 .filter(message => message.id !== errMsg.id)
                 .map(snapshotMessage)
@@ -528,9 +549,18 @@ export function useChatView() {
                 contextMessages,
                 sourceUserMessageId: userMsg.id,
                 turnId: errMsg.generationTurnId,
+                runtime: runtimeSnapshot,
             })
             return
         }
+
+        const catalog = getCachedBackendProvidersCatalog(settings.backend?.url)
+        const active = resolveActiveConnection(settings, catalog)
+        if (!active.isConfigured) {
+            toast.show(active.error || '当前模型服务未就绪或未配置，无法重试', 'warning')
+            return
+        }
+        const runtimeSnapshot = freezeRuntime(createRuntimeFromSettings(settings, catalog))
 
         await db.messages.delete(messageId)
         messages.value.splice(msgIdx, 1)
@@ -544,6 +574,7 @@ export function useChatView() {
             convId: currentId.value,
             sourceUserMessageId: userMsg.id,
             regeneratedFromRunId: errMsg.generationRunId,
+            runtime: runtimeSnapshot,
         })
     }
 
@@ -557,6 +588,14 @@ export function useChatView() {
 
         const userMsg = findPreviousUserMessage(messageId)
         if (!userMsg) return
+
+        const catalog = getCachedBackendProvidersCatalog(settings.backend?.url)
+        const active = resolveActiveConnection(settings, catalog)
+        if (!active.isConfigured) {
+            toast.show(active.error || '当前模型服务未就绪或未配置，无法重新生成', 'warning')
+            return
+        }
+        const runtimeSnapshot = freezeRuntime(createRuntimeFromSettings(settings, catalog))
 
         updateMessage(targetMsg.id, {
             content: '',
@@ -579,6 +618,7 @@ export function useChatView() {
             convId: currentId.value,
             contextMessages,
             sourceUserMessageId: userMsg.id,
+            runtime: runtimeSnapshot,
         })
     }
 
@@ -589,6 +629,15 @@ export function useChatView() {
         const msg = messages.value.find(m => m.id === messageId)
         if (!msg || currentId.value === null) return
         if (msg.status !== 'aborted') return
+
+        const catalog = getCachedBackendProvidersCatalog(settings.backend?.url)
+        const active = resolveActiveConnection(settings, catalog)
+        if (!active.isConfigured) {
+            toast.show(active.error || '当前模型服务未就绪或未配置，无法继续生成', 'warning')
+            return
+        }
+        const runtimeSnapshot = freezeRuntime(createRuntimeFromSettings(settings, catalog))
+
         typewriter.restoreAbortedOutput(messageId)
         const contextMessages: Message[] = messages.value.map(item =>
             item.id === msg.id
@@ -611,6 +660,7 @@ export function useChatView() {
                 convId: currentId.value,
                 contextMessages,
                 sourceUserMessageId: sourceUserMessage.id,
+                runtime: runtimeSnapshot,
             })
             return
         }
@@ -624,6 +674,7 @@ export function useChatView() {
             convId: currentId.value,
             contextMessages,
             skipRagContext: true,
+            runtime: runtimeSnapshot,
         })
     }
 
@@ -639,6 +690,7 @@ export function useChatView() {
         turnId?: string
         regeneratedFromRunId?: string
         resumeRunId?: string
+        runtime?: Readonly<ModelRuntimeConfig>
     }
 
     /**
@@ -659,7 +711,21 @@ export function useChatView() {
         activeStreamSettled = settled
         typewriter.reset()
         needsStatusFallback = true
-        const runtime = createRuntimeFromSettings(settings)
+        const runtime = options.runtime || freezeRuntime(createRuntimeFromSettings(settings, getCachedBackendProvidersCatalog(settings.backend?.url)))
+        if (!options.resumeRunId && !options.runtime) {
+            const active = resolveActiveConnection(settings, getCachedBackendProvidersCatalog(settings.backend?.url))
+            if (!active.isConfigured) {
+                const errMsg = active.error || '当前模型服务未就绪或未配置'
+                toast.show(errMsg, 'warning')
+                updateMessage(options.aiMessageId, {
+                    status: 'error',
+                    errorMessage: errMsg,
+                })
+                await flushMessagePersist(options.aiMessageId, options.convId)
+                settleActiveStream()
+                return
+            }
+        }
         activeStreamTransport = options.resumeRunId ? 'backend' : runtime.transport
         streamCtrl = createStreamController(options.aiMessageId)
         isStreaming.value = true

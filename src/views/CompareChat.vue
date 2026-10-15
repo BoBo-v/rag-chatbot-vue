@@ -422,7 +422,7 @@ import {
 } from '../services/comparisonExport'
 import { formatLatency, getSessionStats } from '../services/comparisonStats'
 import { getVisionUnsupportedRuntimeLabels } from '../services/modelCapabilities'
-import { createRuntimeFromSettings } from '../services/runtime'
+import { createRuntimeFromSettings, freezeRuntime } from '../services/runtime'
 import { settings } from '../stores/settings'
 import type { ModelRuntimeConfig } from '../types/model'
 
@@ -468,10 +468,10 @@ const {
 } = comparison
 
 const runtimeDrafts = reactive<ModelRuntimeConfig[]>([
-  createRuntimeFromSettings(settings),
-  createRuntimeFromSettings(settings),
+  cloneRuntime(createRuntimeFromSettings(settings)),
+  cloneRuntime(createRuntimeFromSettings(settings)),
 ])
-const summaryRuntime = reactive<ModelRuntimeConfig>(createRuntimeFromSettings(settings))
+const summaryRuntime = reactive<ModelRuntimeConfig>(cloneRuntime(createRuntimeFromSettings(settings)))
 
 const currentSession = computed(() => comparison.session.value)
 const sessionStats = computed(() => getSessionStats(runs.value))
@@ -628,7 +628,7 @@ function normalizeRuntime(runtime: ModelRuntimeConfig): void {
 }
 
 function resetRuntime(index: number): void {
-  runtimeDrafts[index] = createRuntimeFromSettings(settings)
+  runtimeDrafts[index] = cloneRuntime(createRuntimeFromSettings(settings))
 }
 
 function resetAllRuntimes(): void {
@@ -637,7 +637,7 @@ function resetAllRuntimes(): void {
 }
 
 function resetSummaryRuntime(): void {
-  Object.assign(summaryRuntime, createRuntimeFromSettings(settings))
+  Object.assign(summaryRuntime, cloneRuntime(createRuntimeFromSettings(settings)))
 }
 
 function statusLabel(status: string): string {
@@ -664,7 +664,7 @@ async function start(): Promise<void> {
   isHistorySession.value = false
   const runtimes = runtimeDrafts.map(runtime => {
     normalizeRuntime(runtime)
-    return cloneRuntime(runtime)
+    return freezeRuntime(cloneRuntime(runtime))
   })
   if (pendingImages.value.length > 0) {
     const unsupported = getVisionUnsupportedRuntimeLabels(runtimes)
@@ -844,7 +844,7 @@ async function retryRun(runId: string): Promise<void> {
 async function summarize(): Promise<void> {
   if (!canSummarize.value) return
   normalizeRuntime(summaryRuntime)
-  await summarizeWith(cloneRuntime(summaryRuntime), summaryInstruction.value)
+  await summarizeWith(freezeRuntime(cloneRuntime(summaryRuntime)), summaryInstruction.value)
 }
 </script>
 

@@ -69,17 +69,24 @@ export function resolveActiveConnection(
                 providers = catalogOrProviders
                 catalogState = 'success'
             } else {
-                providers = catalogOrProviders.providers
-                catalogState = catalogOrProviders.state
-                catalogError = catalogOrProviders.error
+                const catalogBaseUrl = catalogOrProviders.baseUrl
+                if (catalogBaseUrl && resolveTargetBaseUrl(catalogBaseUrl) !== baseUrl) {
+                    catalogState = 'idle'
+                    catalogError = '目录地址与当前配置不一致'
+                    providers = undefined
+                } else {
+                    providers = catalogOrProviders.providers
+                    catalogState = catalogOrProviders.state
+                    catalogError = catalogOrProviders.error
+                }
             }
         }
 
         const matched = providers?.find(p => p.id === providerId)
         const providerName = matched?.name?.trim() || getDefaultBackendProviderName(providerId)
 
-        let model = ''
-        let isConfigured = false
+        let model: string
+        let isConfigured: boolean
         let error: string | undefined
 
         if (catalogState === 'loading') {
@@ -89,6 +96,10 @@ export function resolveActiveConnection(
         } else if (catalogState === 'error') {
             isConfigured = false
             error = catalogError || '后端服务元数据加载失败'
+            model = settings.backend?.model?.trim() || ''
+        } else if (catalogState === 'idle' || catalogOrProviders === undefined) {
+            isConfigured = false
+            error = catalogError || '后端服务目录未就绪'
             model = settings.backend?.model?.trim() || ''
         } else if (providers !== undefined) {
             if (!matched) {
@@ -128,13 +139,9 @@ export function resolveActiveConnection(
                 }
             }
         } else {
-            // catalogOrProviders 未提供时，仅使用用户设置值，绝不跨厂商硬编码猜模型
-            const userModel = settings.backend?.model?.trim()
-            model = userModel || ''
-            isConfigured = Boolean(model)
-            if (!isConfigured) {
-                error = '未选择后端模型'
-            }
+            model = settings.backend?.model?.trim() || ''
+            isConfigured = false
+            error = '后端服务目录未就绪'
         }
 
         return {

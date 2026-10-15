@@ -16,6 +16,7 @@ import {
 } from '../src/services/activeConnection'
 import {
     createRuntimeFromSettings,
+    freezeRuntime,
 } from '../src/services/runtime'
 import {
     createBackendChatRun,
@@ -248,7 +249,22 @@ async function runTests() {
         assert.equal(connC.isConfigured, false)
         assert.equal(connC.model, '')
         assert.ok(connC.error?.includes('后端未配置厂商'))
-        console.log('✓ [断言 3 通过] 自动回退有效候选首项，空候选明确禁止发送，绝不跨厂商硬编码猜模型')
+
+        // 情形 D：未提供目录时，绝不凭已保存模型名称判定后端连接可用
+        const connD = resolveActiveConnection(baseSettings, undefined)
+        assert.equal(connD.isConfigured, false)
+        assert.equal(connD.error, '后端服务目录未就绪')
+
+        // 情形 E：目录地址与当前设置不匹配
+        const connE = resolveActiveConnection(baseSettings, {
+            state: 'success',
+            baseUrl: 'http://another-host:9999',
+            providers: catalogOnlyOllama,
+        })
+        assert.equal(connE.isConfigured, false)
+        assert.equal(connE.error, '目录地址与当前配置不一致')
+
+        console.log('✓ [断言 3 通过] 自动回退有效候选首项，空候选/未就绪/地址不一致明确判定不可用，绝不硬编码盲猜')
     }
 
     // ── 断言 4：任务生成中切换顶栏连接、页面刷新后恢复任务、恢复后点击停止，全流程请求均准确打向原 Fastify 后端 ──
@@ -347,13 +363,31 @@ async function runTests() {
 
     // ── 断言 5：顶栏连接与模型切换不会修改正在后台执行任务的 Provider、模型或目标地址 ──
     {
-        console.log('\n[断言 5] 测试已创建 Runtime 配置的不可变性...')
+        console.log('\n[断言 5] 测试已创建 Runtime 配置的不可变性与对比页草稿隔离...')
         const liveSettings = createMockSettings({
             backend: { url: 'http://original-fastify:3000', provider: 'ollama', model: 'qwen2.5:7b' },
         })
+        const catalogReady = {
+            state: 'success' as const,
+            baseUrl: 'http://original-fastify:3000',
+            providers: [{
+                id: 'ollama' as const,
+                name: 'Ollama',
+                configured: true,
+                defaultModel: 'qwen2.5:7b',
+                models: ['qwen2.5:7b'],
+            }],
+        }
 
-        const activeRuntime = createRuntimeFromSettings(liveSettings)
-        assert.equal(Object.isFrozen(activeRuntime), true, 'Runtime 配置必须是 Object.freeze 不可变对象')
+        // 1. 验证工厂函数返回普通可变草稿（解耦 CompareChat.vue，使其可以正常响应式编辑）
+        const editableDraft = createRuntimeFromSettings(liveSettings, catalogReady)
+        assert.equal(Object.isFrozen(editableDraft), false, 'createRuntimeFromSettings 返回值必须是普通可变对象')
+        editableDraft.model = 'custom-model'
+        assert.equal(editableDraft.model, 'custom-model', '对比页草稿必须允许自由编辑与重置')
+
+        // 2. 验证发起请求时通过 freezeRuntime 生成不可变快照
+        const activeRuntime = freezeRuntime(editableDraft)
+        assert.equal(Object.isFrozen(activeRuntime), true, 'Runtime 执行快照必须是 Object.freeze 不可变对象')
 
         // 尝试就地篡改属性应当在严格模式抛出异常或静默失败
         assert.throws(() => {
@@ -368,8 +402,8 @@ async function runTests() {
         // 检查原任务持有的 activeRuntime 绝不受影响
         assert.equal(activeRuntime.baseUrl, 'http://original-fastify:3000')
         assert.equal(activeRuntime.provider, 'ollama')
-        assert.equal(activeRuntime.model, 'qwen2.5:7b')
-        console.log('✓ [断言 5 通过] 顶栏与全局设置变更完全不影响已创建后台任务的不可变快照')
+        assert.equal(activeRuntime.model, 'custom-model')
+        console.log('✓ [断言 5 通过] 对比页草稿可自由编辑，请求快照不可变，顶栏全局变更不污染在途任务')
     }
 
     console.log('\n🎉 第一批 5 项关键断言与架构约束全部通过！')

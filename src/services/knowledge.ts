@@ -74,6 +74,7 @@ export interface KnowledgeSearchOptions {
     fileId?: string
 }
 
+import { reactive } from 'vue'
 import { apiFetch, apiUrl, resolveTargetBaseUrl } from './api'
 import { useAuthStore } from '../stores/auth'
 import type { BackendChatProvider, BackendProvidersCatalog } from '../types/connection'
@@ -129,9 +130,20 @@ export function buildCatalogCacheKey(baseUrl?: string): string {
     return `${resolvedUrl}|${username}`
 }
 
+export const sharedCatalogState = reactive<Record<string, BackendProvidersCatalog>>({})
+
+export function getSharedBackendProvidersCatalog(baseUrl?: string): BackendProvidersCatalog {
+    const key = buildCatalogCacheKey(baseUrl)
+    return sharedCatalogState[key] || {
+        state: 'idle',
+        baseUrl: resolveTargetBaseUrl(baseUrl),
+        providers: [],
+    }
+}
+
 export function getCachedBackendProvidersCatalog(baseUrl?: string): BackendProvidersCatalog | undefined {
     const key = buildCatalogCacheKey(baseUrl)
-    return catalogCacheMap.get(key)?.catalog
+    return catalogCacheMap.get(key)?.catalog || sharedCatalogState[key]
 }
 
 export function resetBackendProvidersCatalog(): void {
@@ -144,6 +156,9 @@ export function resetBackendProvidersCatalog(): void {
         entry.currentPromise = null
     }
     catalogCacheMap.clear()
+    for (const key of Object.keys(sharedCatalogState)) {
+        delete sharedCatalogState[key]
+    }
 }
 
 export async function getBackendProvidersCatalog(
@@ -191,6 +206,7 @@ export async function getBackendProvidersCatalog(
         baseUrl: resolvedUrl,
         providers: entry.catalog.providers,
     }
+    sharedCatalogState[key] = entry.catalog
 
     const promise = (async () => {
         let abortListener: (() => void) | undefined
@@ -242,6 +258,7 @@ export async function getBackendProvidersCatalog(
                 providers,
             }
             currentEntry.catalog = successCatalog
+            sharedCatalogState[key] = successCatalog
             return successCatalog
         } catch (err: unknown) {
             const currentEntry = catalogCacheMap.get(key)
@@ -255,7 +272,15 @@ export async function getBackendProvidersCatalog(
 
             if (!isStale && currentEntry) {
                 if (controller.signal.aborted) {
-                    // 主动取消不覆盖为永久 error 状态
+                    // 主动取消不覆盖为永久 error 状态，结束 loading 恢复 idle
+                    if (currentEntry.catalog.state === 'loading') {
+                        currentEntry.catalog = {
+                            state: 'idle',
+                            baseUrl: resolvedUrl,
+                            providers: currentEntry.catalog.providers,
+                        }
+                        sharedCatalogState[key] = currentEntry.catalog
+                    }
                 } else {
                     currentEntry.catalog = {
                         state: 'error',
@@ -263,6 +288,7 @@ export async function getBackendProvidersCatalog(
                         providers: [],
                         error: err instanceof Error ? err.message : String(err),
                     }
+                    sharedCatalogState[key] = currentEntry.catalog
                 }
             }
             throw err

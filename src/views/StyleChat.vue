@@ -722,7 +722,7 @@ import { useConversationGroups } from '../composables/useConversationGroups'
 import { persistSettings, settings as currentSettings } from '../stores/settings'
 import type { BackendRagMode } from '../stores/settings'
 import { getClaudeModels } from '../services/providers/claude'
-import { uploadKnowledgeFile, getBackendProvidersCatalog, type BackendProvidersCatalog } from '../services/knowledge'
+import { uploadKnowledgeFile, getBackendProvidersCatalog, getSharedBackendProvidersCatalog, type BackendProvidersCatalog } from '../services/knowledge'
 import type { UploadProgress } from '../services/knowledge'
 import { resolveActiveConnection, getDefaultBackendProviderName } from '../services/activeConnection'
 import type { BackendProviderId, DirectProviderId, ModelTransport } from '../types/model'
@@ -876,19 +876,16 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 }
 
 // ── 后端厂商与连接解析 ────────────────────────────
-const backendCatalog = ref<BackendProvidersCatalog>({
-  state: 'idle',
-  baseUrl: currentSettings.backend.url,
-  providers: [],
+const backendCatalog = computed<BackendProvidersCatalog>(() => {
+  return getSharedBackendProvidersCatalog(currentSettings.backend.url)
 })
 
 async function loadBackendProviders(forceRefresh = false) {
   try {
-    const catalog = await getBackendProvidersCatalog({
+    await getBackendProvidersCatalog({
       baseUrl: currentSettings.backend.url,
       forceRefresh,
     })
-    backendCatalog.value = catalog
   } catch (err) {
     console.warn('[StyleChat] 获取后端厂商列表失败:', err)
   }

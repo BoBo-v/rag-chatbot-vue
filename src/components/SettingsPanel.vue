@@ -566,7 +566,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch, type Component } from 'vue'
+import { computed, nextTick, onUnmounted, reactive, ref, watch, type Component } from 'vue'
 import {
   AlertCircle,
   Bot,
@@ -920,8 +920,25 @@ function selectDirectProvider(value: ProviderType) {
 }
 
 function onBackendDraftChanged() {
+  draftCatalogSeq++
+  if (currentCatalogAbortController) {
+    currentCatalogAbortController.abort()
+    currentCatalogAbortController = null
+  }
+  loadingBackendProviders.value = false
+  backendProviders.value = []
+  backendReachable.value = null
+  backendProviderError.value = ''
   resetTestState()
 }
+
+onUnmounted(() => {
+  if (currentCatalogAbortController) {
+    currentCatalogAbortController.abort()
+    currentCatalogAbortController = null
+  }
+  resetTestState()
+})
 
 function onDirectDraftChanged() {
   resetTestState()
@@ -1005,11 +1022,29 @@ async function loadBackendProviders() {
       if (catalog.providers.length > 0) {
         const currentProvider = catalog.providers.find(p => p.id === draft.backend.provider)
         if (!currentProvider || !currentProvider.configured) {
-          const firstConfigured = catalog.providers.find(p => p.configured) || catalog.providers[0]
-          draft.backend.provider = firstConfigured.id
-          draft.backend.model = firstConfigured.defaultModel || firstConfigured.models?.[0] || ''
-        } else if (!draft.backend.model || (currentProvider.models?.length && !currentProvider.models.includes(draft.backend.model))) {
-          draft.backend.model = currentProvider.defaultModel || currentProvider.models?.[0] || ''
+          backendProviderError.value = currentProvider
+            ? `${currentProvider.name || draft.backend.provider} 未在后端配置可用密钥或服务`
+            : `后端未提供当前选中的厂商 (${draft.backend.provider})`
+        } else {
+          let validModels: string[] = []
+          if (Array.isArray(currentProvider.models)) {
+            validModels = currentProvider.models
+              .map(m => typeof m === 'string' ? m.trim() : (m as any)?.id?.trim())
+              .filter(Boolean)
+          } else if (currentProvider.defaultModel?.trim()) {
+            validModels = [currentProvider.defaultModel.trim()]
+          }
+
+          if (validModels.length === 0) {
+            backendProviderError.value = `${currentProvider.name || draft.backend.provider} 无可用模型候选`
+            draft.backend.model = ''
+          } else if (!draft.backend.model || !validModels.includes(draft.backend.model)) {
+            if (currentProvider.defaultModel && validModels.includes(currentProvider.defaultModel)) {
+              draft.backend.model = currentProvider.defaultModel
+            } else {
+              draft.backend.model = validModels[0]
+            }
+          }
         }
       } else {
         backendProviderError.value = '后端无可用模型服务'

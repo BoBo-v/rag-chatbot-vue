@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
     getBackendProvidersCatalog,
+    getSharedBackendProvidersCatalog,
     resetBackendProvidersCatalog,
 } from '../src/services/knowledge'
 import {
@@ -113,7 +114,7 @@ async function main() {
     resetBackendProvidersCatalog()
 
     let callCount = 0
-    let fetchSignals: AbortSignal[] = []
+    const fetchSignals: AbortSignal[] = []
 
     currentFetchHandler = async (url: string, init?: RequestInit) => {
         if (url.includes('/api/providers')) {
@@ -182,7 +183,18 @@ async function main() {
         baseUrl: 'http://same-server:3000',
     })
     assert.equal(finalCatalog.providers[0].id, 'openai', '旧请求绝不能覆盖新请求的最终缓存')
-    console.log('   ✓ 慢请求被正确中止且不可污染最新目录缓存')
+
+    // 验证共享响应式目录状态同步
+    const shared = getSharedBackendProvidersCatalog('http://same-server:3000')
+    assert.equal(shared.state, 'success')
+    assert.equal(shared.providers[0].id, 'openai')
+
+    // 验证未加载的地址 B 立即返回 idle 且无模型，绝不残留地址 A 的缓存
+    const unreachedB = getSharedBackendProvidersCatalog('http://unreachable-b:9999')
+    assert.equal(unreachedB.state, 'idle')
+    assert.equal(unreachedB.providers.length, 0)
+
+    console.log('   ✓ 慢请求被正确中止，共享目录实时响应且各地址严格隔离')
 
     // ─────────────────────────────────────────────────────────────
     // 断言 3: 草稿测试使用指定参数发起且支持中途取消

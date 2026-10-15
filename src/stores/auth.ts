@@ -14,6 +14,7 @@ interface AuthState {
     isChecking: boolean
     isAuthModalVisible: boolean
     isChangePasswordModalVisible: boolean
+    sessionVersion: number
 }
 
 const state = reactive<AuthState>({
@@ -23,6 +24,7 @@ const state = reactive<AuthState>({
     isChecking: false,
     isAuthModalVisible: false,
     isChangePasswordModalVisible: false,
+    sessionVersion: 1,
 })
 
 export function useAuthStore() {
@@ -31,6 +33,7 @@ export function useAuthStore() {
         state.user = null
         state.mustChangePassword = false
         state.isChangePasswordModalVisible = false
+        state.sessionVersion++
         resetBackendProvidersCatalog()
     }
 
@@ -70,6 +73,7 @@ export function useAuthStore() {
 
             const data = await res.json().catch(() => ({}))
             if (res.ok) {
+                state.sessionVersion++
                 state.isAuthenticated = true
                 state.user = data.user
                 state.isAuthModalVisible = false

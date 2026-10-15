@@ -44,6 +44,10 @@ export async function apiFetch(path: string, init?: RequestInit, options?: ApiFe
         headers,
     }
 
+    const authStore = useAuthStore()
+    const targetBaseUrl = resolveTargetBaseUrl(options?.baseUrl)
+    const sessionVersionAtStart = authStore.sessionVersion.value
+
     const response = await fetch(apiUrl(path, options?.baseUrl), mergedInit)
 
     if (!options?.skipAuthInterception) {
@@ -55,22 +59,24 @@ export async function apiFetch(path: string, init?: RequestInit, options?: ApiFe
                 && cleanPath !== '/api/auth/me'
                 && !cleanPath.startsWith('/api/agent')
             ) {
-                let isAgentUnauthorized = false
-                try {
-                    const cloned = response.clone()
-                    const data = await cloned.json().catch(() => null)
-                    if (data?.code === 'AGENT_UNAUTHORIZED') {
-                        isAgentUnauthorized = true
+                const currentActiveBaseUrl = resolveTargetBaseUrl(undefined)
+                if (targetBaseUrl === currentActiveBaseUrl && authStore.sessionVersion.value === sessionVersionAtStart) {
+                    let isAgentUnauthorized = false
+                    try {
+                        const cloned = response.clone()
+                        const data = await cloned.json().catch(() => null)
+                        if (data?.code === 'AGENT_UNAUTHORIZED') {
+                            isAgentUnauthorized = true
+                        }
+                    } catch {
+                        // ignore
                     }
-                } catch {
-                    // ignore
-                }
 
-                if (!isAgentUnauthorized) {
-                    const authStore = useAuthStore()
-                    authStore.invalidateSession()
-                    if (!authStore.isAuthModalVisible.value) {
-                        authStore.openLoginModal()
+                    if (!isAgentUnauthorized) {
+                        authStore.invalidateSession()
+                        if (!authStore.isAuthModalVisible.value) {
+                            authStore.openLoginModal()
+                        }
                     }
                 }
             }

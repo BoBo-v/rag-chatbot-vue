@@ -42,6 +42,7 @@ export interface DBMessage {
     generationSequence?: number
     generationTurnId?: string
     generationRunStatus?: GenerationRunStatus
+    generationBaseUrl?: string
     createdAt: number
 }
 

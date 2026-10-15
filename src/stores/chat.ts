@@ -68,6 +68,7 @@ export function useChat() {
                 generationSequence: m.generationSequence,
                 generationTurnId: m.generationTurnId,
                 generationRunStatus: m.generationRunStatus,
+                generationBaseUrl: m.generationBaseUrl,
             }
         })
     }

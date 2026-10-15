@@ -244,6 +244,7 @@ export function useChatView() {
             generationSequence: msg.generationSequence,
             generationTurnId: msg.generationTurnId,
             generationRunStatus: msg.generationRunStatus,
+            generationBaseUrl: msg.generationBaseUrl,
             ragContext: msg.ragContext
                 ? {
                     ...msg.ragContext,
@@ -366,6 +367,7 @@ export function useChatView() {
         const msgId = streamCtrl.messageId
         const runId = activeGenerationRunId
         const convId = streamMessageConversations.get(msgId) ?? currentId.value
+        const targetMsg = messages.value.find(m => m.id === msgId)
 
         typewriter.abort(msgId)
         streamCtrl.abort()
@@ -382,7 +384,7 @@ export function useChatView() {
         }
 
         if (runId) {
-            void cancelBackendChatRun(runId).catch(err => {
+            void cancelBackendChatRun(runId, { baseUrl: targetMsg?.generationBaseUrl }).catch(err => {
                 console.warn('[chat] 取消后端生成任务失败', err)
             })
         }
@@ -777,9 +779,11 @@ export function useChatView() {
         runId: string,
         initialSequence: number,
         needInitialSnapshot = false,
+        baseUrl?: string,
     ): Promise<void> {
         await runBackendChatRunRecoveryCoordinator({
             runId,
+            baseUrl,
             initialSequence,
             needInitialSnapshot,
             signal: streamCtrl?.controller.signal,
@@ -836,6 +840,7 @@ export function useChatView() {
             generationTurnId: turnId,
             generationRunStatus: 'queued',
             errorMessage: undefined,
+            generationBaseUrl: runtime.baseUrl,
         })
         await flushMessagePersist(options.aiMessageId, options.convId)
 
@@ -848,6 +853,7 @@ export function useChatView() {
             sourceUserMessageId,
             assistantMessageId: options.aiMessageId,
             regeneratedFromRunId: options.regeneratedFromRunId,
+            baseUrl: runtime.baseUrl,
         })
 
         activeGenerationRunId = created.run.runId
@@ -857,12 +863,13 @@ export function useChatView() {
 
         // 检查在建单接口返回的这几十毫秒内，用户是否已经点击了停止
         if (streamCtrl?.isAborted) {
-            void cancelBackendChatRun(created.run.runId).catch(() => undefined)
+            void cancelBackendChatRun(created.run.runId, { baseUrl: runtime.baseUrl }).catch(() => undefined)
             updateMessage(options.aiMessageId, {
                 generationRunId: created.run.runId,
                 generationRunStatus: 'cancelled',
                 status: 'aborted',
                 canContinue: true,
+                generationBaseUrl: runtime.baseUrl,
             })
             await flushMessagePersist(options.aiMessageId, options.convId)
             return
@@ -872,6 +879,7 @@ export function useChatView() {
             generationRunId: created.run.runId,
             generationRunStatus: created.run.status,
             generationSequence: afterSequence,
+            generationBaseUrl: runtime.baseUrl,
         })
         await flushMessagePersist(options.aiMessageId, options.convId)
         markConversationGenerating(options.convId)
@@ -880,18 +888,29 @@ export function useChatView() {
             return
         }
 
-        await subscribeChatRunEventsWithRetry(options, created.run.runId, afterSequence)
+        await subscribeChatRunEventsWithRetry(options, created.run.runId, afterSequence, false, runtime.baseUrl)
     }
 
     async function resumeBackendStream(options: RunStreamOptions, runId: string): Promise<void> {
         const message = messages.value.find(item => item.id === options.aiMessageId)
         if (!message) throw new Error('找不到待恢复的助手消息。')
 
+        if (!message.generationBaseUrl) {
+            updateMessage(options.aiMessageId, {
+                status: 'error',
+                errorMessage: '历史任务缺失后端地址信息，请点击重新生成。',
+                generationRunStatus: 'failed',
+                canContinue: false,
+            })
+            toast.show('历史任务缺失后端地址信息，请点击重新生成。', 'warning')
+            return
+        }
+
         activeGenerationRunId = runId
         const afterSequence = message.generationSequence ?? 0
 
         await flushMessagePersist(options.aiMessageId, options.convId)
-        await subscribeChatRunEventsWithRetry(options, runId, afterSequence, true)
+        await subscribeChatRunEventsWithRetry(options, runId, afterSequence, true, message.generationBaseUrl)
     }
 
     async function handleBackendRunEvent(options: RunStreamOptions, event: BackendChatRunEvent): Promise<void> {

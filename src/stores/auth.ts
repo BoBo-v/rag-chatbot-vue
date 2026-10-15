@@ -1,5 +1,6 @@
 import { reactive, toRefs } from 'vue'
 import { apiFetch } from '../services/api'
+import { resetBackendProvidersCatalog } from '../services/knowledge'
 
 export interface AuthUser {
     username: string
@@ -30,6 +31,7 @@ export function useAuthStore() {
         state.user = null
         state.mustChangePassword = false
         state.isChangePasswordModalVisible = false
+        resetBackendProvidersCatalog()
     }
 
     async function checkAuth(): Promise<boolean> {

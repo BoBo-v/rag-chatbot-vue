@@ -5,11 +5,9 @@ import type {
     DirectProviderId,
     ModelTransport,
 } from '../types/model'
-import type { BackendChatProvider } from './knowledge'
+import type { BackendChatProvider, BackendProvidersCatalog, CatalogState } from '../types/connection'
 import { supportsVision } from './modelCapabilities'
-
-const env = (import.meta as { env?: Record<string, any> }).env
-const configuredApiBaseUrl = (env?.VITE_API_BASE_URL as string | undefined)?.trim() ?? ''
+import { resolveTargetBaseUrl } from './api'
 
 export function directToBackendProvider(direct: DirectProviderId): BackendProviderId {
     if (direct === 'claude') return 'anthropic'
@@ -22,6 +20,9 @@ export function backendToDirectProvider(backend: BackendProviderId): DirectProvi
     if (backend === 'openai') return 'openai'
     return 'ollama'
 }
+
+export const toBackendProviderId = directToBackendProvider
+export const toDirectProviderId = backendToDirectProvider
 
 export function getDefaultBackendProviderName(providerId: BackendProviderId): string {
     switch (providerId) {
@@ -49,29 +50,92 @@ export function getDefaultDirectProviderName(providerId: DirectProviderId): stri
     }
 }
 
-function resolveBrowserOrigin(): string {
-    if (typeof window !== 'undefined' && window.location?.origin) {
-        return window.location.origin
-    }
-    return 'http://localhost:3001'
-}
-
 export function resolveActiveConnection(
     settings: AppSettings,
-    backendProviders?: BackendChatProvider[]
+    catalogOrProviders?: BackendProvidersCatalog | BackendChatProvider[]
 ): ActiveConnection {
     const transport: ModelTransport = settings.transport === 'backend' ? 'backend' : 'direct'
 
     if (transport === 'backend') {
         const providerId: BackendProviderId = settings.backend?.provider || 'ollama'
-        const matched = backendProviders?.find(p => p.id === providerId)
+        const baseUrl = resolveTargetBaseUrl(settings.backend?.url)
+
+        let catalogState: CatalogState | undefined
+        let catalogError: string | undefined
+        let providers: BackendChatProvider[] | undefined
+
+        if (catalogOrProviders) {
+            if (Array.isArray(catalogOrProviders)) {
+                providers = catalogOrProviders
+                catalogState = 'success'
+            } else {
+                providers = catalogOrProviders.providers
+                catalogState = catalogOrProviders.state
+                catalogError = catalogOrProviders.error
+            }
+        }
+
+        const matched = providers?.find(p => p.id === providerId)
         const providerName = matched?.name?.trim() || getDefaultBackendProviderName(providerId)
 
-        const defaultModel = matched?.defaultModel?.trim() || matched?.models?.[0]?.trim() || 'qwen2.5:7b'
-        const model = settings.backend?.model?.trim() || defaultModel
+        let model = ''
+        let isConfigured = false
+        let error: string | undefined
 
-        const baseUrl = settings.backend?.url?.trim() || configuredApiBaseUrl || resolveBrowserOrigin()
-        const isConfigured = Boolean(matched ? matched.configured : true) && Boolean(model)
+        if (catalogState === 'loading') {
+            isConfigured = false
+            error = '后端服务目录正在加载中...'
+            model = settings.backend?.model?.trim() || ''
+        } else if (catalogState === 'error') {
+            isConfigured = false
+            error = catalogError || '后端服务元数据加载失败'
+            model = settings.backend?.model?.trim() || ''
+        } else if (providers !== undefined) {
+            if (!matched) {
+                isConfigured = false
+                error = `后端未配置厂商: ${providerName}`
+                model = ''
+            } else {
+                let validModels: string[] = []
+                if (Array.isArray(matched.models)) {
+                    validModels = matched.models
+                        .map(m => typeof m === 'string' ? m.trim() : (m as any)?.id?.trim())
+                        .filter(Boolean)
+                } else if (matched.defaultModel?.trim()) {
+                    validModels = [matched.defaultModel.trim()]
+                }
+
+                const userModel = settings.backend?.model?.trim()
+                if (userModel && validModels.includes(userModel)) {
+                    model = userModel
+                } else if (matched.defaultModel?.trim() && validModels.includes(matched.defaultModel.trim())) {
+                    model = matched.defaultModel.trim()
+                } else if (validModels.length > 0) {
+                    model = validModels[0]
+                } else {
+                    model = ''
+                }
+
+                if (!matched.configured) {
+                    isConfigured = false
+                    error = matched.error || `${providerName} 未在后端配置可用密钥或地址`
+                } else if (!model) {
+                    isConfigured = false
+                    error = `${providerName} 无可用模型候选`
+                } else {
+                    isConfigured = true
+                    error = undefined
+                }
+            }
+        } else {
+            // catalogOrProviders 未提供时，仅使用用户设置值，绝不跨厂商硬编码猜模型
+            const userModel = settings.backend?.model?.trim()
+            model = userModel || ''
+            isConfigured = Boolean(model)
+            if (!isConfigured) {
+                error = '未选择后端模型'
+            }
+        }
 
         return {
             transport: 'backend',
@@ -80,7 +144,7 @@ export function resolveActiveConnection(
             model,
             baseUrl,
             apiKeySource: 'backend',
-            summaryLabel: `后端调用 · ${providerName} · ${model}`,
+            summaryLabel: `后端调用 · ${providerName} · ${model || '未选择'}`,
             capabilities: {
                 chatStream: true,
                 agentTools: matched?.capabilities?.agentTools ?? true,
@@ -89,7 +153,7 @@ export function resolveActiveConnection(
             },
             visionDisabledReason: '当前连接不支持图片输入 (模型或后端接口未开启)',
             isConfigured,
-            error: !isConfigured ? '后端服务未就绪或未选择模型' : undefined,
+            error,
         }
     }
 

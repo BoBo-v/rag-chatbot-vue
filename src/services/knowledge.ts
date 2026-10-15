@@ -73,21 +73,11 @@ export interface KnowledgeSearchOptions {
     minScore?: number
     fileId?: string
 }
-import { apiFetch, apiUrl } from './api'
 
-export interface BackendChatProvider {
-    id: 'ollama' | 'openai' | 'anthropic'
-    name: string
-    defaultModel: string
-    configured: boolean
-    models?: string[]
-    capabilities?: {
-        chatStream: boolean
-        agentTools: boolean
-        vision: boolean
-        rag: boolean
-    }
-}
+import { apiFetch, apiUrl, resolveTargetBaseUrl } from './api'
+import { useAuthStore } from '../stores/auth'
+import type { BackendChatProvider, BackendProvidersCatalog } from '../types/connection'
+export type { BackendChatProvider, BackendProvidersCatalog, CatalogState } from '../types/connection'
 
 export interface VectorStoreStatus {
     currentEmbeddingModel?: string
@@ -105,6 +95,192 @@ export interface VectorStoreStatus {
 
 const KNOWLEDGE_UPLOAD_ENDPOINT = '/api/upload'
 const KNOWLEDGE_FILE_FIELD = 'file'
+
+export interface GetBackendProvidersCatalogOptions {
+    baseUrl?: string
+    forceRefresh?: boolean
+    signal?: AbortSignal
+    skipAuthInterception?: boolean
+}
+
+interface CatalogCacheEntry {
+    catalog: BackendProvidersCatalog
+    seq: number
+    sessionVersion: number
+    currentPromise: Promise<BackendProvidersCatalog> | null
+    abortController: AbortController | null
+}
+
+let globalSessionVersion = 0
+const catalogCacheMap = new Map<string, CatalogCacheEntry>()
+
+function getCurrentUsername(): string {
+    try {
+        const authStore = useAuthStore()
+        return authStore.user?.value?.username || 'anonymous'
+    } catch {
+        return 'anonymous'
+    }
+}
+
+export function buildCatalogCacheKey(baseUrl?: string): string {
+    const resolvedUrl = resolveTargetBaseUrl(baseUrl)
+    const username = getCurrentUsername()
+    return `${resolvedUrl}|${username}`
+}
+
+export function getCachedBackendProvidersCatalog(baseUrl?: string): BackendProvidersCatalog | undefined {
+    const key = buildCatalogCacheKey(baseUrl)
+    return catalogCacheMap.get(key)?.catalog
+}
+
+export function resetBackendProvidersCatalog(): void {
+    globalSessionVersion++
+    for (const entry of catalogCacheMap.values()) {
+        if (entry.abortController) {
+            entry.abortController.abort()
+            entry.abortController = null
+        }
+        entry.currentPromise = null
+    }
+    catalogCacheMap.clear()
+}
+
+export async function getBackendProvidersCatalog(
+    options: GetBackendProvidersCatalogOptions = {}
+): Promise<BackendProvidersCatalog> {
+    const resolvedUrl = resolveTargetBaseUrl(options.baseUrl)
+    const usernameAtStart = getCurrentUsername()
+    const sessionVersionAtStart = globalSessionVersion
+    const key = `${resolvedUrl}|${usernameAtStart}`
+
+    let entry = catalogCacheMap.get(key)
+    if (!entry) {
+        entry = {
+            catalog: {
+                state: 'idle',
+                baseUrl: resolvedUrl,
+                providers: [],
+            },
+            seq: 0,
+            sessionVersion: sessionVersionAtStart,
+            currentPromise: null,
+            abortController: null,
+        }
+        catalogCacheMap.set(key, entry)
+    }
+
+    if (!options.forceRefresh && entry.catalog.state === 'success') {
+        return entry.catalog
+    }
+
+    if (!options.forceRefresh && entry.currentPromise) {
+        return entry.currentPromise
+    }
+
+    if (options.forceRefresh && entry.abortController) {
+        entry.abortController.abort()
+        entry.abortController = null
+    }
+
+    const mySeq = ++entry.seq
+    const controller = new AbortController()
+    entry.abortController = controller
+    entry.catalog = {
+        state: 'loading',
+        baseUrl: resolvedUrl,
+        providers: entry.catalog.providers,
+    }
+
+    const promise = (async () => {
+        let abortListener: (() => void) | undefined
+        if (options.signal) {
+            if (options.signal.aborted) {
+                controller.abort(options.signal.reason)
+            } else {
+                abortListener = () => controller.abort(options.signal?.reason)
+                options.signal.addEventListener('abort', abortListener, { once: true })
+            }
+        }
+
+        try {
+            const res = await apiFetch('/api/providers', {
+                method: 'GET',
+                signal: controller.signal,
+            }, {
+                baseUrl: resolvedUrl,
+                skipAuthInterception: options.skipAuthInterception,
+            })
+
+            if (!res.ok) {
+                const errMsg = await readErrorMessage(res)
+                throw new Error(errMsg)
+            }
+
+            const data = await readJson<{ providers?: BackendChatProvider[] }>(res)
+            const providers = Array.isArray(data?.providers) ? data.providers : []
+
+            const currentEntry = catalogCacheMap.get(key)
+            const nowUsername = getCurrentUsername()
+
+            // 提交结果防污染校验：
+            // 会话版本必须匹配、该 Key 的最新序号必须匹配、当前用户身份必须匹配
+            if (
+                sessionVersionAtStart !== globalSessionVersion
+                || !currentEntry
+                || currentEntry.seq !== mySeq
+                || nowUsername !== usernameAtStart
+            ) {
+                const staleErr = new Error('CATALOG_REQUEST_SUPERSEDED')
+                ;(staleErr as any).name = 'AbortError'
+                throw staleErr
+            }
+
+            const successCatalog: BackendProvidersCatalog = {
+                state: 'success',
+                baseUrl: resolvedUrl,
+                providers,
+            }
+            currentEntry.catalog = successCatalog
+            return successCatalog
+        } catch (err: unknown) {
+            const currentEntry = catalogCacheMap.get(key)
+            const nowUsername = getCurrentUsername()
+            const isStale = (
+                sessionVersionAtStart !== globalSessionVersion
+                || !currentEntry
+                || currentEntry.seq !== mySeq
+                || nowUsername !== usernameAtStart
+            )
+
+            if (!isStale && currentEntry) {
+                if (controller.signal.aborted) {
+                    // 主动取消不覆盖为永久 error 状态
+                } else {
+                    currentEntry.catalog = {
+                        state: 'error',
+                        baseUrl: resolvedUrl,
+                        providers: [],
+                        error: err instanceof Error ? err.message : String(err),
+                    }
+                }
+            }
+            throw err
+        } finally {
+            if (abortListener && options.signal) {
+                options.signal.removeEventListener('abort', abortListener)
+            }
+            const currentEntry = catalogCacheMap.get(key)
+            if (currentEntry && currentEntry.seq === mySeq) {
+                currentEntry.currentPromise = null
+                currentEntry.abortController = null
+            }
+        }
+    })()
+
+    entry.currentPromise = promise
+    return promise
+}
 
 export async function uploadKnowledgeFile(file: File, options: KnowledgeUploadOptions = {}): Promise<KnowledgeUploadResult> {
     const formData = new FormData()
@@ -220,9 +396,9 @@ export async function searchKnowledge(options: KnowledgeSearchOptions): Promise<
     return data.results ?? []
 }
 
-export async function fetchBackendChatProviders(options?: { baseUrl?: string }): Promise<BackendChatProvider[]> {
-    const data = await fetchJson<{ providers: BackendChatProvider[] }>('/api/providers', undefined, options)
-    return (data.providers ?? []).filter(provider => provider.configured)
+export async function fetchBackendChatProviders(options?: { baseUrl?: string; skipAuthInterception?: boolean }): Promise<BackendChatProvider[]> {
+    const catalog = await getBackendProvidersCatalog(options)
+    return catalog.providers
 }
 
 export async function getVectorStoreStatus(): Promise<VectorStoreStatus> {

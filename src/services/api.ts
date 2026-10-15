@@ -16,15 +16,20 @@ function resolveBrowserOrigin(): string {
     return ''
 }
 
-export function apiUrl(path: string, baseUrlOverride?: string): string {
+export function resolveTargetBaseUrl(baseUrlOverride?: string): string {
     const raw = baseUrlOverride !== undefined ? baseUrlOverride : settings.backend.url
-    const baseUrl = normalizeBaseUrl(raw) || normalizeBaseUrl(configuredBaseUrl) || normalizeBaseUrl(resolveBrowserOrigin())
+    return normalizeBaseUrl(raw) || normalizeBaseUrl(configuredBaseUrl) || normalizeBaseUrl(resolveBrowserOrigin())
+}
+
+export function apiUrl(path: string, baseUrlOverride?: string): string {
+    const baseUrl = resolveTargetBaseUrl(baseUrlOverride)
     if (!baseUrl) return path
     return `${baseUrl}/${path.replace(/^\/+/, '')}`
 }
 
 export interface ApiFetchOptions {
     baseUrl?: string
+    skipAuthInterception?: boolean
 }
 
 export async function apiFetch(path: string, init?: RequestInit, options?: ApiFetchOptions): Promise<Response> {
@@ -41,47 +46,49 @@ export async function apiFetch(path: string, init?: RequestInit, options?: ApiFe
 
     const response = await fetch(apiUrl(path, options?.baseUrl), mergedInit)
 
-    // 401 统一拦截防抖：排除登录接口本身、探活静默接口以及 Agent 密钥鉴权（Agent 独立弹窗录入）
-    if (response.status === 401) {
-        const cleanPath = path.split('?')[0]
-        if (
-            cleanPath !== '/api/auth/login'
-            && cleanPath !== '/api/auth/me'
-            && !cleanPath.startsWith('/api/agent')
-        ) {
-            let isAgentUnauthorized = false
-            try {
-                const cloned = response.clone()
-                const data = await cloned.json().catch(() => null)
-                if (data?.code === 'AGENT_UNAUTHORIZED') {
-                    isAgentUnauthorized = true
+    if (!options?.skipAuthInterception) {
+        // 401 统一拦截防抖：排除登录接口本身、探活静默接口以及 Agent 密钥鉴权（Agent 独立弹窗录入）
+        if (response.status === 401) {
+            const cleanPath = path.split('?')[0]
+            if (
+                cleanPath !== '/api/auth/login'
+                && cleanPath !== '/api/auth/me'
+                && !cleanPath.startsWith('/api/agent')
+            ) {
+                let isAgentUnauthorized = false
+                try {
+                    const cloned = response.clone()
+                    const data = await cloned.json().catch(() => null)
+                    if (data?.code === 'AGENT_UNAUTHORIZED') {
+                        isAgentUnauthorized = true
+                    }
+                } catch {
+                    // ignore
                 }
-            } catch {
-                // ignore
-            }
 
-            if (!isAgentUnauthorized) {
-                const authStore = useAuthStore()
-                authStore.invalidateSession()
-                if (!authStore.isAuthModalVisible.value) {
-                    authStore.openLoginModal()
+                if (!isAgentUnauthorized) {
+                    const authStore = useAuthStore()
+                    authStore.invalidateSession()
+                    if (!authStore.isAuthModalVisible.value) {
+                        authStore.openLoginModal()
+                    }
                 }
             }
         }
-    }
 
-    // 403 强制首次改密全局拦截：使用 response.clone() 防止消费原始 body
-    if (response.status === 403) {
-        try {
-            const cloned = response.clone()
-            const data = await cloned.json().catch(() => null)
-            if (data?.code === 'PASSWORD_CHANGE_REQUIRED') {
-                const authStore = useAuthStore()
-                authStore.mustChangePassword.value = true
-                authStore.openChangePasswordModal()
+        // 403 强制首次改密全局拦截：使用 response.clone() 防止消费原始 body
+        if (response.status === 403) {
+            try {
+                const cloned = response.clone()
+                const data = await cloned.json().catch(() => null)
+                if (data?.code === 'PASSWORD_CHANGE_REQUIRED') {
+                    const authStore = useAuthStore()
+                    authStore.mustChangePassword.value = true
+                    authStore.openChangePasswordModal()
+                }
+            } catch {
+                // 忽略非 JSON 响应解析失败
             }
-        } catch {
-            // 忽略非 JSON 响应解析失败
         }
     }
 

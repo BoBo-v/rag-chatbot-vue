@@ -61,6 +61,7 @@ export interface Message {
     generationSequence?: number
     generationTurnId?: string
     generationRunStatus?: GenerationRunStatus
+    generationBaseUrl?: string
 }
 
 // 统一错误分类，方便 UI 根据错误类型展示更友好的提示。

@@ -25,6 +25,7 @@ export interface RecoveryCoordinatorDependencies {
 
 export interface RunRecoveryCoordinatorOptions {
     runId: string
+    baseUrl?: string
     initialSequence: number
     needInitialSnapshot?: boolean
     signal?: AbortSignal
@@ -70,8 +71,8 @@ export async function runBackendChatRunRecoveryCoordinator(
     options: RunRecoveryCoordinatorOptions,
 ): Promise<void> {
     const deps = options.deps || {}
-    const getSnapshotFn = deps.getSnapshot || ((r, s) => getBackendChatRun(r, { signal: s }))
-    const streamEventsFn = deps.streamEvents || streamBackendChatRunEvents
+    const getSnapshotFn = deps.getSnapshot || ((r, s) => getBackendChatRun(r, { signal: s, baseUrl: options.baseUrl }))
+    const streamEventsFn = deps.streamEvents || ((r, opt) => streamBackendChatRunEvents(r, { ...opt, baseUrl: options.baseUrl }))
     const sleepFn = deps.sleep || defaultSleepWithAbort
     const jitterFn = deps.randomJitter || (() => Math.floor(Math.random() * 500))
     const retryDelays = deps.retryDelays || DEFAULT_RETRY_DELAYS

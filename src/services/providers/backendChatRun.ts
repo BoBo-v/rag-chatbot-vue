@@ -54,6 +54,7 @@ export interface CreateBackendChatRunInput {
     sourceUserMessageId: string
     assistantMessageId: string
     regeneratedFromRunId?: string
+    baseUrl?: string
 }
 
 export interface CreateBackendChatRunResult {
@@ -62,6 +63,7 @@ export interface CreateBackendChatRunResult {
 }
 
 export interface BackendChatRunRequestOptions {
+    baseUrl?: string
     accessKey?: string
     signal?: AbortSignal
 }
@@ -102,6 +104,8 @@ export async function createBackendChatRun(
     headers.set('Content-Type', 'application/json')
     headers.set('Idempotency-Key', input.turnId)
 
+    const targetBaseUrl = options.baseUrl || input.baseUrl || input.runtime.baseUrl
+
     const response = await request('/api/chat/runs', {
         method: 'POST',
         headers,
@@ -114,7 +118,7 @@ export async function createBackendChatRun(
             regeneratedFromRunId: input.regeneratedFromRunId,
         }),
         signal: options.signal,
-    }, options.signal)
+    }, options.signal, targetBaseUrl)
 
     if (!response.ok) throw await toApiError(response, options.signal)
     const payload = await readJson(response, options.signal)
@@ -134,7 +138,7 @@ export async function getBackendChatRun(
     const response = await request(`/api/chat/runs/${encodeURIComponent(runId)}`, {
         headers: buildHeaders(options.accessKey),
         signal: options.signal,
-    }, options.signal)
+    }, options.signal, options.baseUrl)
     if (!response.ok) throw await toApiError(response, options.signal)
     const payload = await readJson(response, options.signal)
     if (!isRecord(payload)) throw protocolError('生成任务快照接口返回格式不正确。')
@@ -149,7 +153,7 @@ export async function cancelBackendChatRun(
         method: 'DELETE',
         headers: buildHeaders(options.accessKey),
         signal: options.signal,
-    }, options.signal)
+    }, options.signal, options.baseUrl)
     if (!response.ok) throw await toApiError(response, options.signal)
     const payload = await readJson(response, options.signal)
     if (!isRecord(payload)) throw protocolError('取消生成任务接口返回格式不正确。')
@@ -168,7 +172,7 @@ export async function streamBackendChatRunEvents(
     const response = await request(`/api/chat/runs/${encodeURIComponent(runId)}/events`, {
         headers,
         signal: options.signal,
-    }, options.signal)
+    }, options.signal, options.baseUrl)
     if (!response.ok) throw await toApiError(response, options.signal)
     if (!response.headers.get('content-type')?.includes('text/event-stream')) {
         throw protocolError('生成任务事件接口没有返回预期的 SSE 流。')
@@ -329,9 +333,9 @@ function buildHeaders(accessKey?: string): Headers {
     return headers
 }
 
-async function request(url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
+async function request(url: string, init: RequestInit, signal?: AbortSignal, baseUrl?: string): Promise<Response> {
     try {
-        return await apiFetch(url, init)
+        return await apiFetch(url, init, { baseUrl })
     } catch (error) {
         throw normalizeNetworkError(error, signal)
     }

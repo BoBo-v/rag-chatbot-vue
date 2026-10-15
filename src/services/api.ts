@@ -9,13 +9,25 @@ function normalizeBaseUrl(value: string): string {
     return trimmed.replace(/\/api$/i, '')
 }
 
-export function apiUrl(path: string): string {
-    const baseUrl = normalizeBaseUrl(settings.backend.url) || normalizeBaseUrl(configuredBaseUrl)
+function resolveBrowserOrigin(): string {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        return window.location.origin
+    }
+    return ''
+}
+
+export function apiUrl(path: string, baseUrlOverride?: string): string {
+    const raw = baseUrlOverride !== undefined ? baseUrlOverride : settings.backend.url
+    const baseUrl = normalizeBaseUrl(raw) || normalizeBaseUrl(configuredBaseUrl) || normalizeBaseUrl(resolveBrowserOrigin())
     if (!baseUrl) return path
     return `${baseUrl}/${path.replace(/^\/+/, '')}`
 }
 
-export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+export interface ApiFetchOptions {
+    baseUrl?: string
+}
+
+export async function apiFetch(path: string, init?: RequestInit, options?: ApiFetchOptions): Promise<Response> {
     const headers = new Headers(init?.headers || {})
     if (!headers.has('X-Requested-With')) {
         headers.set('X-Requested-With', 'XMLHttpRequest')
@@ -27,7 +39,7 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
         headers,
     }
 
-    const response = await fetch(apiUrl(path), mergedInit)
+    const response = await fetch(apiUrl(path, options?.baseUrl), mergedInit)
 
     // 401 统一拦截防抖：排除登录接口本身、探活静默接口以及 Agent 密钥鉴权（Agent 独立弹窗录入）
     if (response.status === 401) {

@@ -220,8 +220,8 @@ export async function searchKnowledge(options: KnowledgeSearchOptions): Promise<
     return data.results ?? []
 }
 
-export async function fetchBackendChatProviders(): Promise<BackendChatProvider[]> {
-    const data = await fetchJson<{ providers: BackendChatProvider[] }>('/api/providers')
+export async function fetchBackendChatProviders(options?: { baseUrl?: string }): Promise<BackendChatProvider[]> {
+    const data = await fetchJson<{ providers: BackendChatProvider[] }>('/api/providers', undefined, options)
     return (data.providers ?? []).filter(provider => provider.configured)
 }
 
@@ -230,10 +230,10 @@ export async function getVectorStoreStatus(): Promise<VectorStoreStatus> {
     return data.status ?? data
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T>(path: string, init?: RequestInit, options?: { baseUrl?: string }): Promise<T> {
     let response: Response
     try {
-        response = await apiFetch(path, init)
+        response = await apiFetch(path, init, options)
     } catch (error) {
         throw new Error(error instanceof Error ? error.message : '无法连接知识库接口', { cause: error })
     }

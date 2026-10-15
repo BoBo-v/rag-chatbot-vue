@@ -28,7 +28,7 @@ export function getDefaultBackendProviderName(providerId: BackendProviderId): st
         case 'ollama':
             return 'Ollama (本地)'
         case 'openai':
-            return 'DeepSeek / OpenAI 兼容'
+            return 'OpenAI 服务'
         case 'anthropic':
             return 'Claude 服务'
         default:

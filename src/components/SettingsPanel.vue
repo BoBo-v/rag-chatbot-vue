@@ -673,7 +673,7 @@ const isSaving = ref(false)
 // 针对设计图 1 的三张后端服务卡片配置
 const defaultBackendServices: Array<{ id: BackendChatProviderType; name: string; defaultModel: string; models: string[]; configured: boolean }> = [
   { id: 'ollama', name: 'Ollama (本地)', defaultModel: 'qwen2.5:7b', models: ['qwen2.5:7b', 'qwen3:8b'], configured: true },
-  { id: 'openai', name: 'DeepSeek 服务', defaultModel: 'deepseek-chat', models: ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o'], configured: true },
+  { id: 'openai', name: 'OpenAI 服务', defaultModel: 'gpt-4o', models: ['gpt-4o', 'gpt-4o-mini', 'deepseek-chat'], configured: true },
   { id: 'anthropic', name: 'Claude 服务', defaultModel: 'claude-sonnet-4-6', models: ['claude-sonnet-4-6', 'claude-3-7-sonnet-20250219'], configured: true },
 ]
 
@@ -697,7 +697,7 @@ const currentBackendModels = computed<string[]>(() => {
   if (draft.backend.model && !models.includes(draft.backend.model)) {
     return [draft.backend.model, ...models]
   }
-  return models.length > 0 ? models : [draft.backend.model || 'deepseek-chat']
+  return models.length > 0 ? models : [draft.backend.model || 'gpt-4o']
 })
 
 const backendReachableStatus = computed(() => {

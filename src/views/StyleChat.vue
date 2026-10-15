@@ -984,8 +984,8 @@ const quickModelGroups = computed<QuickModelGroup[]>(() => {
   } else {
     const defaultBackendModels: Record<BackendProviderId, { name: string; models: string[] }> = {
       openai: {
-        name: '公司 DeepSeek',
-        models: ['deepseek-chat', 'deepseek-reasoner'],
+        name: 'OpenAI 服务',
+        models: ['gpt-4o', 'gpt-4o-mini', 'deepseek-chat'],
       },
       anthropic: {
         name: '公司 Claude',

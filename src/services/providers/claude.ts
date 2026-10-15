@@ -3,6 +3,17 @@ import type { ModelRuntimeConfig } from '../../types/model'
 import { buildMessages } from '../context'
 import { parseSSE } from './openai'
 
+export const CLAUDE_API_ENDPOINT = 'https://api.anthropic.com/v1/messages'
+
+export function claudeHeaders(apiKey?: string): Record<string, string> {
+    return {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey?.trim() ?? '',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+    }
+}
+
 // Claude API 适配器。Claude 的消息格式和 OpenAI 不完全一样，所以单独转换。
 export async function claudeStream(
     messages: Message[],
@@ -45,14 +56,9 @@ export async function claudeStream(
             return { role: m.role, content: m.content }
         })
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(CLAUDE_API_ENDPOINT, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': runtime.apiKey ?? '',
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-        },
+        headers: claudeHeaders(runtime.apiKey),
         body: JSON.stringify({
             model: runtime.model,
             ...(system ? { system } : {}),

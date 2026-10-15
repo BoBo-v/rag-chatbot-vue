@@ -1,4 +1,6 @@
 import { apiFetch } from './api'
+import { openAIEndpoint, openAIHeaders } from './providers/openai'
+import { CLAUDE_API_ENDPOINT, claudeHeaders } from './providers/claude'
 
 export type ConnectionTestTransport = 'direct' | 'backend'
 
@@ -144,7 +146,7 @@ async function testBackendConnection(
     const durationMs = Math.round(performance.now() - startTime)
 
     if (!res.ok) {
-        let errMessage = ''
+        let errMessage: string
         try {
             const errJson = await res.json()
             errMessage = errJson.error || errJson.message || ''
@@ -174,6 +176,40 @@ async function testBackendConnection(
     let buffer = ''
     let firstToken = ''
 
+    const parseNdjsonBuffer = (): { errorResult?: TestConnectionResult } => {
+        const lines = buffer.split(/\r?\n/)
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed) continue
+            let parsed: any
+            try {
+                parsed = JSON.parse(trimmed)
+            } catch {
+                continue
+            }
+
+            if (parsed.error) {
+                return {
+                    errorResult: {
+                        ok: false,
+                        durationMs: Math.round(performance.now() - startTime),
+                        reason: 'stream_error',
+                        error: parsed.error,
+                    },
+                }
+            }
+
+            const content = parsed.message?.content
+            if (typeof content === 'string' && content.trim().length > 0) {
+                firstToken = content
+                break
+            }
+        }
+        return {}
+    }
+
     try {
         while (true) {
             if (signal.aborted) {
@@ -184,36 +220,18 @@ async function testBackendConnection(
             if (!value) continue
 
             buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() ?? ''
-
-            for (const line of lines) {
-                const trimmed = line.trim()
-                if (!trimmed) continue
-                let parsed: any
-                try {
-                    parsed = JSON.parse(trimmed)
-                } catch {
-                    continue
-                }
-
-                if (parsed.error) {
-                    return {
-                        ok: false,
-                        durationMs: Math.round(performance.now() - startTime),
-                        reason: 'stream_error',
-                        error: parsed.error,
-                    }
-                }
-
-                const content = parsed.message?.content
-                if (typeof content === 'string' && content.trim().length > 0) {
-                    firstToken = content
-                    break
-                }
-            }
+            const { errorResult } = parseNdjsonBuffer()
+            if (errorResult) return errorResult
 
             if (firstToken) break
+        }
+
+        if (!firstToken) {
+            buffer += decoder.decode()
+            if (buffer.trim()) {
+                const { errorResult } = parseNdjsonBuffer()
+                if (errorResult) return errorResult
+            }
         }
     } finally {
         await reader.cancel().catch(() => undefined)
@@ -241,13 +259,14 @@ async function testDirectConnection(
     signal: AbortSignal,
     startTime: number,
 ): Promise<TestConnectionResult> {
-    let url = ''
-    const headers = new Headers({ 'Content-Type': 'application/json' })
-    let body: any = null
+    let url: string
+    let headers: Headers
+    let body: any
 
     if (options.provider === 'ollama') {
         const rawUrl = (options.baseUrl || 'http://localhost:11434').trim().replace(/\/+$/, '')
         url = `${rawUrl}/api/chat`
+        headers = new Headers({ 'Content-Type': 'application/json' })
         body = {
             model: options.model,
             messages: [{ role: 'user', content: 'hi' }],
@@ -262,22 +281,8 @@ async function testDirectConnection(
                 error: '请先填写 API Key',
             }
         }
-        const rawBase = (options.baseUrl || 'https://api.openai.com').trim().replace(/\/+$/, '')
-        if (rawBase.endsWith('/chat/completions')) {
-            url = rawBase
-        } else if (rawBase.endsWith('/v1')) {
-            url = `${rawBase}/chat/completions`
-        } else {
-            url = `${rawBase}/v1/chat/completions`
-        }
-
-        // 开发环境代理以避开官方域名的浏览器跨域
-        const isDev = Boolean((import.meta as any).env?.DEV)
-        if (isDev && url.startsWith('https://api.openai.com/v1/')) {
-            url = url.replace('https://api.openai.com/v1/', '/__ai_proxy/openai/')
-        }
-
-        headers.set('Authorization', `Bearer ${options.apiKey.trim()}`)
+        url = openAIEndpoint(options.baseUrl, '/v1/chat/completions')
+        headers = new Headers(openAIHeaders(options.apiKey))
         body = {
             model: options.model,
             messages: [{ role: 'user', content: 'hi' }],
@@ -293,10 +298,8 @@ async function testDirectConnection(
                 error: '请先填写 Claude API Key',
             }
         }
-        url = 'https://api.anthropic.com/v1/messages'
-        headers.set('x-api-key', options.apiKey.trim())
-        headers.set('anthropic-version', '2023-06-01')
-        headers.set('anthropic-dangerous-direct-browser-access', 'true')
+        url = CLAUDE_API_ENDPOINT
+        headers = new Headers(claudeHeaders(options.apiKey))
         body = {
             model: options.model,
             messages: [{ role: 'user', content: 'hi' }],
@@ -346,6 +349,102 @@ async function testDirectConnection(
     let buffer = ''
     let firstToken = ''
 
+    const parseDirectBuffer = (): { errorResult?: TestConnectionResult } => {
+        if (options.provider === 'ollama') {
+            const lines = buffer.split(/\r?\n/)
+            buffer = lines.pop() ?? ''
+            for (const line of lines) {
+                const trimmed = line.trim()
+                if (!trimmed) continue
+                let parsed: any
+                try { parsed = JSON.parse(trimmed) } catch { continue }
+                if (parsed.error) {
+                    return {
+                        errorResult: {
+                            ok: false,
+                            durationMs: Math.round(performance.now() - startTime),
+                            reason: 'stream_error',
+                            error: parsed.error,
+                        },
+                    }
+                }
+                const text = parsed.message?.content
+                if (typeof text === 'string' && text.trim().length > 0) {
+                    firstToken = text
+                    break
+                }
+            }
+        } else if (options.provider === 'openai' || options.provider === 'claude') {
+            const blocks = buffer.split(/\r?\n\r?\n/)
+            buffer = blocks.pop() ?? ''
+            for (const block of blocks) {
+                const lines = block.split(/\r?\n/)
+                const dataLines: string[] = []
+                let isErrorEvent = false
+                for (const rawLine of lines) {
+                    const line = rawLine.trim()
+                    if (line.startsWith('event:')) {
+                        const eventType = line.slice(6).trim()
+                        if (eventType === 'error') {
+                            isErrorEvent = true
+                        }
+                    } else if (line.startsWith('data:')) {
+                        dataLines.push(line.slice(5).trim())
+                    }
+                }
+                if (dataLines.length === 0) continue
+
+                const rawData = dataLines.join('\n')
+                if (rawData === '[DONE]') break
+
+                let parsed: any
+                try {
+                    parsed = JSON.parse(rawData)
+                } catch {
+                    continue
+                }
+
+                if (options.provider === 'openai') {
+                    if (parsed.error) {
+                        const errStr = typeof parsed.error === 'object' ? parsed.error.message : String(parsed.error)
+                        return {
+                            errorResult: {
+                                ok: false,
+                                durationMs: Math.round(performance.now() - startTime),
+                                reason: 'stream_error',
+                                error: errStr,
+                            },
+                        }
+                    }
+                    const delta = parsed.choices?.[0]?.delta?.content
+                    if (typeof delta === 'string' && delta.trim().length > 0) {
+                        firstToken = delta
+                        break
+                    }
+                } else if (options.provider === 'claude') {
+                    if (isErrorEvent || parsed.type === 'error') {
+                        return {
+                            errorResult: {
+                                ok: false,
+                                durationMs: Math.round(performance.now() - startTime),
+                                reason: 'stream_error',
+                                error: parsed.error?.message || 'Claude stream error',
+                            },
+                        }
+                    }
+                    if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
+                        const text = parsed.delta.text
+                        if (typeof text === 'string' && text.trim().length > 0) {
+                            firstToken = text
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        return {}
+    }
+
     try {
         while (true) {
             if (signal.aborted) {
@@ -356,92 +455,18 @@ async function testDirectConnection(
             if (!value) continue
 
             buffer += decoder.decode(value, { stream: true })
-
-            if (options.provider === 'ollama') {
-                const lines = buffer.split('\n')
-                buffer = lines.pop() ?? ''
-                for (const line of lines) {
-                    const trimmed = line.trim()
-                    if (!trimmed) continue
-                    let parsed: any
-                    try { parsed = JSON.parse(trimmed) } catch { continue }
-                    if (parsed.error) {
-                        return {
-                            ok: false,
-                            durationMs: Math.round(performance.now() - startTime),
-                            reason: 'stream_error',
-                            error: parsed.error,
-                        }
-                    }
-                    const text = parsed.message?.content
-                    if (typeof text === 'string' && text.trim().length > 0) {
-                        firstToken = text
-                        break
-                    }
-                }
-            } else if (options.provider === 'openai') {
-                // SSE blocks
-                const blocks = buffer.split('\n\n')
-                buffer = blocks.pop() ?? ''
-                for (const block of blocks) {
-                    const dataLines = block.split('\n')
-                        .map(l => l.replace(/\r$/, ''))
-                        .filter(l => l.startsWith('data:'))
-                        .map(l => l.slice(5).trim())
-                    for (const data of dataLines) {
-                        if (data === '[DONE]') break
-                        let parsed: any
-                        try { parsed = JSON.parse(data) } catch { continue }
-                        if (parsed.error) {
-                            const errStr = typeof parsed.error === 'object' ? parsed.error.message : String(parsed.error)
-                            return {
-                                ok: false,
-                                durationMs: Math.round(performance.now() - startTime),
-                                reason: 'stream_error',
-                                error: errStr,
-                            }
-                        }
-                        const delta = parsed.choices?.[0]?.delta?.content
-                        if (typeof delta === 'string' && delta.trim().length > 0) {
-                            firstToken = delta
-                            break
-                        }
-                    }
-                    if (firstToken) break
-                }
-            } else if (options.provider === 'claude') {
-                // Claude SSE blocks
-                const blocks = buffer.split('\n\n')
-                buffer = blocks.pop() ?? ''
-                for (const block of blocks) {
-                    const dataLines = block.split('\n')
-                        .map(l => l.replace(/\r$/, ''))
-                        .filter(l => l.startsWith('data:'))
-                        .map(l => l.slice(5).trim())
-                    for (const data of dataLines) {
-                        let parsed: any
-                        try { parsed = JSON.parse(data) } catch { continue }
-                        if (parsed.type === 'error') {
-                            return {
-                                ok: false,
-                                durationMs: Math.round(performance.now() - startTime),
-                                reason: 'stream_error',
-                                error: parsed.error?.message || 'Claude stream error',
-                            }
-                        }
-                        if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
-                            const text = parsed.delta.text
-                            if (typeof text === 'string' && text.trim().length > 0) {
-                                firstToken = text
-                                break
-                            }
-                        }
-                    }
-                    if (firstToken) break
-                }
-            }
+            const { errorResult } = parseDirectBuffer()
+            if (errorResult) return errorResult
 
             if (firstToken) break
+        }
+
+        if (!firstToken) {
+            buffer += decoder.decode()
+            if (buffer.trim()) {
+                const { errorResult } = parseDirectBuffer()
+                if (errorResult) return errorResult
+            }
         }
     } finally {
         await reader.cancel().catch(() => undefined)

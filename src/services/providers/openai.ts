@@ -6,7 +6,7 @@ const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com'
 const DEV_OPENAI_PROXY_PREFIX = '/__ai_proxy/openai'
 
 // 兼容用户填写 https://xxx 和 https://xxx/v1 两种写法，避免最终请求变成 /v1/v1。
-function normalizeOpenAIBaseUrl(baseUrl?: string): string {
+export function normalizeOpenAIBaseUrl(baseUrl?: string): string {
     let base = (baseUrl?.trim() || DEFAULT_OPENAI_BASE_URL).replace(/\/+$/, '')
 
     while (base.endsWith('/v1')) {
@@ -17,7 +17,7 @@ function normalizeOpenAIBaseUrl(baseUrl?: string): string {
 }
 
 // 开发环境用 Vite 同源代理绕过浏览器 CORS；生产环境仍直接访问配置的厂商地址。
-function openAIEndpoint(baseUrl: string | undefined, path: string): string {
+export function openAIEndpoint(baseUrl: string | undefined, path: string): string {
     const base = normalizeOpenAIBaseUrl(baseUrl)
 
     if (import.meta.env.DEV && /^https?:\/\//i.test(base)) {
@@ -27,8 +27,15 @@ function openAIEndpoint(baseUrl: string | undefined, path: string): string {
     return `${base}${path}`
 }
 
+export function openAIHeaders(apiKey: string): Record<string, string> {
+    return {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey.trim()}`,
+    }
+}
+
 // 错误日志里展示真实厂商地址，不展示本地代理地址，方便排查鉴权和模型权限问题。
-function openAIDisplayEndpoint(baseUrl: string | undefined, path: string): string {
+export function openAIDisplayEndpoint(baseUrl: string | undefined, path: string): string {
     return `${normalizeOpenAIBaseUrl(baseUrl)}${path}`
 }
 
@@ -69,10 +76,7 @@ export async function openaiStream(
 
     const res = await fetch(openAIEndpoint(runtime.baseUrl, '/v1/chat/completions'), {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${runtime.apiKey ?? ''}`,
-        },
+        headers: openAIHeaders(runtime.apiKey ?? ''),
         body: JSON.stringify({
             model: runtime.model,
             messages: openaiMessages,
@@ -111,7 +115,7 @@ export async function fetchOpenAIModels(runtime: ModelRuntimeConfig): Promise<st
     if (!runtime.apiKey) return []
     try {
         const res = await fetch(openAIEndpoint(runtime.baseUrl, '/v1/models'), {
-            headers: { Authorization: `Bearer ${runtime.apiKey}` },
+            headers: openAIHeaders(runtime.apiKey),
         })
         if (!res.ok) {
             console.warn(
@@ -153,7 +157,7 @@ export async function parseSSE(
             if (done) break
 
             buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
+            const lines = buffer.split(/\r?\n/)
             buffer = lines.pop() ?? ''
 
             let currentEvent = ''
@@ -171,6 +175,7 @@ export async function parseSSE(
                 }
             }
         }
+        buffer += decoder.decode()
         if (buffer.trim()) {
             const line = buffer.trim()
             if (line.startsWith('data:')) {

@@ -63,10 +63,32 @@ export async function testConnection(options: TestConnectionOptions): Promise<Te
     }
 
     try {
+        let result: TestConnectionResult
         if (options.transport === 'backend') {
-            return await testBackendConnection(options, internalAbort.signal, startTime, timeoutMs)
+            result = await testBackendConnection(options, internalAbort.signal, startTime, timeoutMs)
+        } else {
+            result = await testDirectConnection(options, internalAbort.signal, startTime)
         }
-        return await testDirectConnection(options, internalAbort.signal, startTime)
+
+        if (internalAbort.signal.aborted || options.signal?.aborted) {
+            const durationMs = Math.round(performance.now() - startTime)
+            if (isTimeout) {
+                return {
+                    ok: false,
+                    durationMs,
+                    reason: 'timeout',
+                    error: `等待首个 Token 超时 (${Math.round(timeoutMs / 1000)}s)`,
+                }
+            }
+            return {
+                ok: false,
+                durationMs,
+                reason: 'aborted',
+                error: '测试已取消',
+            }
+        }
+
+        return result
     } catch (err: unknown) {
         const durationMs = Math.round(performance.now() - startTime)
         if (isTimeout) {
@@ -77,7 +99,7 @@ export async function testConnection(options: TestConnectionOptions): Promise<Te
                 error: `等待首个 Token 超时 (${Math.round(timeoutMs / 1000)}s)`,
             }
         }
-        if (options.signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+        if (internalAbort.signal.aborted || options.signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
             return {
                 ok: false,
                 durationMs,
@@ -154,6 +176,9 @@ async function testBackendConnection(
 
     try {
         while (true) {
+            if (signal.aborted) {
+                throw new DOMException('This operation was aborted', 'AbortError')
+            }
             const { value, done } = await reader.read()
             if (done) break
             if (!value) continue
@@ -323,6 +348,9 @@ async function testDirectConnection(
 
     try {
         while (true) {
+            if (signal.aborted) {
+                throw new DOMException('This operation was aborted', 'AbortError')
+            }
             const { value, done } = await reader.read()
             if (done) break
             if (!value) continue

@@ -533,16 +533,24 @@
           </div>
           <div class="footer-actions">
             <button
+              v-if="connectionTestState === 'loading'"
+              type="button"
+              class="secondary-action btn-test-model btn-cancel-test"
+              title="中断当前正在进行的连接测试"
+              @click="cancelCurrentTest"
+            >
+              <X :size="15" aria-hidden="true" />
+              <span>取消测试</span>
+            </button>
+            <button
+              v-else
               type="button"
               class="secondary-action btn-test-model"
-              :disabled="connectionTestState === 'loading'"
-              :class="{ loading: connectionTestState === 'loading' }"
               title="将发起一次最小真实推理请求，测试首个有效 token 是否正常到达"
               @click="testCurrentModel"
             >
-              <LoaderCircle v-if="connectionTestState === 'loading'" class="spinning" :size="15" aria-hidden="true" />
-              <TestTube2 v-else :size="15" aria-hidden="true" />
-              <span>{{ connectionTestState === 'loading' ? '正在测试…' : '测试当前模型' }}</span>
+              <TestTube2 :size="15" aria-hidden="true" />
+              <span>测试当前模型</span>
             </button>
             <button type="button" class="btn-cancel" @click="requestClose">取消</button>
             <button type="button" class="btn-save" :disabled="!hasUnsavedChanges || isSaving" :class="{ loading: isSaving }" @click="save">
@@ -587,8 +595,8 @@ import { persistSettings, settings, DEFAULT_SYSTEM_PROMPT } from '../stores/sett
 import { fetchModels } from '../services/stream'
 import { createRuntimeFromSettings } from '../services/runtime'
 import { getClaudeModels } from '../services/providers/claude'
-import { fetchBackendChatProviders, type BackendChatProvider } from '../services/knowledge'
-import { apiFetch } from '../services/api'
+import { getBackendProvidersCatalog, type BackendChatProvider } from '../services/knowledge'
+import { testConnection, type TestConnectionResult } from '../services/connectionTester'
 import { supportsVision } from '../services/modelCapabilities'
 import type { AppSettings, BackendChatProviderType, BackendRagMode, ProviderType, ThemeType, TransportMode } from '../stores/settings'
 import { useConfirm } from '../composables/useConfirm'
@@ -666,6 +674,13 @@ const backendReachable = ref<boolean | null>(null)
 const connectionTestState = ref<ConnectionTestState>('idle')
 const connectionTestError = ref('')
 const connectionTestSuccess = ref(false)
+const testDurationMs = ref<number | null>(null)
+const testFirstToken = ref('')
+
+let currentTestAbortController: AbortController | null = null
+let currentCatalogAbortController: AbortController | null = null
+let draftTestSeq = 0
+let draftCatalogSeq = 0
 
 const saveError = ref('')
 const isSaving = ref(false)
@@ -678,26 +693,39 @@ const defaultBackendServices: Array<{ id: BackendChatProviderType; name: string;
 ]
 
 const backendServiceList = computed(() => {
-  if (backendProviders.value.length === 0) return defaultBackendServices
+  const catalogList = backendProviders.value
+  const hasLoaded = backendReachable.value === true
   return defaultBackendServices.map(def => {
-    const matched = backendProviders.value.find(p => p.id === def.id)
+    const matched = catalogList.find(p => p.id === def.id)
+    if (!hasLoaded) {
+      return {
+        id: def.id,
+        name: def.name,
+        defaultModel: '',
+        models: [],
+        configured: false,
+      }
+    }
     return {
       id: def.id,
       name: matched?.name || def.name,
-      defaultModel: matched?.defaultModel || def.defaultModel,
-      models: matched?.models && matched.models.length > 0 ? matched.models : def.models,
-      configured: matched ? matched.configured : true,
+      defaultModel: matched?.defaultModel || '',
+      models: matched?.models && matched.models.length > 0 ? matched.models : (matched?.defaultModel ? [matched.defaultModel] : []),
+      configured: Boolean(matched?.configured),
     }
   })
 })
 
 const currentBackendModels = computed<string[]>(() => {
   const currentSvc = backendServiceList.value.find(p => p.id === draft.backend.provider)
-  const models = currentSvc?.models ?? []
+  if (!currentSvc || !currentSvc.configured) {
+    return draft.backend.model ? [draft.backend.model] : []
+  }
+  const models = currentSvc.models ?? []
   if (draft.backend.model && !models.includes(draft.backend.model)) {
     return [draft.backend.model, ...models]
   }
-  return models.length > 0 ? models : [draft.backend.model || 'gpt-4o']
+  return models.length > 0 ? models : (currentSvc.defaultModel ? [currentSvc.defaultModel] : [])
 })
 
 const backendReachableStatus = computed(() => {
@@ -806,12 +834,15 @@ const connectionTestFlowLabel = computed(() => {
     return '测试中：正在向模型发起一次最小流式推理测试…'
   }
   if (connectionTestState.value === 'success') {
+    const duration = testDurationMs.value !== null ? ` [${testDurationMs.value}ms]` : ''
+    const preview = testFirstToken.value ? ` (首字: "${testFirstToken.value.slice(0, 15)}")` : ''
     return draft.transport === 'backend'
-      ? '后端可访问 → 服务已配置 → 模型调用通过'
-      : '服务已连接 → 鉴权已就绪 → 模型调用通过'
+      ? `后端服务测试通过${duration}${preview}`
+      : `直连服务测试通过${duration}${preview}`
   }
   if (connectionTestState.value === 'error') {
-    return `调用失败：${connectionTestError.value}`
+    const duration = testDurationMs.value !== null ? ` [${testDurationMs.value}ms]` : ''
+    return `调用失败${duration}：${connectionTestError.value}`
   }
   if (hasUnsavedChanges.value) {
     return `有 ${changedSettingCount.value} 项修改尚未保存 (测试使用草稿配置)`
@@ -851,9 +882,16 @@ function sectionHasChanges(sectionId: SectionId): boolean {
 }
 
 function resetTestState() {
+  if (currentTestAbortController) {
+    currentTestAbortController.abort()
+    currentTestAbortController = null
+  }
+  draftTestSeq++
   connectionTestState.value = 'idle'
   connectionTestError.value = ''
   connectionTestSuccess.value = false
+  testDurationMs.value = null
+  testFirstToken.value = ''
 }
 
 function setTransport(mode: TransportMode) {
@@ -938,225 +976,161 @@ async function loadModels() {
 }
 
 async function loadBackendProviders() {
+  const seq = ++draftCatalogSeq
+  if (currentCatalogAbortController) {
+    currentCatalogAbortController.abort()
+  }
+  const abortCtrl = new AbortController()
+  currentCatalogAbortController = abortCtrl
+
   loadingBackendProviders.value = true
   backendProviderError.value = ''
   resetTestState()
-  try {
-    const draftUrl = draft.backend.url?.trim()
-    const fetched = await fetchBackendChatProviders({ baseUrl: draftUrl })
-    backendProviders.value = fetched
-    backendReachable.value = true
 
-    if (fetched.length > 0) {
-      if (!fetched.some(p => p.id === draft.backend.provider)) {
-        draft.backend.provider = fetched[0].id
-        draft.backend.model = fetched[0].defaultModel || fetched[0].models?.[0] || ''
-      } else if (!draft.backend.model) {
-        const current = fetched.find(p => p.id === draft.backend.provider)
-        if (current) draft.backend.model = current.defaultModel || current.models?.[0] || ''
+  try {
+    const draftUrl = draft.backend.url
+    const catalog = await getBackendProvidersCatalog({
+      baseUrl: draftUrl,
+      forceRefresh: true,
+      signal: abortCtrl.signal,
+      skipAuthInterception: true,
+    })
+
+    if (seq !== draftCatalogSeq) return
+
+    if (catalog.state === 'success') {
+      backendProviders.value = catalog.providers
+      backendReachable.value = true
+
+      if (catalog.providers.length > 0) {
+        const currentProvider = catalog.providers.find(p => p.id === draft.backend.provider)
+        if (!currentProvider || !currentProvider.configured) {
+          const firstConfigured = catalog.providers.find(p => p.configured) || catalog.providers[0]
+          draft.backend.provider = firstConfigured.id
+          draft.backend.model = firstConfigured.defaultModel || firstConfigured.models?.[0] || ''
+        } else if (!draft.backend.model || (currentProvider.models?.length && !currentProvider.models.includes(draft.backend.model))) {
+          draft.backend.model = currentProvider.defaultModel || currentProvider.models?.[0] || ''
+        }
+      } else {
+        backendProviderError.value = '后端无可用模型服务'
       }
+    } else if (catalog.state === 'error') {
+      backendReachable.value = false
+      backendProviderError.value = catalog.error || '后端厂商列表获取失败。'
+      backendProviders.value = []
     }
-  } catch (error) {
+  } catch (error: any) {
+    if (seq !== draftCatalogSeq) return
+    if (error?.name === 'AbortError') return
     backendReachable.value = false
     backendProviderError.value = error instanceof Error ? error.message : '后端厂商列表获取失败。'
+    backendProviders.value = []
   } finally {
-    loadingBackendProviders.value = false
+    if (seq === draftCatalogSeq) {
+      loadingBackendProviders.value = false
+      currentCatalogAbortController = null
+    }
   }
 }
 
 async function testCurrentModel() {
+  const seq = ++draftTestSeq
+  if (currentTestAbortController) {
+    currentTestAbortController.abort()
+  }
+  const abortCtrl = new AbortController()
+  currentTestAbortController = abortCtrl
+
   connectionTestState.value = 'loading'
   connectionTestError.value = ''
   connectionTestSuccess.value = false
+  testDurationMs.value = null
+  testFirstToken.value = ''
 
-  const abortCtrl = new AbortController()
-  const timer = setTimeout(() => abortCtrl.abort(), 15000)
+  const timeoutMs = Math.max(5, draft.responseTimeoutSeconds || 30) * 1000
 
   try {
+    let result: TestConnectionResult
+
     if (draft.transport === 'backend') {
-      const baseUrl = draft.backend.url?.trim()
-      const provider = draft.backend.provider
       const model = draft.backend.model?.trim()
-      if (!model) {
-        throw new Error('未选择测试模型')
-      }
+      if (!model) throw new Error('未选择测试模型')
 
-      // 专用连接测试流接口：POST /api/chat/test，关闭 RAG，不写 AI 观测记录与数据库
-      const res = await apiFetch('/api/chat/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, model }),
-        signal: abortCtrl.signal,
-      }, { baseUrl })
-
-      if (!res.ok) {
-        let errMessage = ''
-        try {
-          const errJson = await res.json()
-          errMessage = errJson.error || errJson.message || ''
-        } catch {
-          errMessage = await res.text().catch(() => '')
-        }
-        if (res.status === 401) throw new Error(`401 认证失败：${errMessage || 'API Key 无效或未授权'}`)
-        if (res.status === 403) throw new Error(`403 权限拒绝：${errMessage || '上游服务禁止访问'}`)
-        if (res.status === 402) throw new Error(`402 余额不足：${errMessage || '账户欠费或配额已耗尽'}`)
-        if (res.status === 429) throw new Error(`429 限流：${errMessage || '请求速率或并发超限'}`)
-        throw new Error(errMessage || `后端代理响应错误 (${res.status})`)
-      }
-
-      // 读取首个非空片段即判为通过，并立即中止流式请求
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('未能读取后端响应流')
-
-      const decoder = new TextDecoder()
-      let receivedValidToken = false
-      try {
-        while (true) {
-          const { value, done } = await reader.read()
-          if (done) break
-          if (!value) continue
-          const text = decoder.decode(value, { stream: true })
-          if (text.includes('"error":')) {
-            try {
-              const lines = text.split('\n')
-              for (const line of lines) {
-                if (line.trim()) {
-                  const parsed = JSON.parse(line)
-                  if (parsed.error) throw new Error(parsed.error)
-                }
-              }
-            } catch (e: any) {
-              if (e.message && !e.message.startsWith('JSON')) throw e
-            }
-          }
-          if (text.trim().length > 0) {
-            receivedValidToken = true
-            abortCtrl.abort()
-            break
-          }
-        }
-      } catch (streamErr: any) {
-        if (receivedValidToken || abortCtrl.signal.aborted) {
-          // 已经收到首个 token，主动中止是正常预期
-        } else {
-          throw streamErr
-        }
-      } finally {
-        reader.releaseLock()
-      }
-
-      if (!receivedValidToken && !abortCtrl.signal.aborted) {
-        throw new Error('模型返回空响应，未收到有效 Token')
-      }
-
-      connectionTestSuccess.value = true
-      connectionTestState.value = 'success'
-      return
-    }
-
-    // 前端直连测试：按 provider 发起最小推理，首个 token 到达即成功并立即中止
-    if (draft.provider === 'ollama') {
-      const url = (draft.ollama.url || 'http://localhost:11434').replace(/\/+$/, '')
-      const model = draft.ollama.model?.trim()
-      if (!model) throw new Error('未填写 Ollama 模型')
-
-      const res = await fetch(`${url}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], stream: true }),
+      result = await testConnection({
+        transport: 'backend',
+        provider: draft.backend.provider,
+        model,
+        baseUrl: draft.backend.url,
+        timeoutMs,
         signal: abortCtrl.signal,
       })
-      if (!res.ok) throw new Error(`Ollama 响应错误 (${res.status}): ${await res.text()}`)
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('无法读取响应流')
-      await reader.read()
-      abortCtrl.abort()
-      connectionTestSuccess.value = true
-      connectionTestState.value = 'success'
-      return
-    }
-
-    if (draft.provider === 'openai') {
-      const baseUrl = (draft.openai.baseUrl || 'https://api.openai.com').replace(/\/+$/, '')
-      const apiKey = draft.openai.apiKey?.trim()
-      const model = draft.openai.model?.trim()
-      if (!apiKey) throw new Error('请先填写 API Key')
-      if (!model) throw new Error('未填写模型名称')
-
-      const targetUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`
-      const res = await fetch(targetUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], stream: true }),
-        signal: abortCtrl.signal,
-      })
-      if (!res.ok) {
-        const text = await res.text()
-        if (res.status === 401) throw new Error(`401 认证失败：API Key 无效`)
-        if (res.status === 402) throw new Error(`402 余额不足：账户欠费或配额已耗尽`)
-        if (res.status === 429) throw new Error(`429 访问受限：请求频率或并发超限`)
-        throw new Error(`OpenAI 兼容接口错误 (${res.status}): ${text}`)
-      }
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('无法读取响应流')
-      await reader.read()
-      abortCtrl.abort()
-      connectionTestSuccess.value = true
-      connectionTestState.value = 'success'
-      return
-    }
-
-    if (draft.provider === 'claude') {
-      const apiKey = draft.claude.apiKey?.trim()
-      const model = draft.claude.model?.trim()
-      if (!apiKey) throw new Error('请先填写 Claude API Key')
-      if (!model) throw new Error('未填写模型名称')
-
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'dangerously-allow-browser': 'true',
-        },
-        body: JSON.stringify({ model, max_tokens: 10, messages: [{ role: 'user', content: 'hi' }], stream: true }),
-        signal: abortCtrl.signal,
-      })
-      if (!res.ok) {
-        const text = await res.text()
-        if (res.status === 401) throw new Error(`401 认证失败：Claude API Key 无效`)
-        if (res.status === 403) throw new Error(`403 权限拒绝：无权访问该模型`)
-        if (res.status === 429) throw new Error(`429 访问受限：频率超限`)
-        throw new Error(`Claude API 错误 (${res.status}): ${text}`)
-      }
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('无法读取响应流')
-      await reader.read()
-      abortCtrl.abort()
-      connectionTestSuccess.value = true
-      connectionTestState.value = 'success'
-      return
-    }
-  } catch (error: any) {
-    clearTimeout(timer)
-    if (abortCtrl.signal.aborted && connectionTestSuccess.value) {
-      return
-    }
-    connectionTestState.value = 'error'
-    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-      connectionTestError.value = '测试超时，模型未在 15 秒内返回首个有效 token'
-    } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-      connectionTestError.value = '网络连接失败或存在跨域限制，请检查地址是否可达'
     } else {
-      connectionTestError.value = error.message || '连接测试失败'
+      let model = ''
+      let baseUrl = ''
+      let apiKey = ''
+
+      if (draft.provider === 'ollama') {
+        model = draft.ollama.model?.trim()
+        baseUrl = draft.ollama.url
+        if (!model) throw new Error('未填写 Ollama 模型')
+      } else if (draft.provider === 'openai') {
+        model = draft.openai.model?.trim()
+        baseUrl = draft.openai.baseUrl
+        apiKey = draft.openai.apiKey?.trim()
+        if (!apiKey) throw new Error('请先填写 API Key')
+        if (!model) throw new Error('未填写模型名称')
+      } else if (draft.provider === 'claude') {
+        model = draft.claude.model?.trim()
+        apiKey = draft.claude.apiKey?.trim()
+        if (!apiKey) throw new Error('请先填写 API Key')
+        if (!model) throw new Error('未选择 Claude 模型')
+      }
+
+      result = await testConnection({
+        transport: 'direct',
+        provider: draft.provider,
+        model,
+        baseUrl,
+        apiKey,
+        timeoutMs,
+        signal: abortCtrl.signal,
+      })
     }
+
+    if (seq !== draftTestSeq) return
+
+    testDurationMs.value = result.durationMs
+    if (result.ok) {
+      testFirstToken.value = result.firstToken || ''
+      connectionTestSuccess.value = true
+      connectionTestState.value = 'success'
+    } else {
+      connectionTestSuccess.value = false
+      connectionTestState.value = 'error'
+      connectionTestError.value = result.error || '测试失败'
+    }
+  } catch (err: any) {
+    if (seq !== draftTestSeq) return
+    testDurationMs.value = null
+    connectionTestSuccess.value = false
+    connectionTestState.value = 'error'
+    connectionTestError.value = err?.message || '测试异常'
   } finally {
-    clearTimeout(timer)
+    if (seq === draftTestSeq) {
+      currentTestAbortController = null
+    }
   }
+}
+
+function cancelCurrentTest() {
+  if (currentTestAbortController) {
+    currentTestAbortController.abort()
+    currentTestAbortController = null
+  }
+  draftTestSeq++
+  connectionTestState.value = 'idle'
+  connectionTestError.value = '测试已取消'
+  connectionTestSuccess.value = false
 }
 
 function normalizeTimeout(value: number): number {
@@ -1168,7 +1142,7 @@ function createSettingsSnapshot(): AppSettings {
   const backend = { ...draft.backend }
   if (!backend.model) {
     const provider = backendServiceList.value.find(item => item.id === backend.provider)
-    backend.model = provider?.defaultModel ?? draft.ollama.model
+    backend.model = provider?.defaultModel || provider?.models?.[0] || ''
   }
   return {
     transport: draft.transport,
@@ -1959,6 +1933,15 @@ void loadBackendProviders()
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
   font-size: 12px;
+}
+.btn-cancel-test {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+}
+.btn-cancel-test:hover {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: #ef4444;
 }
 .btn-cancel,
 .btn-save {

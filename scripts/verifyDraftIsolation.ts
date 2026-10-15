@@ -1,0 +1,265 @@
+import assert from 'node:assert/strict'
+import {
+    getBackendProvidersCatalog,
+    resetBackendProvidersCatalog,
+} from '../src/services/knowledge'
+import {
+    resolveActiveConnection,
+} from '../src/services/activeConnection'
+import {
+    testConnection,
+} from '../src/services/connectionTester'
+import { settings, type AppSettings } from '../src/stores/settings'
+
+console.log('=== 开始执行第四批专项验证：隔离草稿测试副作用与竞态覆盖 ===\n')
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>
+let currentFetchHandler: FetchHandler | null = null
+
+const originalFetch = globalThis.fetch
+globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = typeof input === 'string' ? input : input.toString()
+    if (currentFetchHandler) {
+        return currentFetchHandler(url, init)
+    }
+    return originalFetch(input, init)
+}
+
+function ndjsonResponse(lines: unknown[], status = 200): Response {
+    const text = lines.map(line => JSON.stringify(line)).join('\n') + '\n'
+    return new Response(text, {
+        status,
+        headers: { 'Content-Type': 'application/x-ndjson' },
+    })
+}
+
+function jsonResponse(data: unknown, status = 200): Response {
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+    })
+}
+
+if (typeof globalThis.localStorage === 'undefined') {
+    const store = new Map<string, string>()
+    ;(globalThis as any).localStorage = {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => store.set(k, String(v)),
+        removeItem: (k: string) => store.delete(k),
+        clear: () => store.clear(),
+        key: (i: number) => Array.from(store.keys())[i] ?? null,
+        get length() { return store.size },
+    }
+}
+
+async function main() {
+    // ─────────────────────────────────────────────────────────────
+    // 断言 1: 草稿修改不污染当前生效连接与顶栏状态
+    // ─────────────────────────────────────────────────────────────
+    console.log('-> 断言 1: 草稿隔离（未保存时 resolveActiveConnection 保持原状态）')
+    // 初始化 settings
+    settings.transport = 'backend'
+    settings.backend.url = 'http://saved-backend:3000'
+    settings.backend.provider = 'ollama'
+    settings.backend.model = 'saved-ollama-model'
+
+    const activeBefore = resolveActiveConnection(settings, {
+        state: 'success',
+        baseUrl: 'http://saved-backend:3000',
+        providers: [{
+            id: 'ollama',
+            name: 'Ollama',
+            defaultModel: 'saved-ollama-model',
+            configured: true,
+            models: ['saved-ollama-model'],
+        }],
+    })
+    assert.equal(activeBefore.baseUrl, 'http://saved-backend:3000')
+    assert.equal(activeBefore.model, 'saved-ollama-model')
+
+    // 模拟设置面板创建 draft 并进行编辑
+    const draft = JSON.parse(JSON.stringify(settings)) as AppSettings
+    draft.backend.url = 'http://draft-url:9999'
+    draft.backend.model = 'draft-model-x'
+    draft.transport = 'direct'
+    draft.provider = 'openai'
+    draft.openai.model = 'gpt-4o-draft'
+
+    // 再次调用 resolveActiveConnection，确认生效配置不受任何 draft 编辑影响
+    const activeWhileEditing = resolveActiveConnection(settings, {
+        state: 'success',
+        baseUrl: 'http://saved-backend:3000',
+        providers: [{
+            id: 'ollama',
+            name: 'Ollama',
+            defaultModel: 'saved-ollama-model',
+            configured: true,
+            models: ['saved-ollama-model'],
+        }],
+    })
+    assert.equal(activeWhileEditing.baseUrl, 'http://saved-backend:3000', '草稿编辑期间活动 baseUrl 必须保持不变')
+    assert.equal(activeWhileEditing.model, 'saved-ollama-model', '草稿编辑期间活动模型必须保持不变')
+    assert.equal(activeWhileEditing.transport, 'backend', '草稿编辑期间活动传输模式必须保持不变')
+    console.log('   ✓ 草稿修改完全隔离，未保存时不改变全局生效连接状态')
+
+    // ─────────────────────────────────────────────────────────────
+    // 断言 2: 草稿目录加载的竞态与过期丢弃保护
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n-> 断言 2: 目录竞态保护（旧请求不可覆盖新请求，支持显式强制刷新）')
+    resetBackendProvidersCatalog()
+
+    let callCount = 0
+    let fetchSignals: AbortSignal[] = []
+
+    currentFetchHandler = async (url: string, init?: RequestInit) => {
+        if (url.includes('/api/providers')) {
+            const reqIndex = ++callCount
+            if (init?.signal) fetchSignals.push(init.signal)
+
+            if (reqIndex === 1) {
+                // 第 1 次请求：模拟网络慢，延迟 80ms 返回旧数据
+                await sleep(80)
+                return jsonResponse({
+                    providers: [{
+                        id: 'ollama',
+                        name: 'Ollama Old',
+                        defaultModel: 'old-model',
+                        configured: true,
+                        models: ['old-model'],
+                    }],
+                })
+            } else {
+                // 第 2 次请求：立即返回新数据
+                return jsonResponse({
+                    providers: [{
+                        id: 'openai',
+                        name: 'OpenAI New',
+                        defaultModel: 'new-model',
+                        configured: true,
+                        models: ['new-model'],
+                    }],
+                })
+            }
+        }
+        return jsonResponse({})
+    }
+
+    // 触发请求 1 (慢请求)
+    const p1 = getBackendProvidersCatalog({
+        baseUrl: 'http://same-server:3000',
+        forceRefresh: true,
+        skipAuthInterception: true,
+    })
+
+    // 10ms 后用户切换或强制刷新触发请求 2 (快请求)
+    await sleep(10)
+    const p2 = getBackendProvidersCatalog({
+        baseUrl: 'http://same-server:3000',
+        forceRefresh: true,
+        skipAuthInterception: true,
+    })
+
+    const r2 = await p2
+    assert.equal(r2.state, 'success')
+    assert.equal(r2.providers[0].id, 'openai', '快请求结果必须成功写入')
+
+    // 等待慢请求完成或被拒绝
+    try {
+        await p1
+    } catch (err: any) {
+        assert.ok(
+            err.name === 'AbortError' || err.message === 'CATALOG_REQUEST_SUPERSEDED',
+            '被覆盖的慢请求必须抛出 AbortError 或 CATALOG_REQUEST_SUPERSEDED'
+        )
+    }
+
+    // 验证旧请求没有覆盖新请求的缓存结果
+    const finalCatalog = await getBackendProvidersCatalog({
+        baseUrl: 'http://same-server:3000',
+    })
+    assert.equal(finalCatalog.providers[0].id, 'openai', '旧请求绝不能覆盖新请求的最终缓存')
+    console.log('   ✓ 慢请求被正确中止且不可污染最新目录缓存')
+
+    // ─────────────────────────────────────────────────────────────
+    // 断言 3: 草稿测试使用指定参数发起且支持中途取消
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n-> 断言 3: 草稿连接测试参数隔离与取消链路')
+
+    let lastTestReqBody: any = null
+    let lastTestBaseUrl = ''
+
+function abortableSleep(ms: number, signal?: AbortSignal | null): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+            return reject(new DOMException('This operation was aborted', 'AbortError'))
+        }
+        const timer = setTimeout(resolve, ms)
+        signal?.addEventListener('abort', () => {
+            clearTimeout(timer)
+            reject(new DOMException('This operation was aborted', 'AbortError'))
+        }, { once: true })
+    })
+}
+
+    currentFetchHandler = async (url: string, init?: RequestInit) => {
+        if (url.includes('/api/chat/test')) {
+            lastTestBaseUrl = url
+            lastTestReqBody = JSON.parse(String(init?.body || '{}'))
+
+            // 模拟流式生成，延迟返回并监听信号
+            await abortableSleep(300, init?.signal)
+            return ndjsonResponse([
+                { message: { role: 'assistant', content: 'draft-token' }, done: false },
+            ])
+        }
+        return jsonResponse({})
+    }
+
+    const abortCtrl = new AbortController()
+    const testPromise = testConnection({
+        transport: 'backend',
+        provider: 'anthropic',
+        model: 'claude-3-7-sonnet',
+        baseUrl: 'http://test-draft-backend:8888',
+        timeoutMs: 5000,
+        signal: abortCtrl.signal,
+    })
+
+    // 50ms 后主动取消测试
+    await sleep(50)
+    abortCtrl.abort()
+
+    const testResult = await testPromise
+    assert.equal(testResult.ok, false, '被主动取消的测试必须返回 ok: false')
+    assert.equal(testResult.reason, 'aborted', '失败原因必须为 aborted')
+    assert.equal(lastTestReqBody.provider, 'anthropic', '测试请求必须准确发送草稿中指定的 provider')
+    assert.equal(lastTestReqBody.model, 'claude-3-7-sonnet', '测试请求必须准确发送草稿中指定的 model')
+    assert.ok(lastTestBaseUrl.includes('test-draft-backend:8888'), '测试请求必须请求草稿指定的 baseUrl')
+    console.log('   ✓ 草稿测试准确请求目标地址，中途取消正常生效')
+
+    // ─────────────────────────────────────────────────────────────
+    // 断言 4: 快速校验前置拦截（无需发起无效网络请求）
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n-> 断言 4: 前置缺失校验防护')
+    const directNoKeyResult = await testConnection({
+        transport: 'direct',
+        provider: 'openai',
+        model: 'gpt-4o',
+        apiKey: '   ', // 空 API Key
+    })
+    assert.equal(directNoKeyResult.ok, false)
+    assert.equal(directNoKeyResult.reason, 'http_error')
+    assert.match(String(directNoKeyResult.error), /请先填写 API Key/, '缺少 API Key 时应直接返回友好提示')
+    console.log('   ✓ 直连无 Key 前置拦截生效，避免无效调用')
+
+    console.log('\n=== 第四批专项验证全部通过 (4/4) ===')
+}
+
+main().catch(err => {
+    console.error('第四批专项验证失败:', err)
+    process.exit(1)
+})

@@ -997,6 +997,8 @@
 
 /* ─── 顶栏 ──────────────────────────────────── */
 .topbar {
+    position: relative;
+    z-index: 50;
     display: flex;
     align-items: center;
     justify-content: flex-start;
@@ -2546,6 +2548,8 @@ datalist option {
 }
 
 .chat-shell .topbar {
+    position: relative;
+    z-index: 50;
     height: 64px;
     padding: 0 20px;
     border-bottom-color: var(--border-subtle);
@@ -2584,6 +2588,7 @@ datalist option {
     position: relative;
     display: inline-flex;
     align-items: center;
+    z-index: 55;
 }
 
 .chat-shell .topbar-model-btn {
@@ -2619,12 +2624,14 @@ datalist option {
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
-    z-index: var(--z-overlay);
-    width: 240px;
+    z-index: 100;
+    min-width: 260px;
+    max-width: 340px;
+    width: max-content;
     border-radius: var(--radius-md);
     background: var(--bg-elevated);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
     padding: 6px;
     animation: model-dropdown-in var(--motion-fast) var(--ease-standard);
 }

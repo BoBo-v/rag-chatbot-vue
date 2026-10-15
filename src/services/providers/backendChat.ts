@@ -42,7 +42,7 @@ export function buildBackendChatBody(
     const sanitizedMessages = sanitizeBackendMessages(chatMessages)
 
     return {
-        provider: runtime.backendProvider ?? 'ollama',
+        provider: runtime.backendProvider || (runtime.provider as NonNullable<ModelRuntimeConfig['backendProvider']>),
         model: runtime.backendModel || runtime.model,
         messages: sanitizedMessages.map(message => ({
             role: message.role,

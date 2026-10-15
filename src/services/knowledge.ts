@@ -80,6 +80,13 @@ export interface BackendChatProvider {
     name: string
     defaultModel: string
     configured: boolean
+    models?: string[]
+    capabilities?: {
+        chatStream: boolean
+        agentTools: boolean
+        vision: boolean
+        rag: boolean
+    }
 }
 
 export interface VectorStoreStatus {

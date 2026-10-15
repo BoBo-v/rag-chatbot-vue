@@ -1,8 +1,31 @@
 import type { BackendChatProviderType, BackendRagMode, ProviderType } from '../stores/settings'
 import type { FileAttachment, ImageAttachment } from './chat'
 
-export type ModelProvider = ProviderType
+export type DirectProviderId = ProviderType
+export type BackendProviderId = BackendChatProviderType
+export type ModelProvider = DirectProviderId | BackendProviderId
 export type ModelTransport = 'direct' | 'backend'
+
+export interface ActiveConnectionCapabilities {
+    chatStream: boolean
+    agentTools: boolean
+    vision: boolean
+    rag: boolean
+}
+
+export interface ActiveConnection {
+    transport: ModelTransport
+    providerId: DirectProviderId | BackendProviderId
+    providerName: string
+    model: string
+    baseUrl: string
+    apiKeySource: 'local' | 'backend' | 'none'
+    summaryLabel: string
+    capabilities: ActiveConnectionCapabilities
+    visionDisabledReason?: string
+    isConfigured: boolean
+    error?: string
+}
 
 export interface ModelRuntimeConfig {
     provider: ModelProvider

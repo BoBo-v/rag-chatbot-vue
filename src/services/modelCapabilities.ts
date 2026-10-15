@@ -35,6 +35,9 @@ function includesAny(value: string, keywords: string[]): boolean {
 }
 
 export function supportsVision(runtime: ModelRuntimeConfig): boolean {
+    if (runtime.transport === 'backend') {
+        return false
+    }
     switch (runtime.provider) {
         case 'ollama':
             return includesAny(runtime.model, OLLAMA_VISION_MODELS)

@@ -97,10 +97,10 @@ export function resolveActiveConnection(
     const providerId: DirectProviderId = settings.provider || 'ollama'
     const providerName = getDefaultDirectProviderName(providerId)
 
-    let model = ''
-    let baseUrl = ''
-    let apiKeySource: 'local' | 'none' = 'local'
-    let isConfigured = false
+    let model: string
+    let baseUrl: string
+    let apiKeySource: 'local' | 'none'
+    let isConfigured: boolean
 
     switch (providerId) {
         case 'openai':

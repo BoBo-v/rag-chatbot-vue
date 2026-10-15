@@ -186,31 +186,36 @@
               <button
                 type="button"
                 class="topbar-model-btn"
-                :title="`当前模型：${currentModelName} · 点击快速切换`"
+                :title="`当前连接：${activeConnection.summaryLabel} · 点击快速切换`"
                 @click.stop="modelDropdownOpen = !modelDropdownOpen"
               >
-                <Bot :size="13" aria-hidden="true" />
-                <span class="topbar-model-text">{{ currentModelName }}</span>
+                <span class="topbar-conn-dot" :class="{ ready: activeConnection.isConfigured }"></span>
+                <span class="topbar-model-text">{{ activeConnection.summaryLabel }}</span>
                 <ChevronDown :size="12" class="topbar-model-chevron" :class="{ open: modelDropdownOpen }" aria-hidden="true" />
               </button>
               <div v-if="modelDropdownOpen" class="topbar-model-dropdown" role="menu">
                 <div class="dropdown-header">
-                  <span>{{ currentSettings.transport === 'backend' ? '后端代理厂商' : currentSettings.provider.toUpperCase() }} 模型</span>
+                  <span>模型快速切换</span>
                   <button type="button" class="dropdown-settings-link" @click="modelDropdownOpen = false; settingsOpen = true">详细设置</button>
                 </div>
                 <div class="dropdown-list">
-                  <button
-                    v-for="m in quickModels"
-                    :key="m"
-                    type="button"
-                    class="dropdown-item"
-                    :class="{ active: isCurrentModel(m) }"
-                    @click="selectQuickModel(m)"
-                  >
-                    <Check v-if="isCurrentModel(m)" :size="13" />
-                    <span v-else class="item-spacer"></span>
-                    <span class="dropdown-item-name">{{ m }}</span>
-                  </button>
+                  <div v-for="group in quickModelGroups" :key="group.title" class="dropdown-group">
+                    <div class="dropdown-group-title">{{ group.title }}</div>
+                    <button
+                      v-for="item in group.items"
+                      :key="item.key"
+                      type="button"
+                      class="dropdown-item"
+                      :class="{ active: item.isActive }"
+                      @click="selectAtomicModel(item)"
+                    >
+                      <span class="dropdown-item-name">
+                        {{ item.model }}
+                        <span v-if="item.isActive" class="current-tag">(当前)</span>
+                      </span>
+                      <Check v-if="item.isActive" :size="13" class="dropdown-check-icon" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -510,6 +515,11 @@ v-for="(img, idx) in msg.images" :key="idx"
             <div class="knowledge-upload-progress-bar" :style="{ width: knowledgeUploadPercent + '%' }"></div>
           </div>
         </div>
+        <!-- 图片不支持提示横幅 -->
+        <div v-if="pendingImages.length > 0 && !activeConnection.capabilities.vision" class="image-unsupported-banner">
+          <TriangleAlert :size="14" aria-hidden="true" />
+          <span>{{ activeConnection.visionDisabledReason || '当前连接不支持图片输入 (模型或后端接口未开启)' }}。已选择的图片不会发送，请移除或切换连接。</span>
+        </div>
         <!-- 图片预览 -->
         <div v-if="pendingImages.length > 0" class="image-preview-bar">
           <div v-for="(img, idx) in pendingImages" :key="idx" class="image-preview-item">
@@ -563,7 +573,13 @@ v-for="(img, idx) in msg.images" :key="idx"
           ></textarea>
           <div class="input-toolbar">
             <div class="toolbar-left">
-              <button class="tool-btn" title="上传图片" @click="imageInputRef?.click()">
+              <button
+                class="tool-btn"
+                :class="{ disabled: !activeConnection.capabilities.vision }"
+                :disabled="!activeConnection.capabilities.vision"
+                :title="activeConnection.capabilities.vision ? '上传图片' : (activeConnection.visionDisabledReason || '当前连接不支持图片输入 (模型或后端接口未开启)')"
+                @click="activeConnection.capabilities.vision && imageInputRef?.click()"
+              >
                 <ImageIcon :size="18" aria-hidden="true" />
               </button>
               <button class="tool-btn" title="上传文件" @click="fileInputRef?.click()">
@@ -580,12 +596,29 @@ v-for="(img, idx) in msg.images" :key="idx"
                 <BookUp2 v-else :size="18" aria-hidden="true" />
               </button>
               <button
-v-if="speechSupported"
-                      class="tool-btn voice-btn"
-                      :class="{ 'is-listening': isListening }"
-                      :title="isListening ? '停止语音输入' : '语音输入'"
-                      @click="toggleVoice">
+                v-if="speechSupported"
+                class="tool-btn voice-btn"
+                :class="{ 'is-listening': isListening }"
+                :title="isListening ? '停止语音输入' : '语音输入'"
+                @click="toggleVoice"
+              >
                 <Mic :size="18" aria-hidden="true" />
+              </button>
+              <!-- RAG 模式胶囊按钮 -->
+              <button
+                type="button"
+                class="rag-pill-btn"
+                :class="[
+                  currentSettings.transport === 'backend' ? `rag-${currentSettings.ragMode || 'auto'}` : 'disabled'
+                ]"
+                :disabled="currentSettings.transport !== 'backend'"
+                :title="currentSettings.transport === 'backend'
+                  ? `点击切换 RAG 策略 (当前: ${currentSettings.ragMode === 'force' ? '始终开启' : (currentSettings.ragMode === 'off' ? '关闭检索' : '自动检索')})`
+                  : '直连模式不支持知识库 RAG，请切换至后端代理模式'"
+                @click="cycleRagMode"
+              >
+                <FileSearch :size="13" aria-hidden="true" />
+                <span>{{ ragPillLabel }}</span>
               </button>
             </div>
             <div class="toolbar-right">
@@ -651,7 +684,6 @@ v-if="speechSupported"
 import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   BookUp2,
-  Bot,
   Cable,
   Check,
   CheckCheck,
@@ -688,9 +720,12 @@ import { useConversationSearch } from '../composables/useConversationSearch'
 import { useMessageRenderer } from '../composables/useMessageRenderer'
 import { useConversationGroups } from '../composables/useConversationGroups'
 import { persistSettings, settings as currentSettings } from '../stores/settings'
+import type { BackendRagMode } from '../stores/settings'
 import { getClaudeModels } from '../services/providers/claude'
-import { uploadKnowledgeFile } from '../services/knowledge'
-import type { UploadProgress } from '../services/knowledge'
+import { uploadKnowledgeFile, fetchBackendChatProviders } from '../services/knowledge'
+import type { UploadProgress, BackendChatProvider } from '../services/knowledge'
+import { resolveActiveConnection, getDefaultBackendProviderName } from '../services/activeConnection'
+import type { BackendProviderId, DirectProviderId, ModelTransport } from '../types/model'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import RagCitations from '../components/RagCitations.vue'
 
@@ -743,7 +778,7 @@ watch(
 onUnmounted(() => {
   clearSnapshots()
 })
-const { groupedConversations, currentModelName } = useConversationGroups(conversations)
+const { groupedConversations } = useConversationGroups(conversations)
 const {
   conversationSearchDraft,
   isSearchLoading,
@@ -840,43 +875,231 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
-// ── 顶栏模型快速切换 ──────────────────────────────
+// ── 后端厂商与连接解析 ────────────────────────────
+const backendChatProviders = ref<BackendChatProvider[]>([])
+
+async function loadBackendProviders() {
+  try {
+    const list = await fetchBackendChatProviders({ baseUrl: currentSettings.backend.url })
+    if (Array.isArray(list)) {
+      backendChatProviders.value = list
+    }
+  } catch (err) {
+    console.warn('[StyleChat] 获取后端厂商列表失败:', err)
+  }
+}
+
+watch(() => currentSettings.backend.url, () => {
+  void loadBackendProviders()
+})
+
+const activeConnection = computed(() => {
+  return resolveActiveConnection(currentSettings, backendChatProviders.value)
+})
+
+// ── RAG 策略胶囊切换 ──────────────────────────────
+const ragPillLabel = computed(() => {
+  if (currentSettings.transport !== 'backend') {
+    return 'RAG: 仅后端支持'
+  }
+  switch (currentSettings.ragMode) {
+    case 'force':
+      return 'RAG: 始终开启'
+    case 'off':
+      return 'RAG: 关闭'
+    case 'auto':
+    default:
+      return 'RAG: 自动'
+  }
+})
+
+function cycleRagMode() {
+  if (currentSettings.transport !== 'backend') return
+  const nextMode: Record<BackendRagMode, BackendRagMode> = {
+    auto: 'force',
+    force: 'off',
+    off: 'auto',
+  }
+  currentSettings.ragMode = nextMode[currentSettings.ragMode || 'auto']
+  persistSettings(currentSettings)
+  const labels: Record<BackendRagMode, string> = {
+    auto: '自动检索',
+    force: '始终开启',
+    off: '关闭检索',
+  }
+  toast.show(`RAG 模式已切换为：${labels[currentSettings.ragMode]}`, 'success', 2000)
+}
+
+// ── 顶栏模型快速切换（原子联动） ──────────────────
 const modelDropdownOpen = ref(false)
 const claudeModels = getClaudeModels()
 
-const quickModels = computed(() => {
-  if (currentSettings.transport === 'backend') {
-    const list = [currentSettings.backend.model, currentSettings.ollama.model, 'qwen2.5:7b', 'deepseek-chat', 'claude-3-5-sonnet-20241022'].filter(Boolean)
-    return Array.from(new Set(list))
-  }
-  if (currentSettings.provider === 'ollama') {
-    const list = [currentSettings.ollama.model, 'qwen2.5:7b', 'llama3:8b', 'deepseek-r1:7b', 'mistral'].filter(Boolean)
-    return Array.from(new Set(list))
-  }
-  if (currentSettings.provider === 'openai') {
-    const list = [currentSettings.openai.model, 'gpt-4o', 'gpt-4o-mini', 'deepseek-chat', 'moonshot-v1-8k'].filter(Boolean)
-    return Array.from(new Set(list))
-  }
-  const list = [currentSettings.claude.model, ...claudeModels].filter(Boolean)
-  return Array.from(new Set(list))
-})
-
-function isCurrentModel(m: string): boolean {
-  if (currentSettings.transport === 'backend') {
-    return (currentSettings.backend.model || currentSettings.ollama.model) === m
-  }
-  return currentSettings[currentSettings.provider].model === m
+interface QuickModelOption {
+  key: string
+  transport: ModelTransport
+  provider: BackendProviderId | DirectProviderId
+  model: string
+  isActive: boolean
 }
 
-function selectQuickModel(modelName: string) {
-  if (currentSettings.transport === 'backend') {
-    currentSettings.backend.model = modelName
+interface QuickModelGroup {
+  title: string
+  items: QuickModelOption[]
+}
+
+const quickModelGroups = computed<QuickModelGroup[]>(() => {
+  const groups: QuickModelGroup[] = []
+
+  // 1. 后端代理分组
+  if (backendChatProviders.value.length > 0) {
+    for (const p of backendChatProviders.value) {
+      const models = [...(p.models || [])]
+      if (models.length === 0 && p.defaultModel) {
+        models.push(p.defaultModel)
+      }
+      if (
+        currentSettings.transport === 'backend' &&
+        currentSettings.backend.provider === p.id &&
+        currentSettings.backend.model &&
+        !models.includes(currentSettings.backend.model)
+      ) {
+        models.unshift(currentSettings.backend.model)
+      }
+      if (models.length > 0) {
+        groups.push({
+          title: `后端调用 · ${p.name || getDefaultBackendProviderName(p.id)}`,
+          items: models.map(m => ({
+            key: `backend-${p.id}-${m}`,
+            transport: 'backend' as const,
+            provider: p.id,
+            model: m,
+            isActive:
+              currentSettings.transport === 'backend' &&
+              currentSettings.backend.provider === p.id &&
+              currentSettings.backend.model === m,
+          })),
+        })
+      }
+    }
   } else {
-    currentSettings[currentSettings.provider].model = modelName
+    const defaultBackendModels: Record<BackendProviderId, { name: string; models: string[] }> = {
+      openai: {
+        name: '公司 DeepSeek',
+        models: ['deepseek-chat', 'deepseek-reasoner'],
+      },
+      anthropic: {
+        name: '公司 Claude',
+        models: ['claude-3-7-sonnet', 'claude-3-5-sonnet-20241022'],
+      },
+      ollama: {
+        name: '本地 Ollama',
+        models: ['qwen2.5:7b', 'llama3:8b'],
+      },
+    }
+    for (const [id, info] of Object.entries(defaultBackendModels) as [BackendProviderId, { name: string; models: string[] }][]) {
+      const models = [...info.models]
+      if (
+        currentSettings.transport === 'backend' &&
+        currentSettings.backend.provider === id &&
+        currentSettings.backend.model &&
+        !models.includes(currentSettings.backend.model)
+      ) {
+        models.unshift(currentSettings.backend.model)
+      }
+      groups.push({
+        title: `后端调用 · ${info.name}`,
+        items: models.map(m => ({
+          key: `backend-${id}-${m}`,
+          transport: 'backend' as const,
+          provider: id,
+          model: m,
+          isActive:
+            currentSettings.transport === 'backend' &&
+            currentSettings.backend.provider === id &&
+            currentSettings.backend.model === m,
+        })),
+      })
+    }
+  }
+
+  // 2. 直连 Ollama
+  const ollamaModels = Array.from(new Set([
+    currentSettings.ollama.model,
+    'qwen2.5:7b',
+    'llama3:8b',
+    'deepseek-r1:7b',
+  ].filter(Boolean)))
+  groups.push({
+    title: '前端直连 · 本机 Ollama',
+    items: ollamaModels.map(m => ({
+      key: `direct-ollama-${m}`,
+      transport: 'direct' as const,
+      provider: 'ollama' as const,
+      model: m,
+      isActive:
+        currentSettings.transport === 'direct' &&
+        currentSettings.provider === 'ollama' &&
+        currentSettings.ollama.model === m,
+    })),
+  })
+
+  // 3. 直连 OpenAI
+  const openaiModels = Array.from(new Set([
+    currentSettings.openai.model,
+    'gpt-4o',
+    'gpt-4o-mini',
+    'deepseek-chat',
+  ].filter(Boolean)))
+  groups.push({
+    title: '前端直连 · OpenAI 兼容',
+    items: openaiModels.map(m => ({
+      key: `direct-openai-${m}`,
+      transport: 'direct' as const,
+      provider: 'openai' as const,
+      model: m,
+      isActive:
+        currentSettings.transport === 'direct' &&
+        currentSettings.provider === 'openai' &&
+        currentSettings.openai.model === m,
+    })),
+  })
+
+  // 4. 直连 Claude
+  const claudeList = Array.from(new Set([
+    currentSettings.claude.model,
+    ...claudeModels,
+  ].filter(Boolean)))
+  groups.push({
+    title: '前端直连 · Anthropic Claude',
+    items: claudeList.map(m => ({
+      key: `direct-claude-${m}`,
+      transport: 'direct' as const,
+      provider: 'claude' as const,
+      model: m,
+      isActive:
+        currentSettings.transport === 'direct' &&
+        currentSettings.provider === 'claude' &&
+        currentSettings.claude.model === m,
+    })),
+  })
+
+  return groups
+})
+
+function selectAtomicModel(item: QuickModelOption) {
+  currentSettings.transport = item.transport
+  if (item.transport === 'backend') {
+    currentSettings.backend.provider = item.provider as BackendProviderId
+    currentSettings.backend.model = item.model
+  } else {
+    currentSettings.provider = item.provider as DirectProviderId
+    if (item.provider === 'ollama') currentSettings.ollama.model = item.model
+    else if (item.provider === 'openai') currentSettings.openai.model = item.model
+    else if (item.provider === 'claude') currentSettings.claude.model = item.model
   }
   persistSettings(currentSettings)
   modelDropdownOpen.value = false
-  toast.show(`已切换至模型：${modelName}`, 'success')
+  toast.show(`已切换至模型：${item.model}`, 'success')
 }
 
 function handleClickOutside(e: MouseEvent) {
@@ -1104,6 +1327,7 @@ function applySuggestion(promptText: string) {
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('click', handleClickOutside)
+  void loadBackendProviders()
 })
 
 onBeforeUnmount(() => {
@@ -1123,6 +1347,11 @@ const knowledgeUploadPercent = ref(0)
 function handleImageSelect(e: Event) {
   // 文件 input 选中图片后，把 FileList 转成数组交给 useChatView 校验和读取。
   const input = e.target as HTMLInputElement
+  if (!activeConnection.value.capabilities.vision) {
+    toast.show(activeConnection.value.visionDisabledReason || '当前连接不支持图片输入 (模型或后端接口未开启)', 'warning')
+    input.value = ''
+    return
+  }
   if (input.files?.length) {
     addImages(Array.from(input.files))
     input.value = ''
@@ -1207,6 +1436,10 @@ function handlePaste(e: ClipboardEvent) {
   }
   if (imageFiles.length) {
     e.preventDefault()
+    if (!activeConnection.value.capabilities.vision) {
+      toast.show(activeConnection.value.visionDisabledReason || '当前连接不支持图片输入 (模型或后端接口未开启)', 'warning')
+      return
+    }
     addImages(imageFiles)
   }
 }
@@ -1219,7 +1452,13 @@ function handleDrop(e: DragEvent) {
   const droppedFiles = Array.from(files)
   const imageFiles = droppedFiles.filter(f => f.type.startsWith('image/'))
   const textFiles = droppedFiles.filter(f => !f.type.startsWith('image/'))
-  if (imageFiles.length) addImages(imageFiles)
+  if (imageFiles.length) {
+    if (!activeConnection.value.capabilities.vision) {
+      toast.show(activeConnection.value.visionDisabledReason || '当前连接不支持图片输入 (模型或后端接口未开启)', 'warning')
+    } else {
+      addImages(imageFiles)
+    }
+  }
   if (textFiles.length) addFiles(textFiles)
 }
 

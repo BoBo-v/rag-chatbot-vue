@@ -1,5 +1,6 @@
 import { computed, type Ref } from 'vue'
 import { settings } from '../stores/settings'
+import { resolveActiveConnection } from '../services/activeConnection'
 import type { Conversation } from '../types/chat'
 
 // 把时间戳转换成侧边栏更友好的分组标题，例如“今天”“昨天”“上周”。
@@ -37,16 +38,7 @@ export function useConversationGroups(conversations: Ref<Conversation[]>) {
     })
 
     const currentModelName = computed(() => {
-        if (settings.transport === 'backend') {
-            return `${settings.backend.provider} / ${settings.backend.model || settings.ollama.model}`
-        }
-
-        const p = settings.provider
-        if (p === 'ollama') {
-            return settings.ollama.model
-        }
-        if (p === 'openai') return settings.openai.model
-        return settings.claude.model
+        return resolveActiveConnection(settings).summaryLabel
     })
 
     return { groupedConversations, currentModelName }

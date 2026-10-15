@@ -2699,6 +2699,109 @@ datalist option {
     width: 13px;
 }
 
+.chat-shell .topbar-conn-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.chat-shell .topbar-conn-dot.ready {
+    background: #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+}
+
+.chat-shell .dropdown-group {
+    margin-bottom: 6px;
+}
+
+.chat-shell .dropdown-group-title {
+    padding: 6px 8px 3px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+}
+
+.chat-shell .dropdown-item-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.chat-shell .current-tag {
+    font-size: 11px;
+    color: var(--accent-text);
+}
+
+.chat-shell .dropdown-check-icon {
+    margin-left: auto;
+    color: var(--accent-text);
+}
+
+.chat-shell .rag-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border-radius: var(--radius-pill);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    background: var(--bg-surface-2);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    transition: all var(--motion-fast) ease;
+}
+
+.chat-shell .rag-pill-btn:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+}
+
+.chat-shell .rag-pill-btn.rag-auto {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.28);
+}
+
+.chat-shell .rag-pill-btn.rag-force {
+    color: #a855f7;
+    background: rgba(168, 85, 247, 0.12);
+    border-color: rgba(168, 85, 247, 0.28);
+}
+
+.chat-shell .rag-pill-btn.rag-off {
+    color: var(--text-muted);
+    background: var(--bg-surface-2);
+    border-color: var(--border-subtle);
+}
+
+.chat-shell .rag-pill-btn.disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.chat-shell .tool-btn.disabled,
+.chat-shell .tool-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.chat-shell .image-unsupported-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    margin-bottom: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    color: var(--warning);
+    font-size: 11.5px;
+}
+
 .chat-shell .topbar-right { gap: 10px; }
 
 .chat-shell .transport-status {

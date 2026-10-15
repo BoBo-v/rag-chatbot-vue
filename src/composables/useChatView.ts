@@ -16,6 +16,7 @@ import { classifyError } from '../utils/error'
 import { runBackendChatRunRecoveryCoordinator } from '../services/providers/backendChatRunCoordinator'
 import { useToast } from './useToast'
 import { settings } from '../stores/settings'
+import { resolveActiveConnection } from '../services/activeConnection'
 import { searchService } from '../search/SearchService'
 import { useAttachments } from './useAttachments'
 import { useChatScroll } from './useChatScroll'
@@ -397,6 +398,13 @@ export function useChatView() {
         // 5. Start the streaming model request.
         if (isStreaming.value) {
             return
+        }
+        if (pendingImages.value.length > 0) {
+            const activeConn = resolveActiveConnection(settings)
+            if (!activeConn.capabilities.vision) {
+                toast.show(activeConn.visionDisabledReason || '当前连接不支持图片输入，请移除图片或切换至支持视觉的模型连接后再发送', 'warning')
+                return
+            }
         }
         const userText = inputValue.value.trim()
         const images = pendingImages.value.length > 0

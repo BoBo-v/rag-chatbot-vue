@@ -722,8 +722,8 @@ import { useConversationGroups } from '../composables/useConversationGroups'
 import { persistSettings, settings as currentSettings } from '../stores/settings'
 import type { BackendRagMode } from '../stores/settings'
 import { getClaudeModels } from '../services/providers/claude'
-import { uploadKnowledgeFile, fetchBackendChatProviders } from '../services/knowledge'
-import type { UploadProgress, BackendChatProvider } from '../services/knowledge'
+import { uploadKnowledgeFile, getBackendProvidersCatalog, type BackendProvidersCatalog } from '../services/knowledge'
+import type { UploadProgress } from '../services/knowledge'
 import { resolveActiveConnection, getDefaultBackendProviderName } from '../services/activeConnection'
 import type { BackendProviderId, DirectProviderId, ModelTransport } from '../types/model'
 import SettingsPanel from '../components/SettingsPanel.vue'
@@ -876,25 +876,30 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 }
 
 // ── 后端厂商与连接解析 ────────────────────────────
-const backendChatProviders = ref<BackendChatProvider[]>([])
+const backendCatalog = ref<BackendProvidersCatalog>({
+  state: 'idle',
+  baseUrl: currentSettings.backend.url,
+  providers: [],
+})
 
-async function loadBackendProviders() {
+async function loadBackendProviders(forceRefresh = false) {
   try {
-    const list = await fetchBackendChatProviders({ baseUrl: currentSettings.backend.url })
-    if (Array.isArray(list)) {
-      backendChatProviders.value = list
-    }
+    const catalog = await getBackendProvidersCatalog({
+      baseUrl: currentSettings.backend.url,
+      forceRefresh,
+    })
+    backendCatalog.value = catalog
   } catch (err) {
     console.warn('[StyleChat] 获取后端厂商列表失败:', err)
   }
 }
 
 watch(() => currentSettings.backend.url, () => {
-  void loadBackendProviders()
-})
+  void loadBackendProviders(true)
+}, { immediate: true })
 
 const activeConnection = computed(() => {
-  return resolveActiveConnection(currentSettings, backendChatProviders.value)
+  return resolveActiveConnection(currentSettings, backendCatalog.value)
 })
 
 // ── RAG 策略胶囊切换 ──────────────────────────────
@@ -951,8 +956,9 @@ const quickModelGroups = computed<QuickModelGroup[]>(() => {
   const groups: QuickModelGroup[] = []
 
   // 1. 后端代理分组
-  if (backendChatProviders.value.length > 0) {
-    for (const p of backendChatProviders.value) {
+  if (backendCatalog.value.state === 'success' && backendCatalog.value.providers.length > 0) {
+    for (const p of backendCatalog.value.providers) {
+      if (!p.configured) continue
       const models = [...(p.models || [])]
       if (models.length === 0 && p.defaultModel) {
         models.push(p.defaultModel)
@@ -981,45 +987,16 @@ const quickModelGroups = computed<QuickModelGroup[]>(() => {
         })
       }
     }
-  } else {
-    const defaultBackendModels: Record<BackendProviderId, { name: string; models: string[] }> = {
-      openai: {
-        name: 'OpenAI 服务',
-        models: ['gpt-4o', 'gpt-4o-mini', 'deepseek-chat'],
-      },
-      anthropic: {
-        name: '公司 Claude',
-        models: ['claude-3-7-sonnet', 'claude-3-5-sonnet-20241022'],
-      },
-      ollama: {
-        name: '本地 Ollama',
-        models: ['qwen2.5:7b', 'llama3:8b'],
-      },
-    }
-    for (const [id, info] of Object.entries(defaultBackendModels) as [BackendProviderId, { name: string; models: string[] }][]) {
-      const models = [...info.models]
-      if (
-        currentSettings.transport === 'backend' &&
-        currentSettings.backend.provider === id &&
-        currentSettings.backend.model &&
-        !models.includes(currentSettings.backend.model)
-      ) {
-        models.unshift(currentSettings.backend.model)
-      }
-      groups.push({
-        title: `后端调用 · ${info.name}`,
-        items: models.map(m => ({
-          key: `backend-${id}-${m}`,
-          transport: 'backend' as const,
-          provider: id,
-          model: m,
-          isActive:
-            currentSettings.transport === 'backend' &&
-            currentSettings.backend.provider === id &&
-            currentSettings.backend.model === m,
-        })),
-      })
-    }
+  } else if (backendCatalog.value.state === 'loading') {
+    groups.push({
+      title: '后端调用 · 目录加载中...',
+      items: [],
+    })
+  } else if (backendCatalog.value.state === 'error') {
+    groups.push({
+      title: `后端调用 · 不可用 (${backendCatalog.value.error || '连接失败'})`,
+      items: [],
+    })
   }
 
   // 2. 直连 Ollama

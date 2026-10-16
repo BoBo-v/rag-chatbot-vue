@@ -87,10 +87,21 @@ function normalizeRestoredRun(row: DBComparisonRun): ComparisonRun {
         ? 'aborted'
         : row.status
 
+    const cfg = { ...row.config }
+    if (!cfg.transport) {
+        cfg.transport = cfg.backendProvider ? 'backend' : 'direct'
+    }
+    if (!cfg.model && cfg.backendModel) {
+        cfg.model = cfg.backendModel
+    }
+    if (!cfg.provider && cfg.backendProvider) {
+        cfg.provider = cfg.backendProvider === 'anthropic' ? 'claude' : cfg.backendProvider
+    }
+
     return {
         id: row.id,
         sessionId: row.sessionId,
-        config: row.config,
+        config: cfg,
         content: row.content,
         status,
         errorMessage: row.errorMessage,

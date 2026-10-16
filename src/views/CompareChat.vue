@@ -215,34 +215,59 @@
                 </button>
               </div>
 
-              <label class="field-label">Provider</label>
-              <select v-model="runtime.provider" class="field-input" :disabled="isRunning" @change="normalizeRuntime(runtime)">
-                <option value="ollama">Ollama</option>
-                <option value="openai">OpenAI 兼容</option>
-                <option value="claude">Claude</option>
+              <label class="field-label">调用方式</label>
+              <select v-model="runtime.transport" class="field-input" :disabled="isRunning" @change="onTransportChange(runtime)">
+                <option value="backend">后端服务代理 (Fastify)</option>
+                <option value="direct">前端直连模式</option>
               </select>
 
-              <label class="field-label">Model</label>
-              <input v-model="runtime.model" class="field-input" :disabled="isRunning" spellcheck="false" />
+              <label class="field-label">厂商 (Provider)</label>
+              <select v-model="runtime.provider" class="field-input" :disabled="isRunning" @change="normalizeRuntime(runtime)">
+                <template v-if="runtime.transport === 'backend'">
+                  <option value="ollama">Ollama</option>
+                  <option value="openai">OpenAI 服务</option>
+                  <option value="anthropic">Claude (Anthropic)</option>
+                </template>
+                <template v-else>
+                  <option value="ollama">Ollama</option>
+                  <option value="openai">OpenAI 兼容</option>
+                  <option value="claude">Claude</option>
+                </template>
+              </select>
 
-              <label class="field-label">Base URL</label>
-              <input
-                v-model="runtime.baseUrl"
-                class="field-input"
-                :disabled="isRunning || runtime.provider === 'claude'"
-                spellcheck="false"
-                placeholder="Claude 不使用此字段"
-              />
+              <label class="field-label">模型 (Model)</label>
+              <input v-model="runtime.model" class="field-input" :disabled="isRunning" spellcheck="false" placeholder="例如 qwen2.5:7b, gpt-4o, claude-3-7-sonnet" />
 
-              <label class="field-label">API Key</label>
-              <input
-                v-model="runtime.apiKey"
-                class="field-input"
-                :disabled="isRunning || runtime.provider === 'ollama'"
-                type="password"
-                spellcheck="false"
-                placeholder="本地 Ollama 可留空"
-              />
+              <template v-if="runtime.transport === 'backend'">
+                <label class="field-label">后端地址 (Fastify URL)</label>
+                <input
+                  v-model="runtime.baseUrl"
+                  class="field-input"
+                  :disabled="isRunning"
+                  spellcheck="false"
+                  placeholder="http://localhost:3001"
+                />
+              </template>
+              <template v-else>
+                <label class="field-label">Base URL</label>
+                <input
+                  v-model="runtime.baseUrl"
+                  class="field-input"
+                  :disabled="isRunning || runtime.provider === 'claude'"
+                  spellcheck="false"
+                  placeholder="Claude 不使用此字段"
+                />
+
+                <label class="field-label">API Key</label>
+                <input
+                  v-model="runtime.apiKey"
+                  class="field-input"
+                  :disabled="isRunning || runtime.provider === 'ollama'"
+                  type="password"
+                  spellcheck="false"
+                  placeholder="本地 Ollama 可留空"
+                />
+              </template>
             </div>
           </div>
 
@@ -366,14 +391,30 @@
             </div>
             <div class="summary-actions">
               <select
+                v-model="summaryRuntime.transport"
+                class="field-input summary-select"
+                :disabled="isSummaryRunning || isHistorySession"
+                @change="onTransportChange(summaryRuntime)"
+              >
+                <option value="backend">后端代理</option>
+                <option value="direct">前端直连</option>
+              </select>
+              <select
                 v-model="summaryRuntime.provider"
                 class="field-input summary-select"
                 :disabled="isSummaryRunning || isHistorySession"
                 @change="normalizeRuntime(summaryRuntime)"
               >
-                <option value="ollama">Ollama</option>
-                <option value="openai">OpenAI 兼容</option>
-                <option value="claude">Claude</option>
+                <template v-if="summaryRuntime.transport === 'backend'">
+                  <option value="ollama">Ollama</option>
+                  <option value="openai">OpenAI 服务</option>
+                  <option value="anthropic">Claude (Anthropic)</option>
+                </template>
+                <template v-else>
+                  <option value="ollama">Ollama</option>
+                  <option value="openai">OpenAI 兼容</option>
+                  <option value="claude">Claude</option>
+                </template>
               </select>
               <input
                 v-model="summaryRuntime.model"
@@ -423,6 +464,7 @@ import {
 import { formatLatency, getSessionStats } from '../services/comparisonStats'
 import { getVisionUnsupportedRuntimeLabels } from '../services/modelCapabilities'
 import { createRuntimeFromSettings, freezeRuntime } from '../services/runtime'
+import { resolveTargetBaseUrl } from '../services/api'
 import { settings } from '../stores/settings'
 import type { ModelRuntimeConfig } from '../types/model'
 
@@ -591,6 +633,12 @@ onMounted(() => {
 })
 
 function cloneRuntime(runtime: ModelRuntimeConfig): ModelRuntimeConfig {
+  const isBackend = runtime.transport === 'backend'
+  const backendProvider = isBackend
+    ? ((runtime.provider === 'claude' ? 'anthropic' : (runtime.provider || runtime.backendProvider || 'ollama')) as any)
+    : undefined
+  const backendModel = isBackend ? (runtime.model || runtime.backendModel || '') : undefined
+
   return {
     provider: runtime.provider,
     transport: runtime.transport,
@@ -602,29 +650,65 @@ function cloneRuntime(runtime: ModelRuntimeConfig): ModelRuntimeConfig {
     maxContextTokens: runtime.maxContextTokens,
     responseTimeoutSeconds: runtime.responseTimeoutSeconds,
     backendRagMode: runtime.backendRagMode,
-    backendProvider: runtime.backendProvider,
-    backendModel: runtime.backendModel,
+    backendProvider,
+    backendModel,
   }
 }
 
-function normalizeRuntime(runtime: ModelRuntimeConfig): void {
-  if (runtime.provider === 'ollama') {
-    runtime.baseUrl = runtime.baseUrl || settings.ollama.url
-    runtime.apiKey = undefined
-    runtime.model = runtime.model || settings.ollama.model
-  } else if (runtime.provider === 'openai') {
-    runtime.baseUrl = runtime.baseUrl || settings.openai.baseUrl
-    runtime.apiKey = runtime.apiKey ?? settings.openai.apiKey
-    runtime.model = runtime.model || settings.openai.model
+function onTransportChange(runtime: ModelRuntimeConfig): void {
+  if (runtime.transport === 'backend') {
+    if (runtime.provider === 'claude') {
+      runtime.provider = 'anthropic'
+    } else if (runtime.provider !== 'openai' && runtime.provider !== 'anthropic') {
+      runtime.provider = 'ollama'
+    }
   } else {
-    runtime.baseUrl = undefined
-    runtime.apiKey = runtime.apiKey ?? settings.claude.apiKey
-    runtime.model = runtime.model || settings.claude.model
+    if (runtime.provider === 'anthropic') {
+      runtime.provider = 'claude'
+    } else if (runtime.provider !== 'openai' && runtime.provider !== 'claude') {
+      runtime.provider = 'ollama'
+    }
+  }
+  normalizeRuntime(runtime)
+}
+
+function normalizeRuntime(runtime: ModelRuntimeConfig): void {
+  if (runtime.transport === 'backend') {
+    if (runtime.provider === 'claude') {
+      runtime.provider = 'anthropic'
+    } else if (runtime.provider !== 'openai' && runtime.provider !== 'anthropic') {
+      runtime.provider = 'ollama'
+    }
+    runtime.baseUrl = resolveTargetBaseUrl(runtime.baseUrl || settings.backend.url)
+    runtime.apiKey = undefined
+    runtime.backendProvider = runtime.provider as any
+    runtime.backendModel = runtime.model
+  } else {
+    runtime.transport = 'direct'
+    if (runtime.provider === 'anthropic') {
+      runtime.provider = 'claude'
+    }
+    if (runtime.provider === 'ollama') {
+      runtime.baseUrl = runtime.baseUrl || settings.ollama.url
+      runtime.apiKey = undefined
+      runtime.model = runtime.model || settings.ollama.model
+    } else if (runtime.provider === 'openai') {
+      runtime.baseUrl = runtime.baseUrl || settings.openai.baseUrl
+      runtime.apiKey = runtime.apiKey ?? settings.openai.apiKey
+      runtime.model = runtime.model || settings.openai.model
+    } else {
+      runtime.provider = 'claude'
+      runtime.baseUrl = undefined
+      runtime.apiKey = runtime.apiKey ?? settings.claude.apiKey
+      runtime.model = runtime.model || settings.claude.model
+    }
+    runtime.backendProvider = undefined
+    runtime.backendModel = undefined
   }
   runtime.systemPrompt = settings.systemPrompt
   runtime.maxContextTokens = settings.maxContextTokens
   runtime.responseTimeoutSeconds = settings.responseTimeoutSeconds
-  runtime.label = `${runtime.provider} - ${runtime.model}`
+  runtime.label = `${runtime.transport === 'backend' ? '后端' : '直连'} · ${runtime.provider} - ${runtime.model}`
 }
 
 function resetRuntime(index: number): void {

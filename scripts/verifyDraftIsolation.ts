@@ -10,6 +10,15 @@ import {
 import {
     testConnection,
 } from '../src/services/connectionTester'
+import {
+    buildBackendChatBody,
+    backendChatStream,
+    fetchBackendChatContext,
+} from '../src/services/providers/backendChat'
+import {
+    createRuntimeFromSettings,
+} from '../src/services/runtime'
+import type { ModelRuntimeConfig } from '../src/types/model'
 import { settings, type AppSettings } from '../src/stores/settings'
 
 console.log('=== 开始执行第四批专项验证：隔离草稿测试副作用与竞态覆盖 ===\n')
@@ -266,9 +275,92 @@ function abortableSleep(ms: number, signal?: AbortSignal | null): Promise<void> 
     assert.equal(directNoKeyResult.ok, false)
     assert.equal(directNoKeyResult.reason, 'http_error')
     assert.match(String(directNoKeyResult.error), /请先填写 API Key/, '缺少 API Key 时应直接返回友好提示')
-    console.log('   ✓ 直连无 Key 前置拦截生效，避免无效调用')
+    // ─────────────────────────────────────────────────────────────
+    // 断言 5: 对比页编辑的厂商与模型进入实际请求、Claude 映射 anthropic、使用快照地址
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n-> 断言 5: 对比页编辑模型映射、后端 Claude 映射与快照地址隔离')
 
-    console.log('\n=== 第四批专项验证全部通过 (4/4) ===')
+    const capturedRequests: Array<{ url: string; body: any }> = []
+    currentFetchHandler = async (url: string, init?: RequestInit) => {
+        const bodyText = String(init?.body || '{}')
+        let parsed = {}
+        try { parsed = JSON.parse(bodyText) } catch {}
+        capturedRequests.push({ url, body: parsed })
+        if (url.includes('/api/chat/context')) {
+            return jsonResponse({ enabled: false, results: [] })
+        }
+        if (url.includes('/api/chat')) {
+            return ndjsonResponse([
+                { message: { role: 'assistant', content: 'mock answer' }, done: true }
+            ])
+        }
+        return jsonResponse({})
+    }
+
+    // 1. 测试两个对比项分别选择 deepseek-chat 与 deepseek-reasoner
+    const runtime1: ModelRuntimeConfig = {
+        transport: 'backend',
+        provider: 'openai',
+        model: 'deepseek-chat',
+        baseUrl: 'http://fastify-host-a:3001',
+        label: '',
+        systemPrompt: '',
+        maxContextTokens: 4096,
+        responseTimeoutSeconds: 30,
+    }
+    const runtime2: ModelRuntimeConfig = {
+        transport: 'backend',
+        provider: 'openai',
+        model: 'deepseek-reasoner',
+        baseUrl: 'http://fastify-host-a:3001',
+        label: '',
+        systemPrompt: '',
+        maxContextTokens: 4096,
+        responseTimeoutSeconds: 30,
+    }
+
+    const body1 = buildBackendChatBody([], 'test 1', runtime1)
+    const body2 = buildBackendChatBody([], 'test 2', runtime2)
+    assert.equal(body1.provider, 'openai')
+    assert.equal(body1.model, 'deepseek-chat', '对比项 1 必须使用编辑后的 deepseek-chat')
+    assert.equal(body2.provider, 'openai')
+    assert.equal(body2.model, 'deepseek-reasoner', '对比项 2 必须使用编辑后的 deepseek-reasoner')
+
+    // 2. 测试后端 Claude 发出 provider: "anthropic"，不得误回退为 ollama
+    const runtimeClaude: ModelRuntimeConfig = {
+        transport: 'backend',
+        provider: 'claude',
+        model: 'claude-3-7-sonnet',
+        baseUrl: 'http://fastify-host-a:3001',
+        label: '',
+        systemPrompt: '',
+        maxContextTokens: 4096,
+        responseTimeoutSeconds: 30,
+    }
+    const bodyClaude = buildBackendChatBody([], 'test claude', runtimeClaude)
+    assert.equal(bodyClaude.provider, 'anthropic', '后端 Claude 在请求体中必须严格映射为 anthropic')
+    assert.equal(bodyClaude.model, 'claude-3-7-sonnet')
+
+    // 3. 测试快照地址 A 固化后，全局设置改为 B，执行聊天与 RAG context 仍发往 A
+    capturedRequests.length = 0
+    settings.backend.url = 'http://fastify-host-b:9999' // 篡改全局设置
+
+    await fetchBackendChatContext([], 'hello', runtime1)
+    assert.equal(capturedRequests.length, 1)
+    assert.ok(capturedRequests[0].url.startsWith('http://fastify-host-a:3001'), 'RAG context 必须使用快照地址 A')
+
+    await backendChatStream([], 'hello', runtime1, () => {}, () => {})
+    assert.equal(capturedRequests.length, 2)
+    assert.ok(capturedRequests[1].url.startsWith('http://fastify-host-a:3001'), 'chat stream 必须使用快照地址 A')
+    assert.equal(capturedRequests[1].body.model, 'deepseek-chat')
+
+    // 4. 新建的任务读取新设置 B
+    const newRuntime = createRuntimeFromSettings(settings)
+    assert.equal(newRuntime.baseUrl, 'http://fastify-host-b:9999', '新建任务使用新全局地址 B')
+
+    console.log('   ✓ 对比页编辑模型精准生效，Claude 准确映射 anthropic，快照地址物理隔离')
+
+    console.log('\n=== 第四批专项验证全部通过 (5/5) ===')
 }
 
 main().catch(err => {

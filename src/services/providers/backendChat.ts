@@ -28,6 +28,13 @@ export interface BackendChatRequestBody {
     rag: 'auto' | boolean
 }
 
+function resolveBackendProvider(runtime: ModelRuntimeConfig): NonNullable<ModelRuntimeConfig['backendProvider']> {
+    const raw = (runtime.provider || runtime.backendProvider || 'ollama').toLowerCase()
+    if (raw === 'claude' || raw === 'anthropic') return 'anthropic'
+    if (raw === 'openai') return 'openai'
+    return 'ollama'
+}
+
 export function buildBackendChatBody(
     messages: Message[],
     userText: string,
@@ -41,9 +48,12 @@ export function buildBackendChatBody(
     )
     const sanitizedMessages = sanitizeBackendMessages(chatMessages)
 
+    const provider = resolveBackendProvider(runtime)
+    const model = (runtime.model || runtime.backendModel || '').trim()
+
     return {
-        provider: runtime.backendProvider || (runtime.provider as NonNullable<ModelRuntimeConfig['backendProvider']>),
-        model: runtime.backendModel || runtime.model,
+        provider,
+        model,
         messages: sanitizedMessages.map(message => ({
             role: message.role,
             content: message.content,
@@ -77,7 +87,7 @@ export async function fetchBackendChatContext(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildBackendChatBody(messages, userText, runtime)),
         signal,
-    })
+    }, { baseUrl: runtime.baseUrl })
 
     if (!res.ok) throw new Error(`Backend chat context error ${res.status}: ${await res.text()}`)
 
@@ -111,7 +121,7 @@ export async function backendChatStream(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildBackendChatBody(messages, userText, runtime)),
         signal,
-    })
+    }, { baseUrl: runtime.baseUrl })
 
     if (!res.ok) throw new Error(`Backend chat error ${res.status}: ${await res.text()}`)
 

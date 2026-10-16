@@ -24,8 +24,21 @@ import {
     getBackendChatRun,
 } from '../src/services/providers/backendChatRun'
 import { settings, type AppSettings } from '../src/stores/settings'
+import { useAuthStore } from '../src/stores/auth'
 
 console.log('=== 开始执行第一批专项验证：统一元数据与连接解析状态 ===\n')
+
+if (typeof globalThis.localStorage === 'undefined') {
+    const store = new Map<string, string>()
+    ;(globalThis as any).localStorage = {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => store.set(k, String(v)),
+        removeItem: (k: string) => store.delete(k),
+        clear: () => store.clear(),
+        key: (i: number) => Array.from(store.keys())[i] ?? null,
+        get length() { return store.size },
+    }
+}
 
 // ── 辅助工具：模拟 fetch 分发器 ──
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>
@@ -554,7 +567,141 @@ async function runTests() {
             console.log('✓ [断言 7 通过] 异步间隙旧 401 迟到响应防污染成功，当前有效会话 401 正常响应')
         }
 
-        console.log('\n🎉 全部 7 项关键断言与架构约束全部通过！')
+        // ── 断言 8：checkAuth() 迟到响应、地址漂移、网络异常与逆序完成提交守卫 ──
+        {
+            console.log('\n[断言 8] 测试 checkAuth() 迟到响应防污染与逆序提交守卫...')
+            const authStore = useAuthStore()
+
+            // 1. 旧 /api/auth/me 延迟返回 401，不能退出刚建立的新登录
+            settings.backend.url = 'http://auth-server:3000'
+            let delayedAuthMeResolve!: (v: Response) => void
+            const delayedAuthMePromise = new Promise<Response>(r => { delayedAuthMeResolve = r })
+
+            currentFetchHandler = async (url) => {
+                if (url.includes('/api/auth/me')) {
+                    return delayedAuthMePromise
+                }
+                if (url.includes('/api/auth/login')) {
+                    return jsonResponse({ user: { username: 'alice', mustChangePassword: false } }, 200)
+                }
+                return jsonResponse({})
+            }
+
+            // 发起 probe 1 (慢请求)
+            const probe1Promise = authStore.checkAuth()
+
+            // 用户在弹窗完成新登录 (变成 alice, sessionVersion 递增)
+            await authStore.login('alice', 'password123')
+            assert.equal(authStore.isAuthenticated.value, true)
+            assert.equal(authStore.user.value?.username, 'alice')
+
+            // 此时 probe 1 返回 401
+            delayedAuthMeResolve(jsonResponse({ error: 'unauthorized' }, 401))
+            const probe1Result = await probe1Promise
+
+            assert.equal(probe1Result, true, '旧 probe 迟到返回 401，返回值应保持当前有效登录状态')
+            assert.equal(authStore.isAuthenticated.value, true, '旧 401 绝不能踢掉刚登录的 alice')
+            assert.equal(authStore.user.value?.username, 'alice')
+
+            // 2. 旧地址延迟返回 200，不能覆盖新地址的用户或弹出强制改密窗口
+            let delayedOldHostResolve!: (v: Response) => void
+            const delayedOldHostPromise = new Promise<Response>(r => { delayedOldHostResolve = r })
+
+            currentFetchHandler = async (url) => {
+                if (url.startsWith('http://old-host:3000') && url.includes('/api/auth/me')) {
+                    return delayedOldHostPromise
+                }
+                if (url.startsWith('http://new-host:3000') && url.includes('/api/auth/me')) {
+                    return jsonResponse({ user: { username: 'new-user', mustChangePassword: false } }, 200)
+                }
+                return jsonResponse({})
+            }
+
+            settings.backend.url = 'http://old-host:3000'
+            const oldHostProbe = authStore.checkAuth()
+
+            // 用户切换至 new-host 并成功完成探测
+            settings.backend.url = 'http://new-host:3000'
+            const newHostProbe = await authStore.checkAuth()
+            assert.equal(newHostProbe, true)
+            assert.equal(authStore.user.value?.username, 'new-user')
+            assert.equal(authStore.mustChangePassword.value, false)
+
+            // 旧地址 delayedOldHost 返回 200，且声称需要强制改密
+            delayedOldHostResolve(jsonResponse({ user: { username: 'old-user', mustChangePassword: true } }, 200))
+            const oldHostResult = await oldHostProbe
+            assert.equal(oldHostResult, true)
+            assert.equal(authStore.user.value?.username, 'new-user', '旧地址迟到 200 绝不能覆盖新地址用户')
+            assert.equal(authStore.mustChangePassword.value, false, '旧地址迟到 200 绝不能触发强制改密弹窗')
+            assert.equal(authStore.isChangePasswordModalVisible.value, false)
+
+            // 3. 旧探测发生网络异常，不能清除新会话
+            let delayedErrorResolve!: (v: any) => void
+            const delayedErrorPromise = new Promise<Response>((_, reject) => { delayedErrorResolve = reject })
+
+            currentFetchHandler = async (url) => {
+                if (url.includes('/api/auth/me')) {
+                    return delayedErrorPromise
+                }
+                return jsonResponse({})
+            }
+
+            const errorProbe = authStore.checkAuth()
+            // 在探测完成前，用户已成功登录
+            const sessionBefore = authStore.sessionVersion.value
+            authStore.user.value = { username: 'stable-user' }
+            authStore.isAuthenticated.value = true
+            authStore.sessionVersion.value = sessionBefore + 1
+
+            // 旧探测网络崩溃
+            delayedErrorResolve(new Error('Network error'))
+            const errorResult = await errorProbe
+            assert.equal(errorResult, true)
+            assert.equal(authStore.isAuthenticated.value, true, '旧探测网络异常绝不能清除新会话')
+            assert.equal(authStore.user.value?.username, 'stable-user')
+
+            // 4. 两次探测逆序完成，只提交最新结果
+            let resolveFirstProbe!: (v: Response) => void
+            const firstProbeNetwork = new Promise<Response>(r => { resolveFirstProbe = r })
+
+            let callNum = 0
+            currentFetchHandler = async (url) => {
+                if (url.includes('/api/auth/me')) {
+                    callNum++
+                    if (callNum === 1) return firstProbeNetwork
+                    return jsonResponse({ user: { username: 'second-user' } }, 200)
+                }
+                return jsonResponse({})
+            }
+
+            const p1 = authStore.checkAuth()
+            const p2 = authStore.checkAuth()
+            const r2 = await p2
+            assert.equal(r2, true)
+            assert.equal(authStore.user.value?.username, 'second-user')
+
+            // 逆序返回 p1 (first-user)
+            resolveFirstProbe(jsonResponse({ user: { username: 'first-user' } }, 200))
+            const r1 = await p1
+            assert.equal(r1, true)
+            assert.equal(authStore.user.value?.username, 'second-user', '逆序到达的旧结果绝不能覆盖最新探测结果')
+
+            // 5. 当前有效探测失败时，仍正常清除失效身份
+            currentFetchHandler = async (url) => {
+                if (url.includes('/api/auth/me')) {
+                    return jsonResponse({ error: 'unauthorized' }, 401)
+                }
+                return jsonResponse({})
+            }
+            const validFailProbe = await authStore.checkAuth()
+            assert.equal(validFailProbe, false)
+            assert.equal(authStore.isAuthenticated.value, false, '当前有效探测 401 必须正常注销身份')
+            assert.equal(authStore.user.value, null)
+
+            console.log('✓ [断言 8 通过] checkAuth 迟到响应、地址漂移、网络异常与逆序提交守卫全部生效')
+        }
+
+        console.log('\n🎉 全部 8 项关键断言与架构约束全部通过！')
     }
 
 runTests().catch(err => {

@@ -1,5 +1,5 @@
 import { reactive, toRefs } from 'vue'
-import { apiFetch } from '../services/api'
+import { apiFetch, resolveTargetBaseUrl, isAuthScopeValid } from '../services/api'
 import { resetBackendProvidersCatalog } from '../services/knowledge'
 
 export interface AuthUser {
@@ -27,6 +27,8 @@ const state = reactive<AuthState>({
     sessionVersion: 1,
 })
 
+let activeProbeSeq = 0
+
 export function useAuthStore() {
     function invalidateSession(): void {
         const wasAuthenticated = state.isAuthenticated || state.user !== null
@@ -41,11 +43,22 @@ export function useAuthStore() {
     }
 
     async function checkAuth(): Promise<boolean> {
+        const targetBaseUrl = resolveTargetBaseUrl(undefined)
+        const sessionVersionAtStart = state.sessionVersion
+        const probeSeq = ++activeProbeSeq
+
         state.isChecking = true
         try {
-            const res = await apiFetch('/api/auth/me')
+            const res = await apiFetch('/api/auth/me', undefined, {
+                baseUrl: targetBaseUrl,
+                skipAuthInterception: true,
+            })
             if (res.ok) {
                 const data = await res.json()
+                if (!isAuthScopeValid(targetBaseUrl, sessionVersionAtStart) || probeSeq !== activeProbeSeq) {
+                    return state.isAuthenticated
+                }
+
                 const newUser = data.user
                 const wasAuthenticated = state.isAuthenticated
                 const oldUsername = state.user?.username
@@ -62,14 +75,22 @@ export function useAuthStore() {
                 }
                 return true
             } else {
+                if (isAuthScopeValid(targetBaseUrl, sessionVersionAtStart) && probeSeq === activeProbeSeq) {
+                    invalidateSession()
+                    return false
+                }
+                return state.isAuthenticated
+            }
+        } catch {
+            if (isAuthScopeValid(targetBaseUrl, sessionVersionAtStart) && probeSeq === activeProbeSeq) {
                 invalidateSession()
                 return false
             }
-        } catch {
-            invalidateSession()
-            return false
+            return state.isAuthenticated
         } finally {
-            state.isChecking = false
+            if (probeSeq === activeProbeSeq) {
+                state.isChecking = false
+            }
         }
     }
 

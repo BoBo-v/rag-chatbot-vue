@@ -123,7 +123,7 @@
                       placeholder="http://localhost:3001"
                       spellcheck="false"
                       autocomplete="url"
-                      @input="onBackendDraftChanged"
+                      @input="onBackendUrlChanged"
                     />
                     <button
                       type="button"
@@ -181,7 +181,7 @@
                     id="backend-model-select"
                     v-model="draft.backend.model"
                     class="settings-input settings-select"
-                    @change="onBackendDraftChanged"
+                    @change="onBackendModelChanged"
                   >
                     <option v-for="m in currentBackendModels" :key="m" :value="m">{{ m }}</option>
                   </select>
@@ -598,6 +598,7 @@ import { getClaudeModels } from '../services/providers/claude'
 import { getBackendProvidersCatalog, type BackendChatProvider } from '../services/knowledge'
 import { testConnection, type TestConnectionResult } from '../services/connectionTester'
 import { supportsVision } from '../services/modelCapabilities'
+import { getValidBackendModels } from '../services/activeConnection'
 import type { AppSettings, BackendChatProviderType, BackendRagMode, ProviderType, ThemeType, TransportMode } from '../stores/settings'
 import { useConfirm } from '../composables/useConfirm'
 import { useToast } from '../composables/useToast'
@@ -706,11 +707,12 @@ const backendServiceList = computed(() => {
         configured: false,
       }
     }
+    const validModels = getValidBackendModels(matched)
     return {
       id: def.id,
       name: matched?.name || def.name,
       defaultModel: matched?.defaultModel || '',
-      models: matched?.models && matched.models.length > 0 ? matched.models : (matched?.defaultModel ? [matched.defaultModel] : []),
+      models: validModels,
       configured: Boolean(matched?.configured),
     }
   })
@@ -725,7 +727,7 @@ const currentBackendModels = computed<string[]>(() => {
   if (draft.backend.model && !models.includes(draft.backend.model)) {
     return [draft.backend.model, ...models]
   }
-  return models.length > 0 ? models : (currentSvc.defaultModel ? [currentSvc.defaultModel] : [])
+  return models
 })
 
 const backendReachableStatus = computed(() => {
@@ -910,7 +912,7 @@ function selectBackendService(id: BackendChatProviderType) {
   if (svc) {
     draft.backend.model = svc.defaultModel || svc.models[0] || ''
   }
-  resetTestState()
+  onBackendModelChanged()
 }
 
 function selectDirectProvider(value: ProviderType) {
@@ -919,7 +921,7 @@ function selectDirectProvider(value: ProviderType) {
   void loadModels()
 }
 
-function onBackendDraftChanged() {
+function onBackendUrlChanged() {
   draftCatalogSeq++
   if (currentCatalogAbortController) {
     currentCatalogAbortController.abort()
@@ -929,6 +931,10 @@ function onBackendDraftChanged() {
   backendProviders.value = []
   backendReachable.value = null
   backendProviderError.value = ''
+  resetTestState()
+}
+
+function onBackendModelChanged() {
   resetTestState()
 }
 
@@ -1026,14 +1032,7 @@ async function loadBackendProviders() {
             ? `${currentProvider.name || draft.backend.provider} 未在后端配置可用密钥或服务`
             : `后端未提供当前选中的厂商 (${draft.backend.provider})`
         } else {
-          let validModels: string[] = []
-          if (Array.isArray(currentProvider.models)) {
-            validModels = currentProvider.models
-              .map(m => typeof m === 'string' ? m.trim() : (m as any)?.id?.trim())
-              .filter(Boolean)
-          } else if (currentProvider.defaultModel?.trim()) {
-            validModels = [currentProvider.defaultModel.trim()]
-          }
+          const validModels = getValidBackendModels(currentProvider)
 
           if (validModels.length === 0) {
             backendProviderError.value = `${currentProvider.name || draft.backend.provider} 无可用模型候选`

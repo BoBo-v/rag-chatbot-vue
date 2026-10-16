@@ -29,12 +29,15 @@ const state = reactive<AuthState>({
 
 export function useAuthStore() {
     function invalidateSession(): void {
+        const wasAuthenticated = state.isAuthenticated || state.user !== null
         state.isAuthenticated = false
         state.user = null
         state.mustChangePassword = false
         state.isChangePasswordModalVisible = false
-        state.sessionVersion++
-        resetBackendProvidersCatalog()
+        if (wasAuthenticated) {
+            state.sessionVersion++
+            resetBackendProvidersCatalog()
+        }
     }
 
     async function checkAuth(): Promise<boolean> {
@@ -43,8 +46,15 @@ export function useAuthStore() {
             const res = await apiFetch('/api/auth/me')
             if (res.ok) {
                 const data = await res.json()
+                const newUser = data.user
+                const wasAuthenticated = state.isAuthenticated
+                const oldUsername = state.user?.username
+                const identityChanged = !wasAuthenticated || (newUser && newUser.username !== oldUsername)
+                if (identityChanged) {
+                    state.sessionVersion++
+                }
                 state.isAuthenticated = true
-                state.user = data.user
+                state.user = newUser
                 const mustChange = Boolean(data.user?.mustChangePassword ?? data.mustChangePassword)
                 state.mustChangePassword = mustChange
                 if (mustChange) {

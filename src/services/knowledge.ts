@@ -106,6 +106,7 @@ export interface GetBackendProvidersCatalogOptions {
 
 interface CatalogCacheEntry {
     catalog: BackendProvidersCatalog
+    lastSuccessCatalog?: BackendProvidersCatalog
     seq: number
     sessionVersion: number
     currentPromise: Promise<BackendProvidersCatalog> | null
@@ -258,6 +259,7 @@ export async function getBackendProvidersCatalog(
                 providers,
             }
             currentEntry.catalog = successCatalog
+            currentEntry.lastSuccessCatalog = successCatalog
             sharedCatalogState[key] = successCatalog
             return successCatalog
         } catch (err: unknown) {
@@ -272,12 +274,16 @@ export async function getBackendProvidersCatalog(
 
             if (!isStale && currentEntry) {
                 if (controller.signal.aborted) {
-                    // 主动取消不覆盖为永久 error 状态，结束 loading 恢复 idle
+                    // 主动取消不覆盖为永久 error 状态；若此前已有成功目录则恢复成功状态，首次取消保持 idle
                     if (currentEntry.catalog.state === 'loading') {
-                        currentEntry.catalog = {
-                            state: 'idle',
-                            baseUrl: resolvedUrl,
-                            providers: currentEntry.catalog.providers,
+                        if (currentEntry.lastSuccessCatalog) {
+                            currentEntry.catalog = currentEntry.lastSuccessCatalog
+                        } else {
+                            currentEntry.catalog = {
+                                state: 'idle',
+                                baseUrl: resolvedUrl,
+                                providers: currentEntry.catalog.providers,
+                            }
                         }
                         sharedCatalogState[key] = currentEntry.catalog
                     }

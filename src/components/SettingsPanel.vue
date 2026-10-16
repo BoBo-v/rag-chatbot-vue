@@ -546,7 +546,8 @@
               v-else
               type="button"
               class="secondary-action btn-test-model"
-              title="将发起一次最小真实推理请求，测试首个有效 token 是否正常到达"
+              :disabled="isTestModelDisabled"
+              :title="testModelDisabledReason || '将发起一次最小真实推理请求，测试首个有效 token 是否正常到达'"
               @click="testCurrentModel"
             >
               <TestTube2 :size="15" aria-hidden="true" />
@@ -598,7 +599,7 @@ import { getClaudeModels } from '../services/providers/claude'
 import { getBackendProvidersCatalog, type BackendChatProvider } from '../services/knowledge'
 import { testConnection, type TestConnectionResult } from '../services/connectionTester'
 import { supportsVision } from '../services/modelCapabilities'
-import { getValidBackendModels } from '../services/activeConnection'
+import { getValidBackendModels, resolveValidBackendModel } from '../services/activeConnection'
 import type { AppSettings, BackendChatProviderType, BackendRagMode, ProviderType, ThemeType, TransportMode } from '../stores/settings'
 import { useConfirm } from '../composables/useConfirm'
 import { useToast } from '../composables/useToast'
@@ -721,14 +722,24 @@ const backendServiceList = computed(() => {
 const currentBackendModels = computed<string[]>(() => {
   const currentSvc = backendServiceList.value.find(p => p.id === draft.backend.provider)
   if (!currentSvc || !currentSvc.configured) {
-    return draft.backend.model ? [draft.backend.model] : []
+    return []
   }
-  const models = currentSvc.models ?? []
-  if (draft.backend.model && !models.includes(draft.backend.model)) {
-    return [draft.backend.model, ...models]
-  }
-  return models
+  return currentSvc.models ?? []
 })
+
+watch(
+  () => [draft.backend.provider, backendServiceList.value],
+  () => {
+    if (draft.transport !== 'backend') return
+    const currentSvc = backendServiceList.value.find(p => p.id === draft.backend.provider)
+    const validModel = resolveValidBackendModel(draft.backend.model, currentSvc)
+    if (draft.backend.model !== validModel) {
+      draft.backend.model = validModel
+      onBackendModelChanged()
+    }
+  },
+  { immediate: true }
+)
 
 const backendReachableStatus = computed(() => {
   if (backendReachable.value === true) return 'success'
@@ -909,9 +920,7 @@ function setTransport(mode: TransportMode) {
 function selectBackendService(id: BackendChatProviderType) {
   draft.backend.provider = id
   const svc = backendServiceList.value.find(p => p.id === id)
-  if (svc) {
-    draft.backend.model = svc.defaultModel || svc.models[0] || ''
-  }
+  draft.backend.model = resolveValidBackendModel(draft.backend.model, svc)
   onBackendModelChanged()
 }
 
@@ -1031,19 +1040,13 @@ async function loadBackendProviders() {
           backendProviderError.value = currentProvider
             ? `${currentProvider.name || draft.backend.provider} 未在后端配置可用密钥或服务`
             : `后端未提供当前选中的厂商 (${draft.backend.provider})`
+          draft.backend.model = resolveValidBackendModel(draft.backend.model, currentProvider)
         } else {
           const validModels = getValidBackendModels(currentProvider)
-
           if (validModels.length === 0) {
             backendProviderError.value = `${currentProvider.name || draft.backend.provider} 无可用模型候选`
-            draft.backend.model = ''
-          } else if (!draft.backend.model || !validModels.includes(draft.backend.model)) {
-            if (currentProvider.defaultModel && validModels.includes(currentProvider.defaultModel)) {
-              draft.backend.model = currentProvider.defaultModel
-            } else {
-              draft.backend.model = validModels[0]
-            }
           }
+          draft.backend.model = resolveValidBackendModel(draft.backend.model, currentProvider)
         }
       } else {
         backendProviderError.value = '后端无可用模型服务'
@@ -1067,11 +1070,50 @@ async function loadBackendProviders() {
   }
 }
 
+const testModelDisabledReason = computed<string | undefined>(() => {
+  if (draft.transport === 'backend') {
+    if (backendReachable.value !== true) {
+      return '服务目录不可用'
+    }
+    const currentSvc = backendServiceList.value.find(p => p.id === draft.backend.provider)
+    if (!currentSvc || !currentSvc.configured) {
+      return '服务未配置'
+    }
+    const validModels = currentSvc.models ?? []
+    if (validModels.length === 0 || !draft.backend.model || !validModels.includes(draft.backend.model)) {
+      return '当前没有有效模型'
+    }
+    return undefined
+  } else {
+    if (draft.provider === 'ollama' && !draft.ollama.model?.trim()) {
+      return '未填写 Ollama 模型'
+    }
+    if (draft.provider === 'openai') {
+      if (!draft.openai.apiKey?.trim()) return '请先填写 API Key'
+      if (!draft.openai.model?.trim()) return '未填写模型名称'
+    }
+    if (draft.provider === 'claude') {
+      if (!draft.claude.apiKey?.trim()) return '请先填写 API Key'
+      if (!draft.claude.model?.trim()) return '未选择 Claude 模型'
+    }
+    return undefined
+  }
+})
+const isTestModelDisabled = computed(() => Boolean(testModelDisabledReason.value))
+
 async function testCurrentModel() {
   const seq = ++draftTestSeq
   if (currentTestAbortController) {
     currentTestAbortController.abort()
   }
+
+  if (testModelDisabledReason.value) {
+    connectionTestSuccess.value = false
+    connectionTestState.value = 'error'
+    connectionTestError.value = testModelDisabledReason.value
+    return
+  }
+
   const abortCtrl = new AbortController()
   currentTestAbortController = abortCtrl
 
@@ -1088,7 +1130,7 @@ async function testCurrentModel() {
 
     if (draft.transport === 'backend') {
       const model = draft.backend.model?.trim()
-      if (!model) throw new Error('未选择测试模型')
+      if (!model) throw new Error('当前没有有效模型')
 
       result = await testConnection({
         transport: 'backend',
@@ -1174,10 +1216,8 @@ function normalizeTimeout(value: number): number {
 
 function createSettingsSnapshot(): AppSettings {
   const backend = { ...draft.backend }
-  if (!backend.model) {
-    const provider = backendServiceList.value.find(item => item.id === backend.provider)
-    backend.model = provider?.defaultModel || provider?.models?.[0] || ''
-  }
+  const provider = backendServiceList.value.find(item => item.id === backend.provider)
+  backend.model = resolveValidBackendModel(backend.model, provider)
   return {
     transport: draft.transport,
     provider: draft.provider,

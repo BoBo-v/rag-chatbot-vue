@@ -68,6 +68,33 @@ export function getValidBackendModels(provider?: BackendChatProvider | null): st
     return []
 }
 
+/**
+ * 统一后端选模算法：
+ * 1. 当前选中且仍然有效；
+ * 2. defaultModel 有效则选 defaultModel；
+ * 3. 有候选选第一个；
+ * 4. 无候选为空。
+ */
+export function resolveValidBackendModel(
+    currentModel: string | undefined,
+    provider?: { defaultModel?: string; models?: string[]; configured?: boolean } | null
+): string {
+    if (!provider) return ''
+    const validModels = getValidBackendModels(provider as any)
+    const trimmed = currentModel?.trim()
+    if (trimmed && validModels.includes(trimmed)) {
+        return trimmed
+    }
+    const defaultModel = provider.defaultModel?.trim()
+    if (defaultModel && validModels.includes(defaultModel)) {
+        return defaultModel
+    }
+    if (validModels.length > 0) {
+        return validModels[0]
+    }
+    return ''
+}
+
 export function resolveActiveConnection(
     settings: AppSettings,
     catalogOrProviders?: BackendProvidersCatalog | BackendChatProvider[]
@@ -125,18 +152,7 @@ export function resolveActiveConnection(
                 error = `后端未配置厂商: ${providerName}`
                 model = ''
             } else {
-                const validModels = getValidBackendModels(matched)
-
-                const userModel = settings.backend?.model?.trim()
-                if (userModel && validModels.includes(userModel)) {
-                    model = userModel
-                } else if (matched.defaultModel?.trim() && validModels.includes(matched.defaultModel.trim())) {
-                    model = matched.defaultModel.trim()
-                } else if (validModels.length > 0) {
-                    model = validModels[0]
-                } else {
-                    model = ''
-                }
+                model = resolveValidBackendModel(settings.backend?.model, matched)
 
                 if (!matched.configured) {
                     isConfigured = false

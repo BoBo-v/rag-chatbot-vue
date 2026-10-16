@@ -463,10 +463,15 @@ import {
 } from '../services/comparisonExport'
 import { formatLatency, getSessionStats } from '../services/comparisonStats'
 import { getVisionUnsupportedRuntimeLabels } from '../services/modelCapabilities'
-import { createRuntimeFromSettings, freezeRuntime } from '../services/runtime'
-import { resolveTargetBaseUrl } from '../services/api'
+import { freezeRuntime } from '../services/runtime'
+import {
+  createCompareEditorDraft,
+  syncDraftFromSettings,
+  normalizeCompareDraft,
+  buildRuntimeFromDraft,
+  type CompareEditorDraft,
+} from '../services/comparisonDraft'
 import { settings } from '../stores/settings'
-import type { ModelRuntimeConfig } from '../types/model'
 
 const prompt = ref('')
 const configOpen = ref(true)
@@ -509,11 +514,11 @@ const {
   removeSession,
 } = comparison
 
-const runtimeDrafts = reactive<ModelRuntimeConfig[]>([
-  cloneRuntime(createRuntimeFromSettings(settings)),
-  cloneRuntime(createRuntimeFromSettings(settings)),
+const runtimeDrafts = reactive<CompareEditorDraft[]>([
+  createCompareEditorDraft(settings),
+  createCompareEditorDraft(settings),
 ])
-const summaryRuntime = reactive<ModelRuntimeConfig>(cloneRuntime(createRuntimeFromSettings(settings)))
+const summaryRuntime = reactive<CompareEditorDraft>(createCompareEditorDraft(settings))
 
 const currentSession = computed(() => comparison.session.value)
 const sessionStats = computed(() => getSessionStats(runs.value))
@@ -632,87 +637,16 @@ onMounted(() => {
   void refreshHistory()
 })
 
-function cloneRuntime(runtime: ModelRuntimeConfig): ModelRuntimeConfig {
-  const isBackend = runtime.transport === 'backend'
-  const backendProvider = isBackend
-    ? ((runtime.provider === 'claude' ? 'anthropic' : (runtime.provider || runtime.backendProvider || 'ollama')) as any)
-    : undefined
-  const backendModel = isBackend ? (runtime.model || runtime.backendModel || '') : undefined
-
-  return {
-    provider: runtime.provider,
-    transport: runtime.transport,
-    label: runtime.label,
-    model: runtime.model,
-    baseUrl: runtime.baseUrl,
-    apiKey: runtime.apiKey,
-    systemPrompt: runtime.systemPrompt,
-    maxContextTokens: runtime.maxContextTokens,
-    responseTimeoutSeconds: runtime.responseTimeoutSeconds,
-    backendRagMode: runtime.backendRagMode,
-    backendProvider,
-    backendModel,
-  }
+function onTransportChange(draft: CompareEditorDraft): void {
+  normalizeCompareDraft(draft)
 }
 
-function onTransportChange(runtime: ModelRuntimeConfig): void {
-  if (runtime.transport === 'backend') {
-    if (runtime.provider === 'claude') {
-      runtime.provider = 'anthropic'
-    } else if (runtime.provider !== 'openai' && runtime.provider !== 'anthropic') {
-      runtime.provider = 'ollama'
-    }
-  } else {
-    if (runtime.provider === 'anthropic') {
-      runtime.provider = 'claude'
-    } else if (runtime.provider !== 'openai' && runtime.provider !== 'claude') {
-      runtime.provider = 'ollama'
-    }
-  }
-  normalizeRuntime(runtime)
-}
-
-function normalizeRuntime(runtime: ModelRuntimeConfig): void {
-  if (runtime.transport === 'backend') {
-    if (runtime.provider === 'claude') {
-      runtime.provider = 'anthropic'
-    } else if (runtime.provider !== 'openai' && runtime.provider !== 'anthropic') {
-      runtime.provider = 'ollama'
-    }
-    runtime.baseUrl = resolveTargetBaseUrl(runtime.baseUrl || settings.backend.url)
-    runtime.apiKey = undefined
-    runtime.backendProvider = runtime.provider as any
-    runtime.backendModel = runtime.model
-  } else {
-    runtime.transport = 'direct'
-    if (runtime.provider === 'anthropic') {
-      runtime.provider = 'claude'
-    }
-    if (runtime.provider === 'ollama') {
-      runtime.baseUrl = runtime.baseUrl || settings.ollama.url
-      runtime.apiKey = undefined
-      runtime.model = runtime.model || settings.ollama.model
-    } else if (runtime.provider === 'openai') {
-      runtime.baseUrl = runtime.baseUrl || settings.openai.baseUrl
-      runtime.apiKey = runtime.apiKey ?? settings.openai.apiKey
-      runtime.model = runtime.model || settings.openai.model
-    } else {
-      runtime.provider = 'claude'
-      runtime.baseUrl = undefined
-      runtime.apiKey = runtime.apiKey ?? settings.claude.apiKey
-      runtime.model = runtime.model || settings.claude.model
-    }
-    runtime.backendProvider = undefined
-    runtime.backendModel = undefined
-  }
-  runtime.systemPrompt = settings.systemPrompt
-  runtime.maxContextTokens = settings.maxContextTokens
-  runtime.responseTimeoutSeconds = settings.responseTimeoutSeconds
-  runtime.label = `${runtime.transport === 'backend' ? '后端' : '直连'} · ${runtime.provider} - ${runtime.model}`
+function normalizeRuntime(draft: CompareEditorDraft): void {
+  normalizeCompareDraft(draft)
 }
 
 function resetRuntime(index: number): void {
-  runtimeDrafts[index] = cloneRuntime(createRuntimeFromSettings(settings))
+  syncDraftFromSettings(runtimeDrafts[index], settings)
 }
 
 function resetAllRuntimes(): void {
@@ -721,7 +655,7 @@ function resetAllRuntimes(): void {
 }
 
 function resetSummaryRuntime(): void {
-  Object.assign(summaryRuntime, cloneRuntime(createRuntimeFromSettings(settings)))
+  syncDraftFromSettings(summaryRuntime, settings)
 }
 
 function statusLabel(status: string): string {
@@ -746,9 +680,9 @@ function statusLabel(status: string): string {
 async function start(): Promise<void> {
   if (!canStart.value) return
   isHistorySession.value = false
-  const runtimes = runtimeDrafts.map(runtime => {
-    normalizeRuntime(runtime)
-    return freezeRuntime(cloneRuntime(runtime))
+  const runtimes = runtimeDrafts.map(draft => {
+    normalizeCompareDraft(draft)
+    return freezeRuntime(buildRuntimeFromDraft(draft, settings))
   })
   if (pendingImages.value.length > 0) {
     const unsupported = getVisionUnsupportedRuntimeLabels(runtimes)
@@ -927,8 +861,9 @@ async function retryRun(runId: string): Promise<void> {
 
 async function summarize(): Promise<void> {
   if (!canSummarize.value) return
-  normalizeRuntime(summaryRuntime)
-  await summarizeWith(freezeRuntime(cloneRuntime(summaryRuntime)), summaryInstruction.value)
+  normalizeCompareDraft(summaryRuntime)
+  const runtimeConfig = freezeRuntime(buildRuntimeFromDraft(summaryRuntime, settings))
+  await summarizeWith(runtimeConfig, summaryInstruction.value)
 }
 </script>
 

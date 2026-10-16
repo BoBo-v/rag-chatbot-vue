@@ -17,7 +17,14 @@ import {
 } from '../src/services/providers/backendChat'
 import {
     createRuntimeFromSettings,
+    freezeRuntime,
 } from '../src/services/runtime'
+import {
+    createCompareEditorDraft,
+    buildRuntimeFromDraft,
+    syncDraftFromSettings,
+    normalizeCompareDraft,
+} from '../src/services/comparisonDraft'
 import type { ModelRuntimeConfig } from '../src/types/model'
 import { settings, type AppSettings } from '../src/stores/settings'
 
@@ -360,7 +367,81 @@ function abortableSleep(ms: number, signal?: AbortSignal | null): Promise<void> 
 
     console.log('   ✓ 对比页编辑模型精准生效，Claude 准确映射 anthropic，快照地址物理隔离')
 
-    console.log('\n=== 第四批专项验证全部通过 (5/5) ===')
+    // ─────────────────────────────────────────────────────────────
+    // 断言 6: 对比页为直连和后端保留独立草稿互切与快照冻结
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n-> 断言 6: 对比页直连与后端独立草稿互切、参数保留与快照不可变性')
+    const compareDraft = createCompareEditorDraft(settings)
+
+    // 1. 设置后端草稿
+    compareDraft.transport = 'backend'
+    compareDraft.baseUrl = 'http://backend-a:3001'
+    compareDraft.provider = 'openai'
+    compareDraft.model = 'backend-model-a'
+    assert.equal(compareDraft.baseUrl, 'http://backend-a:3001')
+    assert.equal(compareDraft.model, 'backend-model-a')
+
+    // 2. 切到直连，设置直连 OpenAI 草稿
+    compareDraft.transport = 'direct'
+    compareDraft.provider = 'openai'
+    compareDraft.baseUrl = 'http://direct-openai:8000'
+    compareDraft.model = 'direct-gpt-4o'
+    compareDraft.apiKey = 'sk-temp-key'
+    assert.equal(compareDraft.baseUrl, 'http://direct-openai:8000')
+    assert.equal(compareDraft.model, 'direct-gpt-4o')
+    assert.equal(compareDraft.apiKey, 'sk-temp-key')
+
+    // 3. 切回后端：确认恢复后端 A 的地址和模型
+    compareDraft.transport = 'backend'
+    assert.equal(compareDraft.baseUrl, 'http://backend-a:3001', '切回后端必须完整恢复后端 A 地址')
+    assert.equal(compareDraft.model, 'backend-model-a', '切回后端必须完整恢复后端 A 模型')
+
+    // 4. 切回直连：确认恢复直连 OpenAI 的地址、模型和 Key
+    compareDraft.transport = 'direct'
+    assert.equal(compareDraft.baseUrl, 'http://direct-openai:8000', '切回直连必须保留临时地址')
+    assert.equal(compareDraft.model, 'direct-gpt-4o', '切回直连必须保留临时模型')
+    assert.equal(compareDraft.apiKey, 'sk-temp-key', '切回直连必须保留临时 API Key')
+
+    // 5. 切换直连厂商至 ollama，再切回 openai
+    compareDraft.provider = 'ollama'
+    compareDraft.baseUrl = 'http://ollama-temp:11434'
+    compareDraft.model = 'llama3.2'
+    compareDraft.provider = 'openai'
+    assert.equal(compareDraft.baseUrl, 'http://direct-openai:8000', '直连厂商切回 openai 恢复原配置')
+    assert.equal(compareDraft.model, 'direct-gpt-4o')
+    assert.equal(compareDraft.apiKey, 'sk-temp-key')
+    compareDraft.provider = 'ollama'
+    assert.equal(compareDraft.baseUrl, 'http://ollama-temp:11434', '直连厂商切回 ollama 恢复原配置')
+    assert.equal(compareDraft.model, 'llama3.2')
+
+    // 6. 生成快照并验证冻结不可变性
+    const snapshot = freezeRuntime(buildRuntimeFromDraft(compareDraft, settings))
+    assert.equal(snapshot.model, 'llama3.2')
+    assert.equal(snapshot.baseUrl, 'http://ollama-temp:11434')
+
+    // 修改草稿不影响进行中的任务快照
+    compareDraft.model = 'new-draft-model'
+    compareDraft.baseUrl = 'http://new-draft-url:12345'
+    assert.equal(snapshot.model, 'llama3.2', '草稿编辑绝不能污染进行中任务的快照模型')
+    assert.equal(snapshot.baseUrl, 'http://ollama-temp:11434', '草稿编辑绝不能污染进行中任务的快照地址')
+
+    // 7. 后端 Claude 严格映射为 anthropic
+    compareDraft.transport = 'backend'
+    compareDraft.provider = 'claude'
+    compareDraft.model = 'claude-3-7-sonnet'
+    normalizeCompareDraft(compareDraft)
+    assert.equal(compareDraft.provider, 'anthropic')
+    const backendClaudeSnapshot = freezeRuntime(buildRuntimeFromDraft(compareDraft, settings))
+    assert.equal(backendClaudeSnapshot.provider, 'anthropic', '后端 Claude 生成快照时 provider 必须映射为 anthropic')
+    assert.equal(backendClaudeSnapshot.backendProvider, 'anthropic')
+
+    // 8. 同步当前设置重置草稿
+    syncDraftFromSettings(compareDraft, settings)
+    assert.equal(compareDraft.transport, settings.transport)
+
+    console.log('   ✓ 对比页直连与后端草稿完全独立保留，切厂商不丢失输入，快照严格只读')
+
+    console.log('\n=== 第四批专项验证全部通过 (6/6) ===')
 }
 
 main().catch(err => {

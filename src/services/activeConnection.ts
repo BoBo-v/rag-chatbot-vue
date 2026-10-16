@@ -50,6 +50,24 @@ export function getDefaultDirectProviderName(providerId: DirectProviderId): stri
     }
 }
 
+/**
+ * 提取有效模型候选列表。
+ * - 服务返回 models 数组时（包括 models: []）：以该数组为准，空数组即无可用模型，禁止用 defaultModel 伪造候选。
+ * - 旧契约没有 models 字段时：允许使用有效 defaultModel 兼容。
+ */
+export function getValidBackendModels(provider?: BackendChatProvider | null): string[] {
+    if (!provider) return []
+    if (Array.isArray(provider.models)) {
+        return provider.models
+            .map(m => (typeof m === 'string' ? m.trim() : (m as any)?.id?.trim() || ''))
+            .filter(Boolean)
+    }
+    if (provider.defaultModel?.trim()) {
+        return [provider.defaultModel.trim()]
+    }
+    return []
+}
+
 export function resolveActiveConnection(
     settings: AppSettings,
     catalogOrProviders?: BackendProvidersCatalog | BackendChatProvider[]
@@ -107,14 +125,7 @@ export function resolveActiveConnection(
                 error = `后端未配置厂商: ${providerName}`
                 model = ''
             } else {
-                let validModels: string[] = []
-                if (Array.isArray(matched.models)) {
-                    validModels = matched.models
-                        .map(m => typeof m === 'string' ? m.trim() : (m as any)?.id?.trim())
-                        .filter(Boolean)
-                } else if (matched.defaultModel?.trim()) {
-                    validModels = [matched.defaultModel.trim()]
-                }
+                const validModels = getValidBackendModels(matched)
 
                 const userModel = settings.backend?.model?.trim()
                 if (userModel && validModels.includes(userModel)) {

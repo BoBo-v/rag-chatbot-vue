@@ -23,7 +23,7 @@ import {
     cancelBackendChatRun,
     getBackendChatRun,
 } from '../src/services/providers/backendChatRun'
-import type { AppSettings } from '../src/stores/settings'
+import { settings, type AppSettings } from '../src/stores/settings'
 
 console.log('=== 开始执行第一批专项验证：统一元数据与连接解析状态 ===\n')
 
@@ -406,8 +406,156 @@ async function runTests() {
         console.log('✓ [断言 5 通过] 对比页草稿可自由编辑，请求快照不可变，顶栏全局变更不污染在途任务')
     }
 
-    console.log('\n🎉 第一批 5 项关键断言与架构约束全部通过！')
-}
+    // ── 断言 6：取消同地址目录刷新时恢复旧成功目录；checkAuth 仅在身份恢复或变更时递增会话版本 ──
+    {
+            console.log('\n[断言 6] 测试取消刷新后成功目录状态恢复，以及 checkAuth 会话版本防抖...')
+            resetBackendProvidersCatalog()
+            const testUrl = 'http://restore-test:3000'
+            const catalogData: BackendChatProvider[] = [
+                { id: 'ollama', name: 'Ollama', defaultModel: 'qwen2.5:7b', configured: true, models: ['qwen2.5:7b'] }
+            ]
+
+            currentFetchHandler = async () => jsonResponse({ providers: catalogData })
+
+            // 1. 首次成功加载
+            const firstSuccess = await getBackendProvidersCatalog({ baseUrl: testUrl, forceRefresh: true })
+            assert.equal(firstSuccess.state, 'success')
+            assert.equal(firstSuccess.providers.length, 1)
+
+            // 2. 第二次带 cancel 的刷新模拟（如设置面板打开后又快速关闭）
+            const abortCtrl = new AbortController()
+            currentFetchHandler = async (_url, init) => {
+                return new Promise<Response>((_, reject) => {
+                    const onAbort = () => {
+                        const err = new Error('Aborted')
+                        err.name = 'AbortError'
+                        reject(err)
+                    }
+                    if (init?.signal?.aborted) return onAbort()
+                    init?.signal?.addEventListener('abort', onAbort)
+                })
+            }
+            const pendingPromise = getBackendProvidersCatalog({ baseUrl: testUrl, forceRefresh: true, signal: abortCtrl.signal })
+            abortCtrl.abort()
+
+            await pendingPromise.catch(() => undefined)
+
+            // 验证：取消后目录状态不是 idle，而是恢复此前的 success 目录！
+            const cached = getCachedBackendProvidersCatalog(testUrl)
+            assert.equal(cached?.state, 'success', '取消同地址刷新后必须恢复此前的成功目录状态，防止停在 idle')
+            assert.equal(cached?.providers.length, 1)
+
+            // 3. 测试 checkAuth 会话版本控制
+            const { useAuthStore } = await import('../src/stores/auth')
+            const authStore = useAuthStore()
+            const initialVersion = authStore.sessionVersion.value
+
+            // 模拟首次未登录探测失败：未登录时不应产生无限自增
+            currentFetchHandler = async (url) => {
+                if (url.includes('/api/auth/me')) return jsonResponse({ error: 'unauthorized' }, 401)
+                return jsonResponse({})
+            }
+            const check1 = await authStore.checkAuth()
+            assert.equal(check1, false)
+            assert.equal(authStore.isAuthenticated.value, false)
+
+            // 模拟成功恢复登录身份：从未登录恢复到已登录，必须递增 sessionVersion
+            currentFetchHandler = async (url) => {
+                if (url.includes('/api/auth/me')) return jsonResponse({ user: { username: 'alice' } }, 200)
+                return jsonResponse({})
+            }
+            const check2 = await authStore.checkAuth()
+            assert.equal(check2, true)
+            assert.equal(authStore.isAuthenticated.value, true)
+            assert.equal(authStore.sessionVersion.value > initialVersion, true, '从未登录恢复已登录必须更新 sessionVersion')
+
+            // 同一身份的普通重复检查：不递增 sessionVersion
+            const versionAfterLogin = authStore.sessionVersion.value
+            const check3 = await authStore.checkAuth()
+            assert.equal(check3, true)
+            assert.equal(authStore.sessionVersion.value, versionAfterLogin, '同一身份的重复探活不得递增 sessionVersion')
+
+            console.log('✓ [断言 6 通过] 取消刷新成功恢复旧目录，checkAuth 身份恢复递增版本而重复探活防抖')
+        }
+
+        // ── 断言 7：401 与 403 响应体异步延迟到达时，作用域与会话版本保护生效 ──
+        {
+            console.log('\n[断言 7] 测试 401/403 异步解析间隙作用域校验与新会话防污染...')
+            const { apiFetch, isAuthScopeValid } = await import('../src/services/api')
+            const { useAuthStore } = await import('../src/stores/auth')
+            const authStore = useAuthStore()
+
+            // 1. 初始化有效登录会话
+            currentFetchHandler = async (url) => {
+                if (url.includes('/api/auth/me')) return jsonResponse({ user: { username: 'bob' } }, 200)
+                return jsonResponse({})
+            }
+            await authStore.checkAuth()
+            assert.equal(authStore.isAuthenticated.value, true)
+            const sessionAtBob = authStore.sessionVersion.value
+            assert.equal(isAuthScopeValid(resolveTargetBaseUrl(settings.backend?.url), sessionAtBob), true)
+
+            // 2. 模拟请求返回 401，但在解析 body 的异步间隙中，用户完成了新登录（版本自增）
+            let delayResolveBody!: (value: any) => void
+            const delayBodyPromise = new Promise(r => { delayResolveBody = r })
+
+            // 构造一个延迟返回 json 的 Response
+            const delayed401Response = new Response(new ReadableStream({
+                async start(controller) {
+                    await delayBodyPromise
+                    controller.enqueue(new TextEncoder().encode(JSON.stringify({ error: 'token expired' })))
+                    controller.close()
+                }
+            }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            })
+
+            currentFetchHandler = async (url) => {
+                if (url.includes('/api/chat/delayed-401')) {
+                    return delayed401Response
+                }
+                if (url.includes('/api/auth/login')) {
+                    return jsonResponse({ user: { username: 'carol' } }, 200)
+                }
+                return jsonResponse({})
+            }
+
+            // 发起 delayed-401 请求
+            const delayedReqPromise = apiFetch('/api/chat/delayed-401')
+
+            // 在 body 返回前，用户在弹窗完成了新登录（变成 carol，sessionVersion++）
+            await authStore.login('carol', 'secret')
+            assert.equal(authStore.isAuthenticated.value, true)
+            assert.equal(authStore.user.value?.username, 'carol')
+            assert.notEqual(authStore.sessionVersion.value, sessionAtBob)
+
+            // 此时放行 delayed-401 的 body
+            delayResolveBody(true)
+            const delayedRes = await delayedReqPromise
+
+            // 校验：旧请求正常返回给调用方，但绝没有把 carol 踢下线或弹登录框！
+            assert.equal(delayedRes.status, 401)
+            assert.equal(authStore.isAuthenticated.value, true, '旧 401 迟到响应不得将新建立的 carol 会话置为未登录')
+            assert.equal(authStore.user.value?.username, 'carol')
+            assert.equal(authStore.isAuthModalVisible.value, false, '旧 401 迟到响应不得打开登录弹窗')
+
+            // 3. 当前有效会话真实的 401 请求：必须正常触发 invalidateSession 与 openLoginModal
+            currentFetchHandler = async (url) => {
+                if (url.includes('/api/chat/real-401')) {
+                    return jsonResponse({ error: 'session invalid' }, 401)
+                }
+                return jsonResponse({})
+            }
+            await apiFetch('/api/chat/real-401')
+            assert.equal(authStore.isAuthenticated.value, false, '当前有效会话的真实 401 必须正常注销会话')
+            assert.equal(authStore.isAuthModalVisible.value, true, '当前有效会话的真实 401 必须正常打开登录弹窗')
+
+            console.log('✓ [断言 7 通过] 异步间隙旧 401 迟到响应防污染成功，当前有效会话 401 正常响应')
+        }
+
+        console.log('\n🎉 全部 7 项关键断言与架构约束全部通过！')
+    }
 
 runTests().catch(err => {
     console.error('❌ 第一批专项验证失败:', err)

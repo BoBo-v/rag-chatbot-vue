@@ -722,12 +722,13 @@ import { useConversationGroups } from '../composables/useConversationGroups'
 import { persistSettings, settings as currentSettings } from '../stores/settings'
 import type { BackendRagMode } from '../stores/settings'
 import { getClaudeModels } from '../services/providers/claude'
-import { uploadKnowledgeFile, getBackendProvidersCatalog, getSharedBackendProvidersCatalog, type BackendProvidersCatalog } from '../services/knowledge'
-import type { UploadProgress } from '../services/knowledge'
-import { resolveActiveConnection, getDefaultBackendProviderName } from '../services/activeConnection'
+import { uploadKnowledgeFile, getBackendProvidersCatalog, getSharedBackendProvidersCatalog, type BackendProvidersCatalog, type UploadProgress } from '../services/knowledge'
 import type { BackendProviderId, DirectProviderId, ModelTransport } from '../types/model'
+import { resolveActiveConnection, getDefaultBackendProviderName, getValidBackendModels } from '../services/activeConnection'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import RagCitations from '../components/RagCitations.vue'
+import { useAuthStore } from '../stores/auth'
+import { resolveTargetBaseUrl } from '../services/api'
 
 // StyleChat 是主聊天页面组件。
 // 模板负责布局和绑定事件；具体业务逻辑尽量放在 composable 里，避免单文件过大。
@@ -891,9 +892,27 @@ async function loadBackendProviders(forceRefresh = false) {
   }
 }
 
-watch(() => currentSettings.backend.url, () => {
-  void loadBackendProviders(true)
-}, { immediate: true })
+const authStore = useAuthStore()
+
+const authReadyState = computed(() => ({
+  url: resolveTargetBaseUrl(currentSettings.backend.url),
+  username: authStore.user.value?.username || 'anonymous',
+  sessionVersion: authStore.sessionVersion.value,
+  isAuthenticated: authStore.isAuthenticated.value,
+  mustChangePassword: authStore.mustChangePassword.value,
+}))
+
+watch(
+  authReadyState,
+  (state) => {
+    // 未登录或仍要求修改初始密码时，不循环请求目录；完成登录或改密后再加载
+    if (!state.isAuthenticated || state.mustChangePassword) {
+      return
+    }
+    void loadBackendProviders(true)
+  },
+  { immediate: true }
+)
 
 const activeConnection = computed(() => {
   return resolveActiveConnection(currentSettings, backendCatalog.value)
@@ -956,18 +975,7 @@ const quickModelGroups = computed<QuickModelGroup[]>(() => {
   if (backendCatalog.value.state === 'success' && backendCatalog.value.providers.length > 0) {
     for (const p of backendCatalog.value.providers) {
       if (!p.configured) continue
-      const models = [...(p.models || [])]
-      if (models.length === 0 && p.defaultModel) {
-        models.push(p.defaultModel)
-      }
-      if (
-        currentSettings.transport === 'backend' &&
-        currentSettings.backend.provider === p.id &&
-        currentSettings.backend.model &&
-        !models.includes(currentSettings.backend.model)
-      ) {
-        models.unshift(currentSettings.backend.model)
-      }
+      const models = getValidBackendModels(p)
       if (models.length > 0) {
         groups.push({
           title: `后端调用 · ${p.name || getDefaultBackendProviderName(p.id)}`,
@@ -977,9 +985,9 @@ const quickModelGroups = computed<QuickModelGroup[]>(() => {
             provider: p.id,
             model: m,
             isActive:
-              currentSettings.transport === 'backend' &&
-              currentSettings.backend.provider === p.id &&
-              currentSettings.backend.model === m,
+              activeConnection.value.transport === 'backend' &&
+              activeConnection.value.providerId === p.id &&
+              activeConnection.value.model === m,
           })),
         })
       }
@@ -1011,9 +1019,9 @@ const quickModelGroups = computed<QuickModelGroup[]>(() => {
       provider: 'ollama' as const,
       model: m,
       isActive:
-        currentSettings.transport === 'direct' &&
-        currentSettings.provider === 'ollama' &&
-        currentSettings.ollama.model === m,
+        activeConnection.value.transport === 'direct' &&
+        activeConnection.value.providerId === 'ollama' &&
+        activeConnection.value.model === m,
     })),
   })
 
@@ -1032,9 +1040,9 @@ const quickModelGroups = computed<QuickModelGroup[]>(() => {
       provider: 'openai' as const,
       model: m,
       isActive:
-        currentSettings.transport === 'direct' &&
-        currentSettings.provider === 'openai' &&
-        currentSettings.openai.model === m,
+        activeConnection.value.transport === 'direct' &&
+        activeConnection.value.providerId === 'openai' &&
+        activeConnection.value.model === m,
     })),
   })
 
@@ -1051,9 +1059,9 @@ const quickModelGroups = computed<QuickModelGroup[]>(() => {
       provider: 'claude' as const,
       model: m,
       isActive:
-        currentSettings.transport === 'direct' &&
-        currentSettings.provider === 'claude' &&
-        currentSettings.claude.model === m,
+        activeConnection.value.transport === 'direct' &&
+        activeConnection.value.providerId === 'claude' &&
+        activeConnection.value.model === m,
     })),
   })
 

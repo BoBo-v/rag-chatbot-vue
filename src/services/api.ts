@@ -32,6 +32,12 @@ export interface ApiFetchOptions {
     skipAuthInterception?: boolean
 }
 
+export function isAuthScopeValid(targetBaseUrl: string, sessionVersionAtStart: number): boolean {
+    const currentActiveBaseUrl = resolveTargetBaseUrl(undefined)
+    const authStore = useAuthStore()
+    return targetBaseUrl === currentActiveBaseUrl && authStore.sessionVersion.value === sessionVersionAtStart
+}
+
 export async function apiFetch(path: string, init?: RequestInit, options?: ApiFetchOptions): Promise<Response> {
     const headers = new Headers(init?.headers || {})
     if (!headers.has('X-Requested-With')) {
@@ -59,8 +65,7 @@ export async function apiFetch(path: string, init?: RequestInit, options?: ApiFe
                 && cleanPath !== '/api/auth/me'
                 && !cleanPath.startsWith('/api/agent')
             ) {
-                const currentActiveBaseUrl = resolveTargetBaseUrl(undefined)
-                if (targetBaseUrl === currentActiveBaseUrl && authStore.sessionVersion.value === sessionVersionAtStart) {
+                if (isAuthScopeValid(targetBaseUrl, sessionVersionAtStart)) {
                     let isAgentUnauthorized = false
                     try {
                         const cloned = response.clone()
@@ -72,7 +77,8 @@ export async function apiFetch(path: string, init?: RequestInit, options?: ApiFe
                         // ignore
                     }
 
-                    if (!isAgentUnauthorized) {
+                    // 异步解析完成之后必须再次检查作用域与会话版本有效性
+                    if (!isAgentUnauthorized && isAuthScopeValid(targetBaseUrl, sessionVersionAtStart)) {
                         authStore.invalidateSession()
                         if (!authStore.isAuthModalVisible.value) {
                             authStore.openLoginModal()
@@ -84,16 +90,17 @@ export async function apiFetch(path: string, init?: RequestInit, options?: ApiFe
 
         // 403 强制首次改密全局拦截：使用 response.clone() 防止消费原始 body
         if (response.status === 403) {
-            try {
-                const cloned = response.clone()
-                const data = await cloned.json().catch(() => null)
-                if (data?.code === 'PASSWORD_CHANGE_REQUIRED') {
-                    const authStore = useAuthStore()
-                    authStore.mustChangePassword.value = true
-                    authStore.openChangePasswordModal()
+            if (isAuthScopeValid(targetBaseUrl, sessionVersionAtStart)) {
+                try {
+                    const cloned = response.clone()
+                    const data = await cloned.json().catch(() => null)
+                    if (data?.code === 'PASSWORD_CHANGE_REQUIRED' && isAuthScopeValid(targetBaseUrl, sessionVersionAtStart)) {
+                        authStore.mustChangePassword.value = true
+                        authStore.openChangePasswordModal()
+                    }
+                } catch {
+                    // 忽略非 JSON 响应解析失败
                 }
-            } catch {
-                // 忽略非 JSON 响应解析失败
             }
         }
     }

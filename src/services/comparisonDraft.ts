@@ -2,6 +2,7 @@ import { reactive } from 'vue'
 import type { AppSettings, BackendRagMode } from '../stores/settings'
 import type { ModelRuntimeConfig } from '../types/model'
 import { resolveTargetBaseUrl } from './api'
+import { normalizeOpenAIBaseUrl } from './providers/openai'
 
 export type DirectProviderType = 'ollama' | 'openai' | 'claude'
 export type BackendProviderType = 'ollama' | 'openai' | 'anthropic'
@@ -60,7 +61,7 @@ export function createCompareEditorDraft(settings: AppSettings): CompareEditorDr
       },
     },
     backend: {
-      baseUrl: settings.backend?.url || 'http://localhost:3001',
+      baseUrl: settings.backend?.url ?? '',
       provider: initialBackendProvider,
       model: settings.backend?.model || '',
       backendRagMode: settings.ragMode ?? 'off',
@@ -153,7 +154,7 @@ export function syncDraftFromSettings(draft: CompareEditorDraft, settings: AppSe
   draft.direct.openai.apiKey = settings.openai?.apiKey || ''
   draft.direct.claude.model = settings.claude?.model || ''
   draft.direct.claude.apiKey = settings.claude?.apiKey || ''
-  draft.backend.baseUrl = settings.backend?.url || 'http://localhost:3001'
+  draft.backend.baseUrl = settings.backend?.url ?? ''
   const rawBackendProvider = settings.backend?.provider as string | undefined
   draft.backend.provider = (rawBackendProvider === 'claude' ? 'anthropic' : (rawBackendProvider || 'ollama')) as BackendProviderType
   draft.backend.model = settings.backend?.model || ''
@@ -181,7 +182,7 @@ export function buildRuntimeFromDraft(draft: CompareEditorDraft, settings: AppSe
     const rawProvider = (draft.backend.provider as string) === 'claude' ? 'anthropic' : draft.backend.provider
     const provider: 'ollama' | 'openai' | 'anthropic' =
       rawProvider === 'openai' || rawProvider === 'anthropic' ? rawProvider : 'ollama'
-    const normalizedUrl = resolveTargetBaseUrl(draft.backend.baseUrl || settings.backend?.url || 'http://localhost:3001')
+    const normalizedUrl = resolveTargetBaseUrl(draft.backend.baseUrl)
     return {
       transport: 'backend',
       provider,
@@ -205,11 +206,11 @@ export function buildRuntimeFromDraft(draft: CompareEditorDraft, settings: AppSe
     let model: string
 
     if (provider === 'ollama') {
-      baseUrl = resolveTargetBaseUrl(draft.direct.ollama.baseUrl || settings.ollama?.url || 'http://localhost:11434')
+      baseUrl = (draft.direct.ollama.baseUrl.trim() || 'http://localhost:11434').replace(/\/+$/, '')
       apiKey = undefined
       model = draft.direct.ollama.model
     } else if (provider === 'openai') {
-      baseUrl = resolveTargetBaseUrl(draft.direct.openai.baseUrl || settings.openai?.baseUrl || '')
+      baseUrl = normalizeOpenAIBaseUrl(draft.direct.openai.baseUrl)
       apiKey = draft.direct.openai.apiKey ?? settings.openai?.apiKey
       model = draft.direct.openai.model
     } else {

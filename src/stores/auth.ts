@@ -28,9 +28,27 @@ const state = reactive<AuthState>({
 })
 
 let activeProbeSeq = 0
+let activeMutationSeq = 0
 
 export function useAuthStore() {
+    function beginMutation() {
+        const targetBaseUrl = resolveTargetBaseUrl(undefined)
+        const sessionVersionAtStart = state.sessionVersion
+        const mutationSeq = ++activeMutationSeq
+        // An older identity probe must not commit while a login/logout is pending.
+        activeProbeSeq++
+        state.isChecking = false
+        return {
+            targetBaseUrl,
+            isCurrent: () => mutationSeq === activeMutationSeq
+                && isAuthScopeValid(targetBaseUrl, sessionVersionAtStart),
+        }
+    }
+
     function invalidateSession(): void {
+        activeMutationSeq++
+        activeProbeSeq++
+        state.isChecking = false
         const wasAuthenticated = state.isAuthenticated || state.user !== null
         state.isAuthenticated = false
         state.user = null
@@ -95,24 +113,27 @@ export function useAuthStore() {
     }
 
     async function login(username: string, password: string): Promise<{ ok: boolean; error?: string }> {
+        const mutation = beginMutation()
         try {
             const res = await apiFetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password }),
-            })
+            }, { baseUrl: mutation.targetBaseUrl })
 
             const data = await res.json().catch(() => ({}))
+            if (!mutation.isCurrent()) return { ok: false, error: '登录请求已过期，请重新登录。' }
             if (res.ok) {
+                activeProbeSeq++
+                state.isChecking = false
                 state.sessionVersion++
+                resetBackendProvidersCatalog()
                 state.isAuthenticated = true
                 state.user = data.user
                 state.isAuthModalVisible = false
                 const mustChange = Boolean(data.user?.mustChangePassword ?? data.mustChangePassword)
                 state.mustChangePassword = mustChange
-                if (mustChange) {
-                    state.isChangePasswordModalVisible = true
-                }
+                state.isChangePasswordModalVisible = mustChange
                 return { ok: true }
             } else {
                 return { ok: false, error: data.error || '登录失败，请检查用户名或密码。' }
@@ -123,14 +144,16 @@ export function useAuthStore() {
     }
 
     async function changePassword(oldPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> {
+        const mutation = beginMutation()
         try {
             const res = await apiFetch('/api/auth/password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ oldPassword, newPassword }),
-            })
+            }, { baseUrl: mutation.targetBaseUrl })
 
             const data = await res.json().catch(() => ({}))
+            if (!mutation.isCurrent()) return { ok: false, error: '修改密码请求已过期，请重试。' }
             if (res.ok) {
                 state.mustChangePassword = false
                 state.isChangePasswordModalVisible = false
@@ -147,9 +170,11 @@ export function useAuthStore() {
     }
 
     async function logout(): Promise<{ ok: boolean; error?: string }> {
+        const mutation = beginMutation()
         try {
-            const res = await apiFetch('/api/auth/logout', { method: 'POST' })
+            const res = await apiFetch('/api/auth/logout', { method: 'POST' }, { baseUrl: mutation.targetBaseUrl })
             if (res.ok) {
+                if (!mutation.isCurrent()) return { ok: false, error: '退出请求已过期，当前会话保持不变。' }
                 invalidateSession()
                 state.isAuthModalVisible = false
                 return { ok: true }

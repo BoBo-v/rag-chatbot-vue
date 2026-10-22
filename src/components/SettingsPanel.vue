@@ -596,7 +596,8 @@ import { persistSettings, settings, DEFAULT_SYSTEM_PROMPT } from '../stores/sett
 import { fetchModels } from '../services/stream'
 import { createRuntimeFromSettings } from '../services/runtime'
 import { getClaudeModels } from '../services/providers/claude'
-import { getBackendProvidersCatalog, type BackendChatProvider } from '../services/knowledge'
+import { buildCatalogCacheKey, getBackendProvidersCatalog, type BackendChatProvider } from '../services/knowledge'
+import { useAuthStore } from '../stores/auth'
 import { testConnection, type TestConnectionResult } from '../services/connectionTester'
 import { supportsVision } from '../services/modelCapabilities'
 import { getValidBackendModels, resolveValidBackendModel } from '../services/activeConnection'
@@ -672,6 +673,14 @@ const backendProviders = ref<BackendChatProvider[]>([])
 const loadingBackendProviders = ref(false)
 const backendProviderError = ref('')
 const backendReachable = ref<boolean | null>(null)
+const auth = useAuthStore()
+const loadedCatalogScope = ref<{ key: string; sessionVersion: number } | null>(null)
+const hasCurrentBackendCatalog = computed(() => (
+  backendReachable.value === true
+  && !loadingBackendProviders.value
+  && loadedCatalogScope.value?.key === buildCatalogCacheKey(draft.backend.url)
+  && loadedCatalogScope.value.sessionVersion === auth.sessionVersion.value
+))
 
 const connectionTestState = ref<ConnectionTestState>('idle')
 const connectionTestError = ref('')
@@ -688,15 +697,15 @@ const saveError = ref('')
 const isSaving = ref(false)
 
 // 针对设计图 1 的三张后端服务卡片配置
-const defaultBackendServices: Array<{ id: BackendChatProviderType; name: string; defaultModel: string; models: string[]; configured: boolean }> = [
-  { id: 'ollama', name: 'Ollama (本地)', defaultModel: 'qwen2.5:7b', models: ['qwen2.5:7b', 'qwen3:8b'], configured: true },
-  { id: 'openai', name: 'OpenAI 服务', defaultModel: 'gpt-4o', models: ['gpt-4o', 'gpt-4o-mini', 'deepseek-chat'], configured: true },
-  { id: 'anthropic', name: 'Claude 服务', defaultModel: 'claude-sonnet-4-6', models: ['claude-sonnet-4-6', 'claude-3-7-sonnet-20250219'], configured: true },
+const defaultBackendServices: Array<{ id: BackendChatProviderType; name: string }> = [
+  { id: 'ollama', name: 'Ollama (本地)' },
+  { id: 'openai', name: 'OpenAI 服务' },
+  { id: 'anthropic', name: 'Claude 服务' },
 ]
 
 const backendServiceList = computed(() => {
   const catalogList = backendProviders.value
-  const hasLoaded = backendReachable.value === true
+  const hasLoaded = hasCurrentBackendCatalog.value
   return defaultBackendServices.map(def => {
     const matched = catalogList.find(p => p.id === def.id)
     if (!hasLoaded) {
@@ -728,9 +737,9 @@ const currentBackendModels = computed<string[]>(() => {
 })
 
 watch(
-  () => [draft.backend.provider, backendServiceList.value],
+  () => [draft.transport, draft.backend.provider, backendServiceList.value],
   () => {
-    if (draft.transport !== 'backend') return
+    if (draft.transport !== 'backend' || !hasCurrentBackendCatalog.value) return
     const currentSvc = backendServiceList.value.find(p => p.id === draft.backend.provider)
     const validModel = resolveValidBackendModel(draft.backend.model, currentSvc)
     if (draft.backend.model !== validModel) {
@@ -919,8 +928,10 @@ function setTransport(mode: TransportMode) {
 
 function selectBackendService(id: BackendChatProviderType) {
   draft.backend.provider = id
-  const svc = backendServiceList.value.find(p => p.id === id)
-  draft.backend.model = resolveValidBackendModel(draft.backend.model, svc)
+  if (hasCurrentBackendCatalog.value) {
+    const svc = backendServiceList.value.find(p => p.id === id)
+    draft.backend.model = resolveValidBackendModel(draft.backend.model, svc)
+  }
   onBackendModelChanged()
 }
 
@@ -939,6 +950,7 @@ function onBackendUrlChanged() {
   loadingBackendProviders.value = false
   backendProviders.value = []
   backendReachable.value = null
+  loadedCatalogScope.value = null
   backendProviderError.value = ''
   resetTestState()
 }
@@ -1016,8 +1028,21 @@ async function loadBackendProviders() {
   currentCatalogAbortController = abortCtrl
 
   loadingBackendProviders.value = true
+  backendReachable.value = null
+  loadedCatalogScope.value = null
   backendProviderError.value = ''
   resetTestState()
+
+  const catalogScope = {
+    key: buildCatalogCacheKey(draft.backend.url),
+    sessionVersion: auth.sessionVersion.value,
+  }
+  const isCurrentRequest = () => (
+    seq === draftCatalogSeq
+    && !abortCtrl.signal.aborted
+    && catalogScope.key === buildCatalogCacheKey(draft.backend.url)
+    && catalogScope.sessionVersion === auth.sessionVersion.value
+  )
 
   try {
     const draftUrl = draft.backend.url
@@ -1028,11 +1053,12 @@ async function loadBackendProviders() {
       skipAuthInterception: true,
     })
 
-    if (seq !== draftCatalogSeq) return
+    if (!isCurrentRequest()) return
 
     if (catalog.state === 'success') {
       backendProviders.value = catalog.providers
       backendReachable.value = true
+      loadedCatalogScope.value = catalogScope
 
       if (catalog.providers.length > 0) {
         const currentProvider = catalog.providers.find(p => p.id === draft.backend.provider)
@@ -1040,13 +1066,11 @@ async function loadBackendProviders() {
           backendProviderError.value = currentProvider
             ? `${currentProvider.name || draft.backend.provider} 未在后端配置可用密钥或服务`
             : `后端未提供当前选中的厂商 (${draft.backend.provider})`
-          draft.backend.model = resolveValidBackendModel(draft.backend.model, currentProvider)
         } else {
           const validModels = getValidBackendModels(currentProvider)
           if (validModels.length === 0) {
             backendProviderError.value = `${currentProvider.name || draft.backend.provider} 无可用模型候选`
           }
-          draft.backend.model = resolveValidBackendModel(draft.backend.model, currentProvider)
         }
       } else {
         backendProviderError.value = '后端无可用模型服务'
@@ -1057,7 +1081,7 @@ async function loadBackendProviders() {
       backendProviders.value = []
     }
   } catch (error: any) {
-    if (seq !== draftCatalogSeq) return
+    if (!isCurrentRequest()) return
     if (error?.name === 'AbortError') return
     backendReachable.value = false
     backendProviderError.value = error instanceof Error ? error.message : '后端厂商列表获取失败。'
@@ -1072,7 +1096,7 @@ async function loadBackendProviders() {
 
 const testModelDisabledReason = computed<string | undefined>(() => {
   if (draft.transport === 'backend') {
-    if (backendReachable.value !== true) {
+    if (!hasCurrentBackendCatalog.value) {
       return '服务目录不可用'
     }
     const currentSvc = backendServiceList.value.find(p => p.id === draft.backend.provider)
@@ -1216,8 +1240,10 @@ function normalizeTimeout(value: number): number {
 
 function createSettingsSnapshot(): AppSettings {
   const backend = { ...draft.backend }
-  const provider = backendServiceList.value.find(item => item.id === backend.provider)
-  backend.model = resolveValidBackendModel(backend.model, provider)
+  if (draft.transport === 'backend' && hasCurrentBackendCatalog.value) {
+    const provider = backendServiceList.value.find(item => item.id === backend.provider)
+    backend.model = resolveValidBackendModel(backend.model, provider)
+  }
   return {
     transport: draft.transport,
     provider: draft.provider,

@@ -559,7 +559,67 @@ async function main() {
             await context.close()
         }
 
-        console.log('\n=== Playwright 页面端到端回归验证全部通过 (5/5) ===')
+        // A non-default model must survive loading, failure, and direct-mode saves.
+        for (const scenario of ['backend-success', 'backend-error', 'backend-pending', 'direct-success'] as const) {
+            console.log(`\n-> 设置草稿回归: ${scenario} 保留 deepseek-reasoner...`)
+            const context = await browser.newContext()
+            await context.addInitScript((transport) => {
+                localStorage.setItem('ai-chat-settings', JSON.stringify({
+                    transport,
+                    provider: 'ollama',
+                    backend: { url: 'http://localhost:3001', provider: 'openai', model: 'deepseek-reasoner' },
+                    showModelInTopbar: true,
+                }))
+            }, scenario.startsWith('direct') ? 'direct' : 'backend')
+            const page = await context.newPage()
+            await setupRouteMocking(page)
+            await page.goto(appUrl)
+            await page.waitForSelector('.settings-btn')
+            if (scenario.startsWith('backend')) {
+                await page.waitForFunction(() => document.querySelector('.topbar-model-text')?.textContent?.includes('deepseek-reasoner'))
+            }
+
+            let release!: () => void
+            const gate = new Promise<void>(resolve => { release = resolve })
+            await page.route('**/api/providers', async route => {
+                await gate
+                await route.fulfill({
+                    status: scenario === 'backend-error' ? 503 : 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify(scenario === 'backend-error' ? { error: 'unavailable' } : { providers: defaultMockProviders }),
+                })
+            })
+            try {
+                const request = page.waitForRequest('**/api/providers')
+                await page.click('.settings-btn')
+                await request
+                // Change an unrelated setting so saving exercises the full snapshot path.
+                await page.locator('.settings-nav-item').filter({ hasText: '模型参数' }).click()
+                await page.fill('#response-timeout', '45')
+                if (scenario !== 'backend-pending') {
+                    const response = page.waitForResponse('**/api/providers')
+                    release()
+                    await response
+                    if (scenario === 'backend-success') {
+                        await page.locator('.settings-nav-item').filter({ hasText: '模型连接' }).click()
+                        await page.waitForFunction(() => (document.querySelector('#backend-model-select') as HTMLSelectElement)?.value === 'deepseek-reasoner')
+                    } else if (scenario === 'backend-error') {
+                        await page.locator('.settings-nav-item').filter({ hasText: '模型连接' }).click()
+                        await page.waitForSelector('.status-badge.error')
+                    }
+                }
+                await page.click('.btn-save')
+                await page.waitForSelector('.settings-overlay', { state: 'hidden' })
+                const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('ai-chat-settings')!))
+                assert.equal(saved.backend.model, 'deepseek-reasoner', `${scenario} must preserve the selected non-default backend model`)
+                assert.equal(saved.responseTimeoutSeconds, 45)
+            } finally {
+                release()
+                await context.close()
+            }
+        }
+
+        console.log('\n=== Playwright 页面端到端回归验证全部通过 (9/9) ===')
     } finally {
         if (browser) await browser.close()
         await new Promise<void>((resolve) => server.close(() => resolve()))

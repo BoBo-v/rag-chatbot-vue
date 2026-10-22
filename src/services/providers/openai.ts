@@ -20,7 +20,7 @@ export function normalizeOpenAIBaseUrl(baseUrl?: string): string {
 export function openAIEndpoint(baseUrl: string | undefined, path: string): string {
     const base = normalizeOpenAIBaseUrl(baseUrl)
 
-    if (import.meta.env.DEV && /^https?:\/\//i.test(base)) {
+    if (import.meta.env?.DEV && /^https?:\/\//i.test(base)) {
         return `${DEV_OPENAI_PROXY_PREFIX}${path}?baseUrl=${encodeURIComponent(base)}`
     }
 
@@ -90,25 +90,25 @@ export async function openaiStream(
         throw new Error(`OpenAI error ${res.status} from ${openAIDisplayEndpoint(runtime.baseUrl, '/v1/chat/completions')}: ${errText}`)
     }
 
+    if (!res.body) throw new Error('OpenAI response has no stream body')
     let doneCalled = false
     // OpenAI 流式响应是 Server-Sent Events，每个 data 行是一段 JSON。
-    await parseSSE(res.body!, signal, (_event, data) => {
+    await parseSSE(res.body, signal, (_event, data) => {
         if (data === '[DONE]') {
             if (!doneCalled) { doneCalled = true; onDone() }
-            return
+            return false
         }
-        try {
-            const obj = JSON.parse(data)
-            const chunk: string = obj.choices?.[0]?.delta?.content ?? ''
-            if (chunk) onChunk(chunk)
-            if (obj.choices?.[0]?.finish_reason === 'stop' && !doneCalled) {
-                doneCalled = true
-                onDone()
-            }
-        } catch {
+        const obj = JSON.parse(data)
+        if (obj.error) throw new Error(`OpenAI stream error: ${obj.error.message || JSON.stringify(obj.error)}`)
+        const chunk = obj.choices?.[0]?.delta?.content
+        if (typeof chunk === 'string' && chunk) onChunk(chunk)
+        if (obj.choices?.[0]?.finish_reason && !doneCalled) {
+            doneCalled = true
+            onDone()
+            return false
         }
     })
-    if (!doneCalled) onDone()
+    if (!doneCalled && !signal?.aborted) throw new Error('OpenAI stream ended before completion')
 }
 
 export async function fetchOpenAIModels(runtime: ModelRuntimeConfig): Promise<string[]> {
@@ -137,55 +137,62 @@ export async function fetchOpenAIModels(runtime: ModelRuntimeConfig): Promise<st
 export async function parseSSE(
     body: ReadableStream<Uint8Array>,
     signal: AbortSignal | undefined,
-    onLine: (event: string, data: string) => void
+    onLine: (event: string, data: string) => void | boolean
 ): Promise<void> {
     // SSE 是按文本行传输的，网络 chunk 可能把一行拆成两段，所以需要 buffer 暂存不完整行。
     const reader = body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-    let aborted = false
+    let currentEvent = ''
+    let dataLines: string[] = []
+    let stopped = false
+    const cancelReader = () => { void reader.cancel().catch(() => undefined) }
+    signal?.addEventListener('abort', cancelReader, { once: true })
 
-    signal?.addEventListener('abort', () => {
-        aborted = true
-        reader.cancel()
-    })
+    const dispatch = () => {
+        if (dataLines.length > 0 && !signal?.aborted) {
+            stopped = onLine(currentEvent, dataLines.join('\n')) === false
+        }
+        currentEvent = ''
+        dataLines = []
+    }
+    const processLine = (line: string) => {
+        if (line === '') {
+            dispatch()
+            return
+        }
+        const colon = line.indexOf(':')
+        const field = colon === -1 ? line : line.slice(0, colon)
+        let value = colon === -1 ? '' : line.slice(colon + 1)
+        if (value.startsWith(' ')) value = value.slice(1)
+        if (field === 'event') currentEvent = value
+        else if (field === 'data') dataLines.push(value)
+    }
 
     try {
         while (true) {
-            if (aborted) break
+            if (signal?.aborted) return
             const { done, value } = await reader.read()
+            if (signal?.aborted) return
             if (done) break
 
             buffer += decoder.decode(value, { stream: true })
             const lines = buffer.split(/\r?\n/)
             buffer = lines.pop() ?? ''
 
-            let currentEvent = ''
             for (const line of lines) {
-                if (line.startsWith('event:')) {
-                    currentEvent = line.slice(6).trim()
-                } else if (line.startsWith('data:')) {
-                    const data = line.slice(5).trim()
-                    if (data) {
-                        onLine(currentEvent, data)
-                        currentEvent = ''
-                    }
-                } else if (line === '') {
-                    currentEvent = ''
-                }
+                if (signal?.aborted) return
+                processLine(line)
+                if (stopped) return
             }
         }
         buffer += decoder.decode()
-        if (buffer.trim()) {
-            const line = buffer.trim()
-            if (line.startsWith('data:')) {
-                const data = line.slice(5).trim()
-                if (data) onLine('', data)
-            }
-        }
-    } catch (err: any) {
-        if (err.name !== 'AbortError') throw err
+        if (signal?.aborted) return
+        if (buffer) processLine(buffer.replace(/\r$/, ''))
+        if (!stopped) dispatch()
     } finally {
+        signal?.removeEventListener('abort', cancelReader)
+        cancelReader()
         reader.releaseLock()
     }
 }

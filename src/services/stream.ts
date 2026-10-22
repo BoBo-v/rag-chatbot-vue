@@ -36,6 +36,7 @@ export async function generateStreamWithContext(options: GenerateStreamWithConte
 
     let receivedFirstChunk = false
     const wrappedOnChunk = (chunk: string) => {
+        if (!chunk || mergedSignal.aborted) return
         // 只限制连接阶段：一旦收到第一个 chunk，就说明服务端已经响应。
         if (!receivedFirstChunk) {
             receivedFirstChunk = true
@@ -43,28 +44,36 @@ export async function generateStreamWithContext(options: GenerateStreamWithConte
         }
         onChunk(chunk)
     }
+    const wrappedOnDone = () => {
+        if (mergedSignal.aborted) return
+        clearTimeout(timer)
+        onDone()
+    }
 
     try {
         if (runtime.transport === 'backend') {
-            await backendChatStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
-            return
+            await backendChatStream(messages, userText, runtime, wrappedOnChunk, wrappedOnDone, mergedSignal)
+        } else {
+            switch (runtime.provider) {
+                case 'openai':
+                    await openaiStream(messages, userText, runtime, wrappedOnChunk, wrappedOnDone, mergedSignal)
+                    break
+                case 'claude':
+                    await claudeStream(messages, userText, runtime, wrappedOnChunk, wrappedOnDone, mergedSignal)
+                    break
+                case 'ollama':
+                default:
+                    await ollamaStream(messages, userText, runtime, wrappedOnChunk, wrappedOnDone, mergedSignal)
+                    break
+            }
         }
-
-        // 根据设置面板中选择的 provider 分发到对应适配器。
-        switch (runtime.provider) {
-            case 'openai':
-                await openaiStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
-                break
-            case 'claude':
-                await claudeStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
-                break
-            case 'ollama':
-            default:
-                await ollamaStream(messages, userText, runtime, wrappedOnChunk, onDone, mergedSignal)
-                break
+        // Some readers settle normally after cancellation. A timeout must still fail.
+        if (timeoutCtrl.signal.aborted && !signal?.aborted) {
+            throw new DOMException(`Request timed out after ${timeoutSeconds} seconds`, 'TimeoutError')
         }
     } catch (err) {
         clearTimeout(timer)
+        if (signal?.aborted) return
         if (timeoutCtrl.signal.aborted && !(signal?.aborted)) {
             throw new DOMException(`Request timed out after ${timeoutSeconds} seconds`, 'TimeoutError')
         }

@@ -50,21 +50,36 @@ export async function readOllamaNdjsonStream(
     onDone: () => void,
     signal?: AbortSignal
 ): Promise<void> {
-    const reader = res.body!.getReader()
+    if (!res.body) throw new Error('Ollama response has no stream body')
+    const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
     let isDone = false
-    let aborted = false
+    const cancelReader = () => { void reader.cancel().catch(() => undefined) }
+    signal?.addEventListener('abort', cancelReader, { once: true })
 
-    signal?.addEventListener('abort', () => {
-        aborted = true
-        reader.cancel()
-    })
+    const processLine = (line: string) => {
+        if (!line.trim()) return
+        const obj = JSON.parse(line) as {
+            message?: { content?: string }
+            done?: boolean
+            error?: string
+        }
+        if (!obj || typeof obj !== 'object') throw new Error('Invalid Ollama stream frame')
+        if (obj.error) throw new Error(`Ollama stream error: ${obj.error}`)
+        const chunk = obj.message?.content
+        if (typeof chunk === 'string' && chunk) onChunk(chunk)
+        if (obj.done === true && !signal?.aborted) {
+            isDone = true
+            onDone()
+        }
+    }
 
     try {
         while (true) {
-            if (aborted) break
+            if (signal?.aborted) return
             const { done, value } = await reader.read()
+            if (signal?.aborted) return
             if (done) break
 
             buffer += decoder.decode(value, { stream: true })
@@ -72,40 +87,20 @@ export async function readOllamaNdjsonStream(
             buffer = lines.pop() ?? ''
 
             for (const line of lines) {
-                if (!line.trim()) continue
-                try {
-                    // Ollama 每一行都是一个 JSON 对象，message.content 是本次增量文本。
-                    const obj = JSON.parse(line)
-                    const chunk: string = obj.message?.content ?? ''
-                    if (chunk) onChunk(chunk)
-                    if (obj.done && !isDone) {
-                        isDone = true
-                        onDone()
-                    }
-                } catch {
-                }
+                if (signal?.aborted) return
+                processLine(line)
+                if (isDone) return
             }
         }
 
-        if (buffer.trim()) {
-            try {
-                const obj = JSON.parse(buffer.trim())
-                const chunk: string = obj.message?.content ?? ''
-                if (chunk) onChunk(chunk)
-                if (obj.done && !isDone) {
-                    isDone = true
-                    onDone()
-                }
-            } catch {
-            }
-        }
-    } catch (err: any) {
-        if (err.name !== 'AbortError') throw err
+        buffer += decoder.decode()
+        if (signal?.aborted) return
+        processLine(buffer)
+        if (!isDone) throw new Error('Ollama stream ended before done:true')
     } finally {
+        signal?.removeEventListener('abort', cancelReader)
+        cancelReader()
         reader.releaseLock()
-        if (!isDone) {
-            onDone()
-        }
     }
 }
 

@@ -74,34 +74,29 @@ export async function claudeStream(
         throw new Error(`Claude error ${res.status}: ${errText}`)
     }
 
+    if (!res.body) throw new Error('Claude response has no stream body')
     let doneCalled = false
 
-    await parseSSE(res.body!, signal, (event, data) => {
+    await parseSSE(res.body, signal, (event, data) => {
+        const obj = JSON.parse(data)
+        const type = event || obj.type
+        if (type === 'error' || obj.error) {
+            throw new Error(`Claude stream error: ${obj.error?.message || 'Unknown error'}`)
+        }
         // Claude 流式事件按 event 类型区分：文本增量在 content_block_delta 里。
-        if (event === 'message_stop' || event === 'message_delta') {
-            try {
-                const obj = JSON.parse(data)
-                if (obj.type === 'message_stop' || obj.delta?.stop_reason) {
-                    if (!doneCalled) { doneCalled = true; onDone() }
-                }
-            } catch {}
-            if (event === 'message_stop' && !doneCalled) {
-                doneCalled = true
-                onDone()
-            }
-            return
+        if (type === 'message_stop') {
+            doneCalled = true
+            onDone()
+            return false
         }
 
-        if (event === 'content_block_delta') {
-            try {
-                const obj = JSON.parse(data)
-                const chunk: string = obj.delta?.text ?? ''
-                if (chunk) onChunk(chunk)
-            } catch {}
+        if (type === 'content_block_delta') {
+            const chunk = obj.delta?.text
+            if (typeof chunk === 'string' && chunk) onChunk(chunk)
         }
     })
 
-    if (!doneCalled) onDone()
+    if (!doneCalled && !signal?.aborted) throw new Error('Claude stream ended before message_stop')
 }
 
 export function getClaudeModels(): string[] {

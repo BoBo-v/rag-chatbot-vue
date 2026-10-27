@@ -1,20 +1,54 @@
 <template>
   <div class="demo-workspace">
-    <!-- 顶部沙盒状态与控制栏 -->
+    <!-- 顶部控制栏（案例选择、状态指示、跳过动画、重新播放、退出） -->
     <DemoControls
       :current-scenario-id="currentScenarioId"
       :all-scenarios="allScenarios"
       :stage="stage"
-      @switch-scenario="switchScenario"
+      @switch-scenario="(id) => switchScenario(id, true)"
       @skip="skipToFinish"
       @replay="replay"
       @exit="$emit('exit')"
     />
 
-    <!-- 演示主视口 -->
-    <div class="demo-main-stage">
-      <div class="demo-chat-feed">
-        <div class="messages-container">
+    <!-- 主聊天消息视口 -->
+    <div ref="chatFeedRef" class="demo-chat-feed">
+      <div class="messages-container">
+        <!-- 空状态引导（当用户清空或尚未发送时） -->
+        <div v-if="messages.length === 0" class="demo-empty-card">
+          <div class="empty-icon-box">
+            <Sparkles :size="24" aria-hidden="true" />
+          </div>
+          <h2 class="empty-title">工单决策推演沙盒</h2>
+          <p class="empty-desc">
+            当前处于<strong>零模型依赖的离线推演环境</strong>。下方输入框已为您预置了报障日志，
+            点击底部的<strong>【模拟发送工单】</strong>按钮，即可实时观察 AI 知识库检索与决策草稿生成！
+          </p>
+          <div class="empty-preset-row">
+            <span class="preset-label">点击快速载入用例：</span>
+            <button
+              v-for="item in allScenarios"
+              :key="item.id"
+              type="button"
+              class="empty-preset-chip"
+              :class="{ active: currentScenarioId === item.id }"
+              @click="switchScenario(item.id, false)"
+            >
+              {{ item.title }}
+            </button>
+          </div>
+          <button
+            type="button"
+            class="btn-start-now"
+            @click="startPlayback(inputPrompt)"
+          >
+            <Send :size="15" aria-hidden="true" />
+            <span>立即模拟发送并观察生成</span>
+          </button>
+        </div>
+
+        <!-- 消息列表 -->
+        <template v-else>
           <div
             v-for="msg in messages"
             :key="msg.id"
@@ -42,8 +76,9 @@
                 ]"
               >
                 <!-- 加载中指示器 -->
-                <div v-if="msg.status === 'loading'" class="loading-dots">
-                  <span></span><span></span><span></span>
+                <div v-if="msg.status === 'loading'" class="loading-state-row">
+                  <div class="loading-spinner"></div>
+                  <span>AI 正在分析工单并检索技术知识库...</span>
                 </div>
 
                 <!-- Markdown 内容 -->
@@ -59,7 +94,6 @@
                 v-if="msg.role === 'assistant' && msg.ragContext"
                 ref="citationsWrapperRef"
                 class="demo-citations-wrapper"
-                :class="{ 'force-open': isEvidenceExpanded }"
               >
                 <RagCitations :context="msg.ragContext" />
               </div>
@@ -82,24 +116,24 @@
                   type="button"
                   class="demo-action-btn btn-adopt-draft"
                   :class="{ copied: copiedField === 'draft' }"
-                  :disabled="stage !== 'completed'"
-                  title="仅提取并复制客户回复草稿，不泄露内部依据与检索分"
+                  :disabled="stage === 'streaming_analysis' || stage === 'simulating_rag'"
+                  title="仅提取并复制客户回复草稿，不泄露内部排障依据与检索打分"
                   @click="adoptAndCopy"
                 >
                   <Check v-if="copiedField === 'draft'" :size="14" :stroke-width="2" aria-hidden="true" />
                   <Copy v-else :size="14" :stroke-width="1.75" aria-hidden="true" />
-                  <span>{{ copiedField === 'draft' ? '已采纳并复制' : '采纳草稿并复制' }}</span>
+                  <span>{{ copiedField === 'draft' ? '已采纳并复制草稿' : '采纳草稿并复制' }}</span>
                 </button>
 
                 <!-- 查看/展开知识库依据 -->
                 <button
                   type="button"
                   class="demo-action-btn"
-                  title="展开或定位知识库切片依据"
+                  title="展开下方官方文档知识库依据卡片"
                   @click="toggleEvidence"
                 >
                   <Database :size="14" aria-hidden="true" />
-                  <span>{{ isEvidenceExpanded ? '收起依据' : '查看知识库依据' }}</span>
+                  <span>{{ isEvidenceExpanded ? '收起知识库依据' : '查看知识库依据' }}</span>
                 </button>
 
                 <!-- 标记转二线研发 -->
@@ -107,7 +141,7 @@
                   type="button"
                   class="demo-action-btn"
                   :class="{ active: isEscalated }"
-                  title="当信息不足或官方未收录时，标记升级转二线技术研发"
+                  title="证据不足或需热修复时，标记升级二线研发"
                   @click="toggleEscalate"
                 >
                   <Headphones :size="14" aria-hidden="true" />
@@ -128,37 +162,54 @@
               </div>
             </div>
           </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- 底部工单输入与发送操作台 -->
+    <footer class="demo-input-bar">
+      <div class="input-bar-inner">
+        <!-- 案例快捷切换标签 -->
+        <div class="preset-chips-strip">
+          <span class="chips-label">切换用例：</span>
+          <button
+            v-for="item in allScenarios"
+            :key="item.id"
+            type="button"
+            class="scenario-chip"
+            :class="{ active: currentScenarioId === item.id }"
+            @click="switchScenario(item.id, true)"
+          >
+            {{ item.title }}
+          </button>
+        </div>
+
+        <!-- 文本框与模拟发送按钮 -->
+        <div class="input-box-row">
+          <textarea
+            v-model="inputPrompt"
+            class="demo-textarea"
+            rows="3"
+            placeholder="您可在此修改或查看报障内容，点击右侧按钮模拟发送..."
+            :disabled="isGenerating"
+            @keydown.ctrl.enter="handleSend"
+          ></textarea>
+
+          <button
+            type="button"
+            class="demo-send-btn"
+            :class="{ 'is-busy': isGenerating }"
+            :disabled="isGenerating || !inputPrompt.trim()"
+            title="模拟发送当前工单，触发 AI 检索与流式回答"
+            @click="handleSend"
+          >
+            <div v-if="isGenerating" class="send-spinner"></div>
+            <Send v-else :size="16" aria-hidden="true" />
+            <span>{{ isGenerating ? '推演生成中...' : '模拟发送工单' }}</span>
+          </button>
         </div>
       </div>
-
-      <!-- 底部微调预览区（展示草稿可微调，直观呈现对客输出隔离） -->
-      <footer v-if="stage === 'completed'" class="demo-draft-tray">
-        <div class="tray-inner">
-          <div class="tray-head">
-            <span class="tray-title">
-              <FileCheck :size="15" class="tray-icon" aria-hidden="true" />
-              已提取可回复给客户的纯净草稿（已剔除内部分析与检索打分）：
-            </span>
-            <button
-              type="button"
-              class="tray-copy-btn"
-              :class="{ copied: copiedField === 'draft' }"
-              @click="adoptAndCopy"
-            >
-              <Check v-if="copiedField === 'draft'" :size="13" />
-              <Copy v-else :size="13" />
-              <span>{{ copiedField === 'draft' ? '已复制' : '一键采纳复制' }}</span>
-            </button>
-          </div>
-          <textarea
-            v-model="editedDraft"
-            class="tray-textarea"
-            rows="3"
-            placeholder="您可在此处直接微调修改对客回复文本..."
-          ></textarea>
-        </div>
-      </footer>
-    </div>
+    </footer>
 
     <!-- 剪贴板受阻降级弹窗 -->
     <DemoCopyModal :text="copyFailedDraft" @close="copyFailedDraft = null" />
@@ -166,14 +217,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   Check,
   CheckCheck,
   Copy,
   Database,
-  FileCheck,
   Headphones,
+  Send,
+  Sparkles,
 } from 'lucide-vue-next'
 import DemoControls from './DemoControls.vue'
 import DemoCopyModal from './DemoCopyModal.vue'
@@ -186,13 +238,14 @@ defineEmits<{
 }>()
 
 const citationsWrapperRef = ref<HTMLElement | null>(null)
+const chatFeedRef = ref<HTMLElement | null>(null)
 
 const {
   currentScenarioId,
   allScenarios,
+  inputPrompt,
   stage,
   messages,
-  editedDraft,
   isEvidenceExpanded,
   isEscalated,
   isConfirmed,
@@ -208,11 +261,34 @@ const {
   toggleConfirm,
 } = useDemoSession()
 
+const isGenerating = computed(() => {
+  return stage.value === 'presenting_ticket' ||
+    stage.value === 'simulating_rag' ||
+    stage.value === 'streaming_analysis'
+})
+
+function handleSend() {
+  if (isGenerating.value) return
+  void startPlayback(inputPrompt.value)
+}
+
 onMounted(() => {
+  // 进入沙盒时自动发送首个演示工单，让用户立即可视化体验
   void startPlayback()
 })
 
-// 响应“查看证据”展开卡片
+// 滚动跟随与展开卡片处理
+watch(
+  () => messages.value[1]?.content,
+  () => {
+    nextTick(() => {
+      if (chatFeedRef.value) {
+        chatFeedRef.value.scrollTop = chatFeedRef.value.scrollHeight
+      }
+    })
+  }
+)
+
 watch(isEvidenceExpanded, (expanded) => {
   if (expanded && citationsWrapperRef.value) {
     const details = citationsWrapperRef.value.querySelector('details')
@@ -230,17 +306,9 @@ watch(isEvidenceExpanded, (expanded) => {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--color-bg-base, #0c0b14);
-  color: var(--color-text, #f0eef8);
+  background: var(--bg-canvas, #f7f5fb);
+  color: var(--text-primary, #1e192b);
   overflow: hidden;
-}
-
-.demo-main-stage {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
 }
 
 .demo-chat-feed {
@@ -256,9 +324,105 @@ watch(isEvidenceExpanded, (expanded) => {
   max-width: 860px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 20px;
 }
 
+/* 空状态卡片 */
+.demo-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 36px 24px;
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-sm, 0 4px 16px rgba(0, 0, 0, 0.05));
+  gap: 14px;
+  margin: 40px auto;
+  max-width: 640px;
+}
+
+.empty-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--accent-bg, rgba(139, 92, 246, 0.15));
+  color: var(--accent, #7c3aed);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary, #1e192b);
+}
+
+.empty-desc {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-secondary, #574e69);
+  margin: 0;
+}
+
+.empty-preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.preset-label {
+  font-size: 12px;
+  color: var(--text-muted, #7d7291);
+}
+
+.empty-preset-chip {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--bg-surface-2, #f0ecf7);
+  border: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
+  color: var(--text-secondary, #574e69);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--motion-fast, 140ms) ease;
+}
+
+.empty-preset-chip.active,
+.empty-preset-chip:hover {
+  background: var(--accent-bg, rgba(139, 92, 246, 0.15));
+  border-color: var(--accent-border, rgba(167, 139, 250, 0.4));
+  color: var(--accent-text, #7c3aed);
+}
+
+.btn-start-now {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--accent, #7c3aed);
+  color: #ffffff;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm, 0 4px 12px rgba(124, 58, 237, 0.25));
+  margin-top: 8px;
+  transition: all var(--motion-fast, 140ms) ease;
+}
+
+.btn-start-now:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* 消息流布局 */
 .msg-row {
   display: flex;
   gap: 12px;
@@ -283,8 +447,8 @@ watch(isEvidenceExpanded, (expanded) => {
 }
 
 .ai-avatar {
-  background: rgba(99, 102, 241, 0.2);
-  border: 1px solid rgba(99, 102, 241, 0.4);
+  background: var(--accent-bg, rgba(139, 92, 246, 0.15));
+  border: 1px solid var(--accent-border, rgba(167, 139, 250, 0.3));
 }
 
 .ai-avatar img {
@@ -294,7 +458,7 @@ watch(isEvidenceExpanded, (expanded) => {
 
 .user-avatar {
   background: linear-gradient(135deg, #6366f1, #a855f7);
-  color: #fff;
+  color: #ffffff;
 }
 
 .msg-col {
@@ -309,7 +473,7 @@ watch(isEvidenceExpanded, (expanded) => {
 }
 
 .msg-bubble {
-  border-radius: 12px;
+  border-radius: var(--radius-md, 8px);
   padding: 14px 18px;
   font-size: 14px;
   line-height: 1.65;
@@ -318,44 +482,48 @@ watch(isEvidenceExpanded, (expanded) => {
 }
 
 .msg-bubble.user {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.25));
-  border: 1px solid rgba(168, 85, 247, 0.35);
-  color: var(--color-text, #f0eef8);
+  background: color-mix(in srgb, var(--accent-bg) 72%, var(--bg-surface-2));
+  border: 1px solid var(--accent-border, rgba(167, 139, 250, 0.35));
+  color: var(--text-primary, #1e192b);
   white-space: pre-wrap;
+  border-radius: var(--radius-md) var(--radius-md) var(--radius-xs) var(--radius-md);
 }
 
 .msg-bubble.assistant {
-  background: var(--color-bg-card, #161522);
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border, rgba(124, 58, 237, 0.18));
+  color: var(--text-primary, #1e192b);
+  box-shadow: var(--shadow-sm, 0 2px 10px rgba(0, 0, 0, 0.05));
+  border-radius: var(--radius-md) var(--radius-md) var(--radius-md) var(--radius-xs);
 }
 
-.loading-dots {
+.loading-state-row {
   display: flex;
-  gap: 6px;
-  padding: 8px 4px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  color: var(--text-secondary, #574e69);
+  font-size: 13.5px;
 }
 
-.loading-dots span {
-  width: 7px;
-  height: 7px;
+.loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-subtle, rgba(124, 58, 237, 0.2));
+  border-top-color: var(--accent, #7c3aed);
   border-radius: 50%;
-  background: #818cf8;
-  animation: bounce 1.4s infinite ease-in-out both;
+  animation: spin 0.8s linear infinite;
 }
 
-.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
-.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
-  40% { transform: scale(1); opacity: 1; }
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .demo-citations-wrapper {
   margin-top: 4px;
 }
 
+/* 操作栏 */
 .msg-actions-bar {
   display: flex;
   align-items: center;
@@ -368,20 +536,20 @@ watch(isEvidenceExpanded, (expanded) => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 11px;
-  border-radius: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm, 6px);
   font-size: 12px;
   font-weight: 500;
-  background: var(--color-bg-surface, #1e1c2e);
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
-  color: var(--color-text, #e2e0ed);
+  background: var(--bg-surface-2, #f0ecf7);
+  border: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
+  color: var(--text-primary, #1e192b);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--motion-fast, 140ms) ease;
 }
 
 .demo-action-btn:hover:not(:disabled) {
-  background: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
-  border-color: var(--color-border-hover, rgba(255, 255, 255, 0.22));
+  background: var(--bg-surface-3, #e8e2f2);
+  border-color: var(--border, rgba(124, 58, 237, 0.3));
 }
 
 .demo-action-btn:disabled {
@@ -390,26 +558,24 @@ watch(isEvidenceExpanded, (expanded) => {
 }
 
 .btn-adopt-draft {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.35);
-  color: #6ee7b7;
+  background: var(--success-bg, rgba(5, 150, 105, 0.12));
+  border-color: var(--success-border, rgba(5, 150, 105, 0.3));
+  color: var(--success, #059669);
 }
 
 .btn-adopt-draft:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.25);
-  border-color: rgba(16, 185, 129, 0.55);
+  filter: brightness(1.08);
 }
 
 .btn-adopt-draft.copied {
-  background: rgba(16, 185, 129, 0.3);
-  border-color: #10b981;
-  color: #a7f3d0;
+  background: var(--success, #059669);
+  color: #ffffff;
 }
 
 .demo-action-btn.active {
-  background: rgba(99, 102, 241, 0.2);
-  border-color: #6366f1;
-  color: #c7d2fe;
+  background: var(--accent-bg, rgba(124, 58, 237, 0.16));
+  border-color: var(--accent, #7c3aed);
+  color: var(--accent-text, #7c3aed);
 }
 
 .ticket-status-badge {
@@ -423,84 +589,127 @@ watch(isEvidenceExpanded, (expanded) => {
 }
 
 .badge-escalated {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--danger-bg, rgba(220, 38, 38, 0.12));
+  color: var(--danger, #dc2626);
+  border: 1px solid var(--danger-border, rgba(220, 38, 38, 0.28));
 }
 
 .badge-confirmed {
-  background: rgba(16, 185, 129, 0.15);
-  color: #6ee7b7;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--success-bg, rgba(5, 150, 105, 0.12));
+  color: var(--success, #059669);
+  border: 1px solid var(--success-border, rgba(5, 150, 105, 0.28));
 }
 
-.demo-draft-tray {
-  background: var(--color-bg-card, #141320);
-  border-top: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
+/* 底部交互输入台 */
+.demo-input-bar {
+  background: var(--bg-surface, #ffffff);
+  border-top: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
   padding: 12px 20px;
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.05);
 }
 
-.tray-inner {
+.input-bar-inner {
   max-width: 860px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+  gap: 10px;
+}
+
+.preset-chips-strip {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
-.tray-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.tray-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.chips-label {
   font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-subtle, #a09cb4);
+  color: var(--text-muted, #7d7291);
 }
 
-.tray-icon {
-  color: #10b981;
-}
-
-.tray-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 500;
-  border-radius: 5px;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  color: #6ee7b7;
+.scenario-chip {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--bg-surface-2, #f0ecf7);
+  border: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
+  color: var(--text-secondary, #574e69);
+  font-size: 11.5px;
   cursor: pointer;
+  transition: all var(--motion-fast, 140ms) ease;
 }
 
-.tray-copy-btn:hover {
-  background: rgba(16, 185, 129, 0.25);
+.scenario-chip.active,
+.scenario-chip:hover {
+  background: var(--accent-bg, rgba(124, 58, 237, 0.15));
+  border-color: var(--accent-border, rgba(124, 58, 237, 0.35));
+  color: var(--accent-text, #7c3aed);
 }
 
-.tray-textarea {
-  width: 100%;
-  background: var(--color-bg-surface, #0d0c16);
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
-  border-radius: 6px;
-  color: var(--color-text, #f0eef8);
-  padding: 8px 12px;
-  font-size: 13px;
-  line-height: 1.5;
+.input-box-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.demo-textarea {
+  flex: 1;
+  background: var(--bg-input, #ffffff);
+  border: 1px solid var(--border, rgba(124, 58, 237, 0.2));
+  border-radius: var(--radius-md, 8px);
+  color: var(--text-primary, #1e192b);
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
   resize: vertical;
   box-sizing: border-box;
+  font-family: var(--font-sans);
 }
 
-.tray-textarea:focus {
+.demo-textarea:focus {
   outline: none;
-  border-color: var(--color-primary, #6366f1);
+  border-color: var(--accent, #7c3aed);
+  box-shadow: var(--focus-ring, 0 0 0 3px rgba(124, 58, 237, 0.2));
+}
+
+.demo-textarea:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.demo-send-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  height: 44px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--accent, #7c3aed);
+  color: #ffffff;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--motion-fast, 140ms) ease;
+}
+
+.demo-send-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.demo-send-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.send-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 </style>

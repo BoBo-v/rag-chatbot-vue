@@ -4,7 +4,7 @@
       <div class="demo-badge">
         <Sparkles :size="15" class="badge-icon" aria-hidden="true" />
         <span class="badge-title">演示沙盒</span>
-        <span class="badge-sub">离线仿真 · 零模型依赖</span>
+        <span class="badge-sub">离线推演</span>
       </div>
 
       <div class="scenario-selector">
@@ -34,20 +34,20 @@
 
     <div class="controls-right">
       <button
-        v-if="stage !== 'completed'"
+        v-if="stage === 'streaming_analysis' || stage === 'simulating_rag'"
         type="button"
-        class="ctrl-btn btn-secondary"
-        title="跳过打字机流式，直接查看完整推理结果"
+        class="ctrl-btn btn-action"
+        title="跳过逐字打字机动画，直接呈现完整结果"
         @click="$emit('skip')"
       >
         <FastForward :size="14" aria-hidden="true" />
-        <span>立即显示结果</span>
+        <span>立即出结果</span>
       </button>
 
       <button
         type="button"
         class="ctrl-btn btn-secondary"
-        title="从头重新模拟播放"
+        title="从头重新模拟播放当前案例"
         @click="$emit('replay')"
       >
         <RotateCcw :size="14" aria-hidden="true" />
@@ -96,15 +96,15 @@ const stageLabel = computed(() => {
     case 'presenting_ticket':
       return '呈现报障工单...'
     case 'simulating_rag':
-      return '检索知识库官方依据中...'
+      return '正在检索知识库依据...'
     case 'streaming_analysis':
-      return '正在流式推演内部分析与客户草稿...'
+      return 'AI 正在推演内部分析与客户草稿...'
     case 'completed':
       return '推演完成 · 操作按钮已就绪'
     case 'paused':
       return '已暂停'
     default:
-      return '就绪'
+      return '待发送工单'
   }
 })
 
@@ -121,18 +121,19 @@ const stageClass = computed(() => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 18px;
-  background: var(--color-bg-card, #141320);
-  border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-  gap: 14px;
+  background: var(--bg-surface, #ffffff);
+  border-bottom: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.06));
+  gap: 12px;
   flex-wrap: wrap;
+  z-index: 10;
 }
 
 .controls-left,
 .controls-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .demo-badge {
@@ -140,24 +141,24 @@ const stageClass = computed(() => {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  background: rgba(99, 102, 241, 0.14);
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  border-radius: 20px;
-  color: #a5b4fc;
+  background: var(--accent-bg, rgba(139, 92, 246, 0.12));
+  border: 1px solid var(--accent-border, rgba(167, 139, 250, 0.3));
+  border-radius: var(--radius-pill, 999px);
+  color: var(--accent-text, #7c3aed);
   font-size: 12px;
 }
 
 .badge-icon {
-  color: #818cf8;
+  color: var(--accent, #7c3aed);
 }
 
 .badge-title {
   font-weight: 600;
-  color: #c7d2fe;
+  color: var(--text-primary, #1e192b);
 }
 
 .badge-sub {
-  color: rgba(199, 210, 254, 0.7);
+  color: var(--text-muted, #7d7291);
   font-size: 11px;
 }
 
@@ -169,27 +170,28 @@ const stageClass = computed(() => {
 
 .scenario-dropdown {
   appearance: none;
-  background: var(--color-bg-surface, #1e1c2e);
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.15));
-  border-radius: 6px;
-  color: var(--color-text, #f0eef8);
+  background: var(--bg-input, #ffffff);
+  border: 1px solid var(--border, rgba(124, 58, 237, 0.2));
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-primary, #1e192b);
   font-size: 13px;
   font-weight: 500;
   padding: 6px 28px 6px 10px;
   cursor: pointer;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--motion-fast, 140ms) ease;
 }
 
 .scenario-dropdown:focus {
-  border-color: var(--color-primary, #6366f1);
+  border-color: var(--accent, #7c3aed);
+  box-shadow: var(--focus-ring, 0 0 0 3px rgba(124, 58, 237, 0.2));
 }
 
 .select-chevron {
   position: absolute;
   right: 9px;
   pointer-events: none;
-  color: var(--color-text-subtle, #a09cb4);
+  color: var(--text-muted, #7d7291);
 }
 
 .stage-indicator {
@@ -197,24 +199,26 @@ const stageClass = computed(() => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--color-text-subtle, #a09cb4);
+  color: var(--text-secondary, #574e69);
+  padding: 0 4px;
 }
 
 .indicator-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #94a3b8;
+  background: var(--text-muted, #81798f);
 }
 
 .stage-indicator.is-active .indicator-dot {
-  background: #38bdf8;
-  box-shadow: 0 0 8px #38bdf8;
+  background: var(--data-accent, #0891b2);
+  box-shadow: 0 0 8px var(--data-accent, #0891b2);
   animation: pulse 1.6s infinite ease-in-out;
 }
 
 .stage-indicator.is-done .indicator-dot {
-  background: #34d399;
+  background: var(--success, #059669);
+  box-shadow: 0 0 6px var(--success, #059669);
 }
 
 @keyframes pulse {
@@ -227,35 +231,45 @@ const stageClass = computed(() => {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--motion-fast, 140ms) ease;
   border: 1px solid transparent;
 }
 
+.btn-action {
+  background: var(--accent-bg, rgba(124, 58, 237, 0.12));
+  border-color: var(--accent-border, rgba(124, 58, 237, 0.3));
+  color: var(--accent-text, #7c3aed);
+}
+
+.btn-action:hover {
+  background: var(--accent, #7c3aed);
+  color: #ffffff;
+}
+
 .btn-secondary {
-  background: var(--color-bg-surface, #1e1c2e);
-  border-color: var(--color-border, rgba(255, 255, 255, 0.12));
-  color: var(--color-text, #e2e0ed);
+  background: var(--bg-surface-2, #f0ecf7);
+  border-color: var(--border-subtle, rgba(124, 58, 237, 0.12));
+  color: var(--text-primary, #1e192b);
 }
 
 .btn-secondary:hover {
-  background: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
-  border-color: var(--color-border-hover, rgba(255, 255, 255, 0.22));
+  background: var(--bg-surface-3, #e8e2f2);
+  border-color: var(--border, rgba(124, 58, 237, 0.25));
 }
 
 .btn-exit {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  background: var(--danger-bg, rgba(220, 38, 38, 0.08));
+  border-color: var(--danger-border, rgba(220, 38, 38, 0.25));
+  color: var(--danger, #dc2626);
 }
 
 .btn-exit:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #fee2e2;
+  background: var(--danger, #dc2626);
+  color: #ffffff;
 }
 
 .sr-only {

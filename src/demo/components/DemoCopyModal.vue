@@ -55,7 +55,7 @@ watch(
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: rgba(0, 0, 0, 0.65);
+  background: var(--bg-overlay, rgba(0, 0, 0, 0.65));
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -66,11 +66,11 @@ watch(
 .demo-copy-modal {
   width: 100%;
   max-width: 520px;
-  background: var(--color-bg-card, #171622);
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
-  border-radius: 12px;
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border, rgba(124, 58, 237, 0.2));
+  border-radius: var(--radius-lg, 12px);
   padding: 20px;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg, 0 16px 36px rgba(0, 0, 0, 0.3));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -86,47 +86,53 @@ watch(
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-text, #f0eef8);
+  color: var(--text-primary, #1e192b);
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: var(--color-text-subtle, #a09cb4);
-  font-size: 20px;
+  color: var(--text-muted, #7d7291);
+  font-size: 22px;
   cursor: pointer;
   line-height: 1;
+}
+
+.close-btn:hover {
+  color: var(--text-primary, #1e192b);
 }
 
 .demo-copy-tip {
   margin: 0;
   font-size: 13px;
-  color: var(--color-text-subtle, #a09cb4);
+  color: var(--text-secondary, #574e69);
 }
 
 .demo-copy-tip code {
-  background: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
+  background: var(--bg-surface-2, #f0ecf7);
+  color: var(--accent-text, #7c3aed);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .demo-copy-textarea {
   width: 100%;
-  border-radius: 8px;
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
-  background: var(--color-bg-surface, #0f0e17);
-  color: var(--color-text, #f0eef8);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
+  background: var(--bg-input, #ffffff);
+  color: var(--text-primary, #1e192b);
   padding: 12px;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
   resize: vertical;
   box-sizing: border-box;
+  font-family: var(--font-sans);
 }
 
 .demo-copy-textarea:focus {
   outline: none;
-  border-color: var(--color-primary, #6366f1);
+  border-color: var(--accent, #7c3aed);
 }
 
 .demo-copy-actions {
@@ -137,13 +143,14 @@ watch(
 
 .btn-primary {
   padding: 8px 18px;
-  background: var(--color-primary, #6366f1);
-  color: #fff;
+  background: var(--accent, #7c3aed);
+  color: #ffffff;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+  transition: all var(--motion-fast, 140ms) ease;
 }
 
 .btn-primary:hover {

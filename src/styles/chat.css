@@ -3918,31 +3918,31 @@ datalist option {
     width: 100%;
     margin: 4px 0 16px 0;
     padding: 14px 18px;
-    border-radius: var(--radius-md, 10px);
-    border: 1px solid rgba(99, 102, 241, 0.35);
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08));
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--accent-border, rgba(167, 139, 250, 0.35));
+    background: var(--accent-bg, rgba(139, 92, 246, 0.12));
     cursor: pointer;
     text-align: left;
-    transition: all var(--motion-fast, 0.15s) ease;
+    transition: all var(--motion-fast, 140ms) ease;
     box-sizing: border-box;
 }
 
 .chat-shell .demo-entry-card:hover {
-    border-color: rgba(99, 102, 241, 0.6);
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(168, 85, 247, 0.14));
+    border-color: var(--accent, #7c3aed);
+    background: var(--accent-soft, rgba(139, 92, 246, 0.18));
     transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.18);
+    box-shadow: var(--shadow-sm, 0 4px 16px rgba(0, 0, 0, 0.08));
 }
 
 .chat-shell .demo-entry-icon {
     width: 36px;
     height: 36px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm, 6px);
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(99, 102, 241, 0.2);
-    color: #818cf8;
+    background: var(--accent-soft, rgba(139, 92, 246, 0.2));
+    color: var(--accent, #7c3aed);
     flex-shrink: 0;
 }
 
@@ -3962,33 +3962,33 @@ datalist option {
 .chat-shell .demo-entry-title strong {
     font-size: 14px;
     font-weight: 600;
-    color: var(--text-primary, #f0eef8);
+    color: var(--text-primary, #1e192b);
 }
 
 .chat-shell .demo-entry-badge {
     padding: 2px 7px;
-    border-radius: 10px;
+    border-radius: var(--radius-pill, 999px);
     font-size: 11px;
     font-weight: 600;
-    background: rgba(16, 185, 129, 0.15);
-    border: 1px solid rgba(16, 185, 129, 0.35);
-    color: #6ee7b7;
+    background: var(--success-bg, rgba(5, 150, 105, 0.12));
+    border: 1px solid var(--success-border, rgba(5, 150, 105, 0.3));
+    color: var(--success, #059669);
 }
 
 .chat-shell .demo-entry-desc {
     margin: 0;
     font-size: 12px;
-    color: var(--text-secondary, #a09cb4);
+    color: var(--text-secondary, #574e69);
     line-height: 1.45;
 }
 
 .chat-shell .demo-entry-arrow {
-    color: var(--text-tertiary, #6b7280);
-    transition: transform var(--motion-fast, 0.15s) ease;
+    color: var(--text-muted, #7d7291);
+    transition: transform var(--motion-fast, 140ms) ease;
     flex-shrink: 0;
 }
 
 .chat-shell .demo-entry-card:hover .demo-entry-arrow {
     transform: translateX(3px);
-    color: var(--text-primary, #f0eef8);
+    color: var(--accent, #7c3aed);
 }

@@ -45,10 +45,10 @@
           <Play :size="13" />
         </div>
         <div class="item-text">
-          <strong>1. 体验演示沙盒</strong>
-          <p>零配置体验真实的知识库检索、两段式分析与草稿采纳</p>
+          <strong>1. 体验工单推演沙盒</strong>
+          <p>零配置体验知识库切片检索、内部分析与客户草稿输出全流程</p>
         </div>
-        <span class="item-action-tag">免配置体验 ›</span>
+        <span class="item-action-tag">免配置试玩 ›</span>
       </div>
 
       <div class="checklist-item" @click="$emit('open-settings')">
@@ -122,10 +122,10 @@ function dismiss() {
   max-width: 680px;
   width: 100%;
   margin: 0 0 16px 0;
-  border-radius: var(--radius-md, 10px);
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
-  background: var(--color-bg-surface, #141322);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
+  background: var(--bg-surface, #ffffff);
+  box-shadow: var(--shadow-sm, 0 4px 18px rgba(0, 0, 0, 0.05));
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -135,8 +135,8 @@ function dismiss() {
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: rgba(99, 102, 241, 0.08);
-  border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  background: var(--accent-bg, rgba(124, 58, 237, 0.08));
+  border-bottom: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.12));
 }
 
 .checklist-title-row {
@@ -146,21 +146,21 @@ function dismiss() {
 }
 
 .checklist-spark-icon {
-  color: #818cf8;
+  color: var(--accent, #7c3aed);
 }
 
 .checklist-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-text, #f0eef8);
+  color: var(--text-primary, #1e192b);
 }
 
 .checklist-tag {
   font-size: 11px;
   padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(99, 102, 241, 0.18);
-  color: #c7d2fe;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--accent-soft, rgba(167, 139, 250, 0.18));
+  color: var(--accent-text, #7c3aed);
 }
 
 .checklist-header-actions {
@@ -175,17 +175,17 @@ function dismiss() {
   gap: 4px;
   background: none;
   border: none;
-  color: #a5b4fc;
+  color: var(--accent-text, #7c3aed);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm, 4px);
+  transition: background var(--motion-fast, 140ms) ease;
 }
 
 .checklist-text-btn:hover {
-  background: rgba(99, 102, 241, 0.15);
-  color: #c7d2fe;
+  background: var(--accent-bg, rgba(124, 58, 237, 0.15));
 }
 
 .checklist-icon-btn {
@@ -194,16 +194,17 @@ function dismiss() {
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   background: none;
   border: none;
-  color: var(--color-text-subtle, #a09cb4);
+  color: var(--text-muted, #7d7291);
   cursor: pointer;
+  transition: all var(--motion-fast, 140ms) ease;
 }
 
 .checklist-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--color-text, #f0eef8);
+  background: var(--bg-surface-2, #f0ecf7);
+  color: var(--text-primary, #1e192b);
 }
 
 .checklist-body {
@@ -218,24 +219,24 @@ function dismiss() {
   align-items: center;
   gap: 12px;
   padding: 8px 10px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-surface-2, #f0ecf7);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--motion-fast, 140ms) ease;
 }
 
 .checklist-item:hover {
-  background: rgba(99, 102, 241, 0.09);
-  border-color: rgba(99, 102, 241, 0.25);
+  background: var(--accent-bg, rgba(124, 58, 237, 0.12));
+  border-color: var(--accent-border, rgba(124, 58, 237, 0.28));
 }
 
 .item-icon-box {
   width: 26px;
   height: 26px;
-  border-radius: 6px;
-  background: rgba(99, 102, 241, 0.15);
-  color: #a5b4fc;
+  border-radius: var(--radius-xs, 4px);
+  background: var(--accent-bg, rgba(124, 58, 237, 0.18));
+  color: var(--accent, #7c3aed);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -251,18 +252,18 @@ function dismiss() {
 
 .item-text strong {
   font-size: 12.5px;
-  color: var(--color-text, #f0eef8);
+  color: var(--text-primary, #1e192b);
 }
 
 .item-text p {
   margin: 0;
   font-size: 11.5px;
-  color: var(--color-text-subtle, #a09cb4);
+  color: var(--text-secondary, #574e69);
 }
 
 .item-action-tag {
   font-size: 11.5px;
-  color: #818cf8;
+  color: var(--accent, #7c3aed);
   font-weight: 500;
   flex-shrink: 0;
 }

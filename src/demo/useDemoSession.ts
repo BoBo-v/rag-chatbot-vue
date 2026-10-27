@@ -18,6 +18,7 @@ export function useDemoSession() {
   const currentScenarioId = ref<DemoScenarioId>('vite-proxy-404')
   const currentScenario = computed(() => getDemoScenario(currentScenarioId.value))
 
+  const inputPrompt = ref<string>(currentScenario.value.ticketMarkdown)
   const stage = ref<PlaybackStage>('idle')
   const messages = ref<Message[]>([])
   const activeRagContext = ref<RagContextInfo | undefined>(undefined)
@@ -30,7 +31,7 @@ export function useDemoSession() {
 
   let copyTimer: ReturnType<typeof setTimeout> | null = null
 
-  async function startPlayback(): Promise<void> {
+  async function startPlayback(customPrompt?: string): Promise<void> {
     const scenario = currentScenario.value
     const seq = controller.nextSequence()
 
@@ -41,8 +42,12 @@ export function useDemoSession() {
     copiedField.value = null
     copyFailedDraft.value = null
 
-    // 1. 用户提报工单
+    // 1. 用户提报工单（使用输入框现有内容或案例默认报障）
+    const promptText = (customPrompt ?? inputPrompt.value).trim() || scenario.ticketMarkdown
+    inputPrompt.value = promptText
+
     const userMsg = createDemoUserMessage(scenario)
+    userMsg.content = promptText
     messages.value = [userMsg]
 
     // 2. 占位 Loading
@@ -87,6 +92,7 @@ export function useDemoSession() {
     const scenario = currentScenario.value
 
     const userMsg = createDemoUserMessage(scenario)
+    userMsg.content = inputPrompt.value || scenario.ticketMarkdown
     const ragContext = createDemoRagContext(scenario, 'hit')
     const assistantMsg = createDemoAssistantMessage(
       scenario,
@@ -106,10 +112,17 @@ export function useDemoSession() {
     void startPlayback()
   }
 
-  function switchScenario(id: DemoScenarioId): void {
-    if (id === currentScenarioId.value) return
+  function switchScenario(id: DemoScenarioId, autoSend = true): void {
     currentScenarioId.value = id
-    void startPlayback()
+    inputPrompt.value = currentScenario.value.ticketMarkdown
+    if (autoSend) {
+      void startPlayback()
+    } else {
+      controller.cancel()
+      messages.value = []
+      activeRagContext.value = undefined
+      stage.value = 'idle'
+    }
   }
 
   async function adoptAndCopy(): Promise<void> {
@@ -171,6 +184,7 @@ export function useDemoSession() {
     isConfirmed.value = false
     copiedField.value = null
     copyFailedDraft.value = null
+    inputPrompt.value = currentScenario.value.ticketMarkdown
   }
 
   onBeforeUnmount(() => {
@@ -181,6 +195,7 @@ export function useDemoSession() {
     currentScenarioId,
     currentScenario,
     allScenarios: allDemoScenarios,
+    inputPrompt,
     stage,
     messages,
     activeRagContext,

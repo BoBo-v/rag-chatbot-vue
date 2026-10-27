@@ -19,7 +19,6 @@ export class DemoPlaybackController {
    */
   public nextSequence(): number {
     this.cancel()
-    this.activeSequence += 1
     return this.activeSequence
   }
 
@@ -31,6 +30,7 @@ export class DemoPlaybackController {
    * 立即作废当前所有动画帧与延迟任务
    */
   public cancel(): void {
+    this.activeSequence += 1
     this.isPaused = false
     this.pausedResumeCallback = null
 

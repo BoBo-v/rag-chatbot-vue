@@ -1,8 +1,8 @@
 import type { DemoScenarioDefinition } from '../../types'
 import { viteProxyKnowledgeChunks } from './knowledge'
-import ticketMarkdown from './ticket.md?raw'
-import analysisMarkdown from './analysis.md?raw'
-import replyMarkdown from './reply.md?raw'
+import { ticketMarkdown } from './ticket'
+import { analysisMarkdown } from './analysis'
+import { replyMarkdown } from './reply'
 
 export const viteProxyScenario: DemoScenarioDefinition = {
   id: 'vite-proxy-404',

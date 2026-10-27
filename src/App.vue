@@ -199,7 +199,7 @@ watch(() => settings.theme, applyTheme)
       </section>
     </main>
 
-    <nav class="mobile-navigation" aria-label="移动端主导航">
+    <nav class="mobile-navigation" aria-label="移动端主导航" data-tour="mobile-nav">
       <button
         v-for="item in modes"
         :key="item.value"
@@ -211,7 +211,12 @@ watch(() => settings.theme, applyTheme)
         <component :is="item.icon" :size="20" :stroke-width="1.8" aria-hidden="true" />
         <span>{{ item.label }}</span>
       </button>
-      <button type="button" aria-label="打开设置" @click="settingsOpen = true">
+      <button
+        type="button"
+        aria-label="打开设置"
+        data-tour="mobile-settings"
+        @click="settingsOpen = true"
+      >
         <Settings2 :size="20" :stroke-width="1.8" aria-hidden="true" />
         <span>设置</span>
       </button>

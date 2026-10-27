@@ -68,3 +68,38 @@
 .driver-popover-arrow-side-bottom.driver-popover-arrow {
   border-bottom-color: var(--bg-surface, #ffffff) !important;
 }
+
+/* ─── 小屏幕与移动端专属气泡适配（PC 端样式完全不受影响） ─── */
+@media (max-width: 640px) {
+  .driver-popover {
+    max-width: calc(100vw - 28px) !important;
+    padding: 14px 14px 12px !important;
+    border-radius: 12px !important;
+  }
+
+  .driver-popover-title {
+    font-size: 14px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .driver-popover-description {
+    font-size: 12px !important;
+    line-height: 1.5 !important;
+  }
+
+  .driver-popover-footer {
+    margin-top: 10px !important;
+    gap: 6px !important;
+  }
+
+  .driver-popover-progress-text {
+    font-size: 10.5px !important;
+  }
+
+  .driver-popover-next-btn,
+  .driver-popover-prev-btn,
+  .driver-popover-close-btn {
+    padding: 5px 10px !important;
+    font-size: 11.5px !important;
+  }
+}

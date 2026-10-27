@@ -1055,4 +1055,183 @@ watch(
   font-family: var(--font-mono, monospace);
   color: var(--text-secondary, #574e69);
 }
+
+/* ─── 小屏幕与移动端响应式适配 ─── */
+@media (max-width: 768px) {
+  .demo-chat-feed {
+    padding: 14px 10px;
+  }
+
+  .messages-container {
+    gap: 14px;
+  }
+
+  .msg-row {
+    gap: 8px;
+  }
+
+  .msg-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 11px;
+  }
+
+  .ai-avatar img {
+    width: 18px;
+    height: 18px;
+  }
+
+  .msg-col {
+    width: calc(100% - 38px);
+  }
+
+  .msg-bubble {
+    padding: 11px 13px;
+    font-size: 13.5px;
+  }
+
+  .msg-actions-bar {
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .demo-action-btn {
+    padding: 4px 9px;
+    font-size: 11.5px;
+    gap: 4px;
+  }
+
+  .ticket-status-badge {
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+
+  .custom-prompt-alert {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 11.5px;
+    margin: 0 auto 8px;
+  }
+
+  .custom-prompt-reset-btn {
+    align-self: flex-end;
+  }
+
+  .demo-input-area {
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .demo-input-box {
+    padding: 8px 12px 6px;
+    border-radius: 10px;
+  }
+
+  .demo-input-field {
+    min-height: 38px;
+    font-size: 13.5px;
+  }
+
+  .demo-input-toolbar {
+    margin-top: 2px;
+    padding-top: 6px;
+    gap: 6px;
+  }
+
+  .preset-tag-label {
+    display: none;
+  }
+
+  .preset-pills-row {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .preset-pill-btn {
+    padding: 2px 8px;
+    font-size: 11px;
+  }
+
+  .demo-send-btn,
+  .demo-stop-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .demo-input-hint {
+    font-size: 10.5px;
+    margin-top: 5px;
+  }
+
+  .demo-empty-card {
+    padding: 20px 14px;
+  }
+
+  .empty-title {
+    font-size: 16px;
+  }
+
+  .empty-desc {
+    font-size: 12px;
+  }
+
+  .empty-preset-chip {
+    font-size: 11.5px;
+    padding: 3px 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .demo-chat-feed {
+    padding: 10px 6px;
+  }
+
+  .msg-row {
+    gap: 6px;
+  }
+
+  .msg-avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 10px;
+  }
+
+  .ai-avatar img {
+    width: 16px;
+    height: 16px;
+  }
+
+  .msg-col {
+    width: calc(100% - 32px);
+  }
+
+  .msg-bubble {
+    padding: 10px 11px;
+    font-size: 13px;
+    border-radius: var(--radius-sm, 6px);
+  }
+
+  .demo-replay-banner {
+    font-size: 10.5px;
+    padding: 3px 6px;
+    margin-bottom: 6px;
+  }
+
+  .demo-custom-input-tag {
+    font-size: 10px;
+    padding: 1px 4px;
+    margin-bottom: 4px;
+  }
+
+  .demo-action-btn {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .preset-pill-btn {
+    padding: 2px 6px;
+    font-size: 10.5px;
+  }
+}
 </style>

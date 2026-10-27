@@ -282,4 +282,97 @@ const stageClass = computed(() => {
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
+
+/* ─── 小屏幕与移动端响应式适配 ─── */
+@media (max-width: 768px) {
+  .demo-controls-bar {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .controls-left {
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .demo-badge {
+    padding: 3px 8px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .badge-sub {
+    display: none;
+  }
+
+  .scenario-selector {
+    min-width: 0;
+    flex: 1;
+    max-width: 160px;
+  }
+
+  .scenario-dropdown {
+    width: 100%;
+    font-size: 12px;
+    padding: 5px 22px 5px 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .stage-indicator {
+    display: none;
+  }
+
+  .controls-right {
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  .ctrl-btn {
+    padding: 5px 9px;
+    font-size: 11.5px;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .demo-controls-bar {
+    padding: 6px 8px;
+  }
+
+  .demo-badge .badge-icon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .scenario-selector {
+    max-width: 120px;
+  }
+
+  .scenario-dropdown {
+    font-size: 11px;
+    padding: 4px 18px 4px 6px;
+  }
+
+  .select-chevron {
+    right: 5px;
+    width: 12px;
+    height: 12px;
+  }
+
+  .btn-action span,
+  .btn-secondary span {
+    display: none;
+  }
+
+  .ctrl-btn {
+    padding: 5px 7px;
+  }
+
+  .btn-exit span {
+    font-size: 11px;
+  }
+}
 </style>

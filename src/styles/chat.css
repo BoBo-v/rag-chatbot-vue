@@ -4067,3 +4067,25 @@ datalist option {
     transform: translateX(3px);
     color: var(--accent, #7c3aed);
 }
+
+@media (max-width: 640px) {
+    .chat-shell .demo-entry-card {
+        padding: 10px 12px;
+        gap: 10px;
+        margin: 4px 0 12px 0;
+    }
+    .chat-shell .demo-entry-icon {
+        width: 30px;
+        height: 30px;
+    }
+    .chat-shell .demo-entry-title strong {
+        font-size: 13px;
+    }
+    .chat-shell .demo-entry-badge {
+        font-size: 10px;
+        padding: 1px 5px;
+    }
+    .chat-shell .demo-entry-desc {
+        font-size: 11px;
+    }
+}

@@ -267,4 +267,56 @@ function dismiss() {
   font-weight: 500;
   flex-shrink: 0;
 }
+
+/* ─── 小屏幕与移动端响应式适配 ─── */
+@media (max-width: 640px) {
+  .onboarding-checklist-card {
+    margin: 0 0 12px 0;
+  }
+
+  .checklist-header {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .checklist-title-row {
+    gap: 6px;
+  }
+
+  .checklist-title {
+    font-size: 12.5px;
+  }
+
+  .checklist-tag {
+    display: none;
+  }
+
+  .checklist-body {
+    padding: 6px 8px;
+    gap: 5px;
+  }
+
+  .checklist-item {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .item-icon-box {
+    width: 24px;
+    height: 24px;
+  }
+
+  .item-text strong {
+    font-size: 12px;
+  }
+
+  .item-text p {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .item-action-tag {
+    display: none;
+  }
+}
 </style>

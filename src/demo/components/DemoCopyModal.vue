@@ -156,4 +156,36 @@ watch(
 .btn-primary:hover {
   filter: brightness(1.1);
 }
+
+/* ─── 小屏幕与移动端响应式适配 ─── */
+@media (max-width: 480px) {
+  .demo-copy-modal-overlay {
+    padding: 10px;
+  }
+
+  .demo-copy-modal {
+    padding: 14px;
+    gap: 10px;
+    border-radius: var(--radius-md, 10px);
+  }
+
+  .demo-copy-header h3 {
+    font-size: 15px;
+  }
+
+  .demo-copy-tip {
+    font-size: 12px;
+  }
+
+  .demo-copy-textarea {
+    padding: 10px;
+    font-size: 12.5px;
+  }
+
+  .btn-primary {
+    width: 100%;
+    text-align: center;
+    padding: 9px;
+  }
+}
 </style>

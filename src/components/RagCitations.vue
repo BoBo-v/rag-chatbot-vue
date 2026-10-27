@@ -211,6 +211,7 @@ function previewText(text: string): string {
   align-items: center;
   gap: 8px;
   margin-bottom: 3px;
+  flex-wrap: wrap;
 }
 
 .decision-icon {
@@ -292,5 +293,25 @@ function previewText(text: string): string {
   font-weight: 600;
   color: var(--accent-text);
   background: var(--accent-bg);
+}
+
+/* ─── 小屏幕与移动端响应式适配 ─── */
+@media (max-width: 480px) {
+  .decision-head {
+    gap: 6px;
+  }
+
+  .decision-title {
+    font-size: 12px;
+  }
+
+  .decision-action-tag {
+    font-size: 10.5px;
+    padding: 1px 6px;
+  }
+
+  .rag-decision-banner {
+    padding: 7px 10px;
+  }
 }
 </style>

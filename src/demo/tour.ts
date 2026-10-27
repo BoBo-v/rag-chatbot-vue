@@ -93,3 +93,16 @@ export function destroyTour(): void {
     activeDriver = null
   }
 }
+
+// ── 开发与调试辅助（暴露全局对象，方便控制台随时调用） ─────────────────
+if (typeof window !== 'undefined') {
+  ;(window as any).__demo = {
+    ...((window as any).__demo || {}),
+    startTour: () => startFeatureTour(true),
+    resetTour: () => {
+      localStorage.removeItem(TOUR_STORAGE_KEY)
+      localStorage.removeItem('ai_chat_checklist_dismissed')
+      console.log('✅ [Demo] 引导与新手清单状态已重置，刷新页面即可模拟新用户重新触发导览！')
+    },
+  }
+}

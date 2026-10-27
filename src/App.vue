@@ -38,6 +38,15 @@ function handleExitDemo() {
   isDemoActive.value = false
 }
 
+// ── 开发与调试辅助 ────────────────────────────────────
+if (typeof window !== 'undefined') {
+  ;(window as any).__demo = {
+    ...((window as any).__demo || {}),
+    openSandbox: () => handleOpenDemo(),
+    exitSandbox: () => handleExitDemo(),
+  }
+}
+
 function handleSwitchMode(targetMode: string) {
   if (['chat', 'agent', 'compare', 'knowledge'].includes(targetMode)) {
     mode.value = targetMode as AppMode

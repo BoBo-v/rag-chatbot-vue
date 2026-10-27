@@ -88,7 +88,7 @@ watch(() => settings.theme, applyTheme)
         <img src="/favicon.svg" alt="技术支持工单辅助决策台" />
       </div>
 
-      <nav class="rail-navigation" aria-label="工作区">
+      <nav class="rail-navigation" aria-label="工作区" data-tour="rail-nav">
         <button
           v-for="item in modes"
           :key="item.value"

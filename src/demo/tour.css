@@ -1,0 +1,70 @@
+.driver-popover {
+  background-color: var(--color-bg-card, #171622) !important;
+  color: var(--color-text, #f0eef8) !important;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.15)) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45) !important;
+  padding: 18px !important;
+  max-width: 360px !important;
+}
+
+.driver-popover-title {
+  color: var(--color-text, #f0eef8) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  margin-bottom: 6px !important;
+}
+
+.driver-popover-description {
+  color: var(--color-text-subtle, #a09cb4) !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+
+.driver-popover-progress-text {
+  color: var(--color-text-subtle, #827e99) !important;
+  font-size: 11px !important;
+}
+
+.driver-popover-next-btn,
+.driver-popover-prev-btn,
+.driver-popover-close-btn {
+  border-radius: 6px !important;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  text-shadow: none !important;
+}
+
+.driver-popover-next-btn {
+  background-color: var(--color-primary, #6366f1) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+.driver-popover-next-btn:hover {
+  filter: brightness(1.1) !important;
+}
+
+.driver-popover-prev-btn {
+  background-color: transparent !important;
+  color: var(--color-text-subtle, #a09cb4) !important;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.15)) !important;
+}
+
+.driver-popover-prev-btn:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.driver-popover-arrow-side-left.driver-popover-arrow {
+  border-left-color: var(--color-bg-card, #171622) !important;
+}
+.driver-popover-arrow-side-right.driver-popover-arrow {
+  border-right-color: var(--color-bg-card, #171622) !important;
+}
+.driver-popover-arrow-side-top.driver-popover-arrow {
+  border-top-color: var(--color-bg-card, #171622) !important;
+}
+.driver-popover-arrow-side-bottom.driver-popover-arrow {
+  border-bottom-color: var(--color-bg-card, #171622) !important;
+}

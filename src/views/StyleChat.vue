@@ -182,7 +182,7 @@
             <img class="logo-mark" src="/favicon.svg" alt="" aria-hidden="true" />
             <span class="logo-text">技术支持工单决策台</span>
             <!-- 顶栏快速切换模型下拉 -->
-            <div v-if="currentSettings.showModelInTopbar" class="topbar-model-wrapper">
+            <div v-if="currentSettings.showModelInTopbar" class="topbar-model-wrapper" data-tour="topbar-model">
               <button
                 type="button"
                 class="topbar-model-btn"
@@ -263,7 +263,7 @@
             <p class="empty-desc">选择预设工单用例或直接粘贴客户报障信息进行检索诊断与草稿生成</p>
 
             <!-- 演示沙盒专属体验卡片 -->
-            <div class="demo-entry-card" role="button" tabindex="0" @click="handleOpenDemo" @keydown.enter="handleOpenDemo">
+            <div class="demo-entry-card" role="button" tabindex="0" data-tour="demo-card" @click="handleOpenDemo" @keydown.enter="handleOpenDemo">
               <div class="demo-entry-icon">
                 <Sparkles :size="18" aria-hidden="true" />
               </div>
@@ -276,7 +276,13 @@
               </div>
               <ChevronRight :size="18" class="demo-entry-arrow" aria-hidden="true" />
             </div>
-            <div class="empty-suggestions">
+            <!-- 新手起步任务清单 -->
+            <OnboardingChecklist
+              @open-demo="handleOpenDemo"
+              @open-settings="settingsOpen = true"
+            />
+
+            <div class="empty-suggestions" data-tour="empty-suggestions">
               <button
                 v-for="s in suggestionPrompts"
                 :key="s.title"
@@ -743,6 +749,8 @@ import type { BackendProviderId, DirectProviderId, ModelTransport } from '../typ
 import { resolveActiveConnection, getDefaultBackendProviderName, getValidBackendModels } from '../services/activeConnection'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import RagCitations from '../components/RagCitations.vue'
+import OnboardingChecklist from '../demo/components/OnboardingChecklist.vue'
+import { startFeatureTour, destroyTour } from '../demo/tour'
 import { useAuthStore } from '../stores/auth'
 import { resolveTargetBaseUrl } from '../services/api'
 
@@ -1207,6 +1215,7 @@ function handleAdoptAndCopyDraft(id: string, content: string) {
       toast.show('已采纳草稿并复制回复内容', 'success')
     }
     if (copyTimer) clearTimeout(copyTimer)
+  destroyTour()
     copyTimer = setTimeout(() => {
       copiedMsgId.value = null
     }, 2000)
@@ -1338,12 +1347,16 @@ onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('click', handleClickOutside)
   void loadBackendProviders()
+  setTimeout(() => {
+    startFeatureTour()
+  }, 800)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
   window.removeEventListener('click', handleClickOutside)
   if (copyTimer) clearTimeout(copyTimer)
+  destroyTour()
 })
 
 // ── 上传相关 ──────────────────────────────────────

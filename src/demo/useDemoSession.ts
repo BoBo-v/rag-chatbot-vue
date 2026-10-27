@@ -50,40 +50,46 @@ export function useDemoSession() {
     userMsg.content = promptText
     messages.value = [userMsg]
 
-    // 2. 占位 Loading
-    const assistantMsg = createDemoAssistantMessage(scenario, 'loading', '')
-    messages.value.push(assistantMsg)
+    // 2. 占位 Loading（放入 messages 数组后取响应式 Proxy，确保打字机更新触发 Vue 视图重绘）
+    messages.value.push(createDemoAssistantMessage(scenario, 'loading', ''))
+    const assistantProxy = messages.value[1]
 
     // 3. 模拟 RAG 检索中状态 (等待 500ms)
     stage.value = 'simulating_rag'
     activeRagContext.value = createDemoRagContext(scenario, 'retrieving')
-    assistantMsg.ragContext = activeRagContext.value
+    if (assistantProxy) assistantProxy.ragContext = activeRagContext.value
 
     const ragDelayOk = await controller.delay(500, seq)
     if (!ragDelayOk) return
 
     // 4. 检索命中并呈现依据
     activeRagContext.value = createDemoRagContext(scenario, 'hit')
-    assistantMsg.ragContext = activeRagContext.value
+    if (assistantProxy) assistantProxy.ragContext = activeRagContext.value
 
     // 5. 流式输出分析区与回复草稿
     const fullContent = buildFullAssistantContent(scenario)
     stage.value = 'streaming_analysis'
-    assistantMsg.status = 'streaming'
-    assistantMsg.content = ''
+    if (assistantProxy) {
+      assistantProxy.status = 'streaming'
+      assistantProxy.content = ''
+    }
 
     const streamOk = await controller.streamText(
       fullContent,
       seq,
       (chunk) => {
-        assistantMsg.content = chunk
+        if (assistantProxy) {
+          assistantProxy.content = chunk
+        }
       },
       { minChunkSize: 1, maxChunkSize: 3, intervalMs: 16, punctuationPauses: true }
     )
 
     if (!streamOk) return
 
-    assistantMsg.status = 'done'
+    if (assistantProxy) {
+      assistantProxy.status = 'done'
+    }
     editedDraft.value = scenario.customerReplyDraft
     stage.value = 'completed'
   }

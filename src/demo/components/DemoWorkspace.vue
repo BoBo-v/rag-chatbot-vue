@@ -171,48 +171,75 @@
       </div>
     </div>
 
-    <!-- 底部工单输入与发送操作台 -->
-    <footer class="demo-input-bar">
-      <div class="input-bar-inner">
-        <!-- 案例快捷切换标签 -->
-        <div class="preset-chips-strip">
-          <span class="chips-label">切换用例：</span>
-          <button
-            v-for="item in allScenarios"
-            :key="item.id"
-            type="button"
-            class="scenario-chip"
-            :class="{ active: currentScenarioId === item.id }"
-            @click="handleSwitch(item.id, true)"
-          >
-            {{ item.title }}
-          </button>
-        </div>
+    <!-- 底部工单工作台输入区（对齐真实工单工作台交互与风格） -->
+    <footer class="demo-input-area">
+      <div class="demo-input-box">
+        <textarea
+          ref="textareaRef"
+          v-model="inputPrompt"
+          class="demo-input-field"
+          rows="2"
+          :placeholder="isGenerating ? '正在模拟检索排障与推演草稿中，可点击右侧停止...' : '描述客户报障现象、报错日志、复现步骤或贴入工单 (按 Enter 发送，Shift+Enter 换行)...'"
+          :disabled="isGenerating"
+          @keydown="handleKeyDown"
+        ></textarea>
 
-        <!-- 文本框与模拟发送按钮 -->
-        <div class="input-box-row">
-          <textarea
-            v-model="inputPrompt"
-            class="demo-textarea"
-            rows="3"
-            placeholder="您可在此修改或查看报障内容，点击右侧按钮模拟发送..."
-            :disabled="isGenerating"
-            @keydown.ctrl.enter="handleSend"
-          ></textarea>
+        <div class="demo-input-toolbar">
+          <div class="demo-toolbar-left">
+            <span class="preset-tag-label">切换用例：</span>
+            <div class="preset-pills-row">
+              <button
+                v-for="item in allScenarios"
+                :key="item.id"
+                type="button"
+                class="preset-pill-btn"
+                :class="{ active: currentScenarioId === item.id }"
+                :disabled="isGenerating"
+                :title="item.summary"
+                @click="handleSwitch(item.id, true)"
+              >
+                {{ item.title }}
+              </button>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            class="demo-send-btn"
-            :class="{ 'is-busy': isGenerating }"
-            :disabled="isGenerating || !inputPrompt.trim()"
-            title="模拟发送当前工单，触发 AI 检索与流式回答"
-            @click="handleSend"
-          >
-            <div v-if="isGenerating" class="send-spinner"></div>
-            <Send v-else :size="16" aria-hidden="true" />
-            <span>{{ isGenerating ? '推演生成中...' : '模拟发送工单' }}</span>
-          </button>
+          <div class="demo-toolbar-right">
+            <!-- 推演生成中：停止生成按钮（对齐真实环境 stop-btn） -->
+            <button
+              v-if="isGenerating"
+              type="button"
+              class="demo-stop-btn"
+              title="停止当前推演（跳过并直接呈现结果）"
+              aria-label="停止推演"
+              @click="skipToFinish"
+            >
+              <Square :size="15" :fill="'currentColor'" aria-hidden="true" />
+            </button>
+
+            <!-- 待发送状态：圆形发送按钮（对齐真实环境 send-btn） -->
+            <button
+              v-else
+              type="button"
+              class="demo-send-btn"
+              :class="{ ready: inputPrompt.trim().length > 0 }"
+              :disabled="!inputPrompt.trim()"
+              title="模拟发送当前工单 (Enter)"
+              aria-label="模拟发送工单"
+              @click="handleSend"
+            >
+              <Send :size="17" aria-hidden="true" />
+            </button>
+          </div>
         </div>
+      </div>
+
+      <div class="demo-input-hint">
+        <template v-if="isGenerating">
+          正在知识库切片检索与两段式排障推演 · 可点击右侧红色方块立即呈现完整结果
+        </template>
+        <template v-else>
+          <span class="hint-key">Enter</span> 模拟发送工单 · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 离线沙盒推演，不污染正式数据库
+        </template>
       </div>
     </footer>
 
@@ -231,6 +258,7 @@ import {
   Headphones,
   Send,
   Sparkles,
+  Square,
 } from 'lucide-vue-next'
 import DemoControls from './DemoControls.vue'
 import DemoCopyModal from './DemoCopyModal.vue'
@@ -283,6 +311,18 @@ function handleSend() {
   if (isGenerating.value) return
   clearSnapshots()
   void startPlayback(inputPrompt.value)
+}
+
+function handleKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Enter') {
+    if (e.shiftKey) {
+      // Shift + Enter 换行
+      return
+    }
+    // Enter 或 Ctrl+Enter 提交模拟工单
+    e.preventDefault()
+    handleSend()
+  }
 }
 
 function handleSwitch(id: any, autoSend: boolean) {
@@ -503,14 +543,14 @@ watch(isEvidenceExpanded, (expanded) => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: calc(100% - 46px);
-}
-
-.msg-row.user .msg-col {
-  align-items: flex-end;
+  flex: 1;
+  min-width: 0;
+  width: calc(100% - 46px);
 }
 
 .msg-bubble {
+  width: 100%;
+  box-sizing: border-box;
   border-radius: var(--radius-md, 8px);
   padding: 14px 18px;
   font-size: 14px;
@@ -703,36 +743,86 @@ watch(isEvidenceExpanded, (expanded) => {
   border: 1px solid var(--success-border, rgba(5, 150, 105, 0.28));
 }
 
-/* 底部交互输入台 */
-.demo-input-bar {
-  background: var(--bg-surface, #ffffff);
+/* ─── 底部工单工作台输入区（对齐真实工单工作台风格） ─── */
+.demo-input-area {
+  padding: 12px 20px 16px;
+  background: var(--bg-topbar, var(--bg-surface));
+  backdrop-filter: blur(16px);
   border-top: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
-  padding: 12px 20px;
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
 }
 
-.input-bar-inner {
-  max-width: 860px;
-  margin: 0 auto;
+.demo-input-box {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  background: var(--bg-input, var(--bg-surface));
+  border: 1px solid var(--accent-border, rgba(167, 139, 250, 0.35));
+  border-radius: var(--radius-md, 12px);
+  padding: 12px 16px 10px;
+  max-width: 860px;
+  margin: 0 auto;
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.04));
+  transition: border-color var(--motion-fast, 140ms) ease, box-shadow var(--motion-fast, 140ms) ease;
 }
 
-.preset-chips-strip {
+.demo-input-box:focus-within {
+  border-color: var(--accent, #7c3aed);
+  box-shadow: var(--focus-ring, 0 0 0 3px rgba(124, 58, 237, 0.2)), var(--shadow-accent, 0 0 18px rgba(124, 58, 237, 0.1));
+}
+
+.demo-input-field {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary, #1e192b);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  padding: 0 0 8px;
+  caret-color: var(--accent, #7c3aed);
+  resize: none; /* 彻底去除多余浏览器拖拽角标手柄 */
+  line-height: 1.6;
+  min-height: 48px;
+  max-height: 140px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.demo-input-field::placeholder {
+  color: var(--text-placeholder, var(--text-muted));
+  font-style: normal;
+}
+
+.demo-input-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.08));
+}
+
+.demo-toolbar-left {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.chips-label {
+.preset-tag-label {
   font-size: 12px;
   color: var(--text-muted, #7d7291);
 }
 
-.scenario-chip {
-  padding: 3px 9px;
+.preset-pills-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.preset-pill-btn {
+  padding: 3px 10px;
   border-radius: var(--radius-pill, 999px);
   background: var(--bg-surface-2, #f0ecf7);
   border: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
@@ -742,77 +832,106 @@ watch(isEvidenceExpanded, (expanded) => {
   transition: all var(--motion-fast, 140ms) ease;
 }
 
-.scenario-chip.active,
-.scenario-chip:hover {
+.preset-pill-btn:hover:not(:disabled) {
   background: var(--accent-bg, rgba(124, 58, 237, 0.15));
   border-color: var(--accent-border, rgba(124, 58, 237, 0.35));
   color: var(--accent-text, #7c3aed);
 }
 
-.input-box-row {
-  display: flex;
-  gap: 10px;
-  align-items: flex-end;
-}
-
-.demo-textarea {
-  flex: 1;
-  background: var(--bg-input, #ffffff);
-  border: 1px solid var(--border, rgba(124, 58, 237, 0.2));
-  border-radius: var(--radius-md, 8px);
-  color: var(--text-primary, #1e192b);
-  padding: 10px 14px;
-  font-size: 13.5px;
-  line-height: 1.55;
-  resize: vertical;
-  box-sizing: border-box;
-  font-family: var(--font-sans);
-}
-
-.demo-textarea:focus {
-  outline: none;
+.preset-pill-btn.active {
+  background: var(--accent-bg, rgba(124, 58, 237, 0.18));
   border-color: var(--accent, #7c3aed);
-  box-shadow: var(--focus-ring, 0 0 0 3px rgba(124, 58, 237, 0.2));
+  color: var(--accent-text, #7c3aed);
+  font-weight: 600;
 }
 
-.demo-textarea:disabled {
-  opacity: 0.7;
+.preset-pill-btn:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
+.demo-toolbar-right {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* 圆形模拟发送按钮（对齐真实环境 send-btn） */
 .demo-send-btn {
-  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-surface-2, #f0ecf7);
+  color: var(--text-muted, #7d7291);
+  cursor: pointer;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
-  height: 44px;
-  border-radius: var(--radius-sm, 6px);
-  background: var(--accent, #7c3aed);
-  color: #ffffff;
-  border: none;
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
   flex-shrink: 0;
   transition: all var(--motion-fast, 140ms) ease;
 }
 
-.demo-send-btn:hover:not(:disabled) {
-  filter: brightness(1.1);
+.demo-send-btn.ready {
+  background: linear-gradient(135deg, var(--accent-deep, #7c3aed), var(--accent-deeper, #6d28d9));
+  color: #ffffff;
+  box-shadow: 0 0 16px var(--accent-glow, rgba(124, 58, 237, 0.35));
 }
 
-.demo-send-btn:disabled {
-  opacity: 0.55;
+.demo-send-btn.ready:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 24px var(--accent-glow, rgba(124, 58, 237, 0.5));
+}
+
+.demo-send-btn:disabled:not(.ready) {
   cursor: not-allowed;
+  opacity: 0.5;
 }
 
-.send-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #ffffff;
+/* 圆形停止生成按钮（对齐真实环境 stop-btn） */
+.demo-stop-btn {
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger, #ef4444);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--motion-fast, 140ms) ease;
+  animation: stop-btn-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.demo-stop-btn:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(248, 113, 113, 0.7);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.35);
+  transform: scale(1.06);
+}
+
+@keyframes stop-btn-in {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.demo-input-hint {
+  font-size: 11.5px;
+  color: var(--text-muted, #7d7291);
+  text-align: center;
+  margin-top: 8px;
+}
+
+.hint-key {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-surface-2, #f0ecf7);
+  border: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary, #574e69);
 }
 </style>

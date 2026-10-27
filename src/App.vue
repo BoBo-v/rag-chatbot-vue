@@ -37,6 +37,13 @@ function handleOpenDemo() {
 function handleExitDemo() {
   isDemoActive.value = false
 }
+
+function handleSwitchMode(targetMode: string) {
+  if (['chat', 'agent', 'compare', 'knowledge'].includes(targetMode)) {
+    mode.value = targetMode as AppMode
+    isDemoActive.value = false
+  }
+}
 const modes: { value: AppMode; label: string; icon: Component }[] = [
   { value: 'chat', label: '工单决策', icon: MessageSquare },
   { value: 'agent', label: '排障 Agent', icon: Bot },
@@ -149,7 +156,7 @@ watch(() => settings.theme, applyTheme)
         <DemoWorkspace @exit="handleExitDemo" />
       </section>
       <section v-show="!isDemoActive && mode === 'chat'" class="mode-page" aria-label="工单决策工作区">
-        <StyleChat @open-demo="handleOpenDemo" />
+        <StyleChat @open-demo="handleOpenDemo" @switch-mode="handleSwitchMode" />
       </section>
       <section v-if="!isDemoActive && mode === 'agent'" class="mode-page" aria-label="排障 Agent 工作区">
         <AgentWorkspace />

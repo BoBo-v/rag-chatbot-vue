@@ -280,6 +280,7 @@
             <OnboardingChecklist
               @open-demo="handleOpenDemo"
               @open-settings="settingsOpen = true"
+              @switch-mode="emit('switch-mode', $event)"
             />
 
             <div class="empty-suggestions" data-tour="empty-suggestions">
@@ -759,6 +760,7 @@ import { resolveTargetBaseUrl } from '../services/api'
 
 const emit = defineEmits<{
   (e: 'open-demo'): void
+  (e: 'switch-mode', mode: string): void
 }>()
 
 function handleOpenDemo() {

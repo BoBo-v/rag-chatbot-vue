@@ -17,7 +17,8 @@ export class DemoPlaybackController {
   private currentRafId: number | null = null
   private currentTimer: ReturnType<typeof setTimeout> | null = null
   private isPaused = false
-  private pausedResumeCallback: (() => void) | null = null
+  private pausedResumeCallback: ((resumed: boolean) => void) | null = null
+  private activeWaitResolver: ((resolved: boolean) => void) | null = null
 
   /**
    * 生成新的有效运行序列号，同时废弃所有历史异步帧与定时器
@@ -32,12 +33,11 @@ export class DemoPlaybackController {
   }
 
   /**
-   * 立即作废当前所有动画帧与延迟任务
+   * 立即作废当前所有动画帧与延迟任务，并唤醒所有等待中的 Promise 避免永久 pending
    */
   public cancel(): void {
     this.activeSequence += 1
     this.isPaused = false
-    this.pausedResumeCallback = null
 
     if (this.currentRafId !== null) {
       if (typeof cancelAnimationFrame === 'function') {
@@ -50,10 +50,22 @@ export class DemoPlaybackController {
       clearTimeout(this.currentTimer)
       this.currentTimer = null
     }
+
+    if (this.activeWaitResolver !== null) {
+      const resolver = this.activeWaitResolver
+      this.activeWaitResolver = null
+      resolver(false)
+    }
+
+    if (this.pausedResumeCallback !== null) {
+      const resumeCb = this.pausedResumeCallback
+      this.pausedResumeCallback = null
+      resumeCb(false)
+    }
   }
 
   /**
-   * 模拟延迟（如检索知识库过程）
+   * 模拟延迟（如检索知识库过程），支持在等待期间被 cancel 立即返回 false
    */
   public delay(ms: number, sequence: number): Promise<boolean> {
     return new Promise((resolve) => {
@@ -62,13 +74,21 @@ export class DemoPlaybackController {
         return
       }
 
-      this.currentTimer = setTimeout(() => {
-        this.currentTimer = null
-        if (sequence === this.activeSequence && !this.isPaused) {
-          resolve(true)
-        } else {
-          resolve(false)
+      const onDone = (success: boolean) => {
+        if (this.currentTimer !== null) {
+          clearTimeout(this.currentTimer)
+          this.currentTimer = null
         }
+        if (this.activeWaitResolver === onDone) {
+          this.activeWaitResolver = null
+        }
+        resolve(success)
+      }
+
+      this.activeWaitResolver = onDone
+
+      this.currentTimer = setTimeout(() => {
+        onDone(sequence === this.activeSequence && !this.isPaused)
       }, ms)
     })
   }
@@ -96,10 +116,13 @@ export class DemoPlaybackController {
       }
 
       if (this.isPaused) {
-        await new Promise<void>((resolve) => {
-          this.pausedResumeCallback = resolve
+        const resumeOk = await new Promise<boolean>((resolve) => {
+          this.pausedResumeCallback = (resumed: boolean) => {
+            this.pausedResumeCallback = null
+            resolve(resumed)
+          }
         })
-        if (sequence !== this.activeSequence) {
+        if (!resumeOk || sequence !== this.activeSequence) {
           return false
         }
       }
@@ -156,12 +179,28 @@ export class DemoPlaybackController {
         }
       }
 
-      await new Promise<void>((resolve) => {
+      const waitOk = await new Promise<boolean>((resolve) => {
+        const onDone = (success: boolean) => {
+          if (this.currentTimer !== null) {
+            clearTimeout(this.currentTimer)
+            this.currentTimer = null
+          }
+          if (this.activeWaitResolver === onDone) {
+            this.activeWaitResolver = null
+          }
+          resolve(success)
+        }
+
+        this.activeWaitResolver = onDone
+
         this.currentTimer = setTimeout(() => {
-          this.currentTimer = null
-          resolve()
+          onDone(sequence === this.activeSequence && !this.isPaused)
         }, delay)
       })
+
+      if (!waitOk || sequence !== this.activeSequence) {
+        return false
+      }
     }
 
     return sequence === this.activeSequence
@@ -177,7 +216,7 @@ export class DemoPlaybackController {
       if (this.pausedResumeCallback) {
         const cb = this.pausedResumeCallback
         this.pausedResumeCallback = null
-        cb()
+        cb(true)
       }
     }
   }

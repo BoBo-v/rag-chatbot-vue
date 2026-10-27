@@ -110,6 +110,36 @@ const cancelPromise = controller.streamText(
 const cancelResult = await cancelPromise
 assert.equal(cancelResult, false, '被中途 cancel 的流式任务必须返回 false')
 assert.ok(abortedChunks.length < 26, '被中断的任务不应继续输出全量字符')
-console.log('   ✓ 播放调度器取消、防竞态与文本截断验证通过')
+
+// 测试 4: delay 等待期间主动 cancel() 必须立即结束 Promise (返回 false)，绝不永久 pending
+const delaySeq = controller.nextSequence()
+const delayStart = Date.now()
+const activeDelayPromise = controller.delay(3000, delaySeq)
+// 15ms 后主动取消
+setTimeout(() => {
+  controller.cancel()
+}, 15)
+const delayCancelledResult = await activeDelayPromise
+const delayElapsed = Date.now() - delayStart
+assert.equal(delayCancelledResult, false, '等待期间取消的 delay 任务必须返回 false')
+assert.ok(delayElapsed < 500, `delay 必须在取消后立即 resolve，实际耗时 ${delayElapsed}ms`)
+
+// 测试 5: pause 等待期间主动 cancel() 必须立即结束 Promise (返回 false)
+const pauseSeq = controller.nextSequence()
+const pauseStreamPromise = controller.streamText(
+  'PausedStreamTask',
+  pauseSeq,
+  () => {
+    controller.pause()
+  },
+  { minChunkSize: 2, maxChunkSize: 3, intervalMs: 10 }
+)
+setTimeout(() => {
+  controller.cancel()
+}, 20)
+const pauseResult = await pauseStreamPromise
+assert.equal(pauseResult, false, '暂停中取消的任务必须立即结束并返回 false')
+
+console.log('   ✓ 播放调度器取消、等待期间截断、暂停唤醒与防竞态验证通过')
 
 console.log('--- ✅ 演示沙盒全套核心回归测试 100% 通过！ ---')

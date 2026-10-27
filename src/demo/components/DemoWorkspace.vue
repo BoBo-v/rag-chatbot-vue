@@ -79,6 +79,23 @@
                   },
                 ]"
               >
+                <!-- 用户自定义报障标记 -->
+                <div
+                  v-if="msg.role === 'user' && msg.content.trim() !== currentScenario.ticketMarkdown.trim()"
+                  class="demo-custom-input-tag"
+                >
+                  自定义输入 · 仅展示
+                </div>
+
+                <!-- 演示推演声明横幅 -->
+                <div
+                  v-if="msg.role === 'assistant' && msg.status !== 'loading'"
+                  class="demo-replay-banner"
+                >
+                  <Sparkles :size="12" aria-hidden="true" />
+                  <span>离线沙盒推演 · 回放【{{ currentScenario.title }}】标准依据与草稿</span>
+                </div>
+
                 <!-- 加载中指示器（跳动三点与阶段状态） -->
                 <div v-if="msg.status === 'loading'" class="loading-state-row">
                   <div class="thinking-dots"><span></span><span></span><span></span></div>
@@ -94,13 +111,15 @@
                 ></div>
               </div>
 
-              <!-- RAG 引用文档展示组件 -->
+              <!-- RAG 引用文档展示组件（通过双向绑定控制 details 展开收起，无需脆弱的 DOM 查询） -->
               <div
                 v-if="msg.role === 'assistant' && msg.ragContext"
-                ref="citationsWrapperRef"
                 class="demo-citations-wrapper"
               >
-                <RagCitations :context="msg.ragContext" />
+                <RagCitations
+                  v-model:open="isEvidenceExpanded"
+                  :context="msg.ragContext"
+                />
               </div>
 
               <!-- 消息快捷操作栏（模拟完整工单闭环动作） -->
@@ -173,6 +192,21 @@
 
     <!-- 底部工单工作台输入区（对齐真实工单工作台交互与风格） -->
     <footer class="demo-input-area">
+      <!-- 自定义报障输入提示栏 -->
+      <div v-if="isCustomPrompt" class="custom-prompt-alert">
+        <span class="custom-prompt-text">
+          ⚠️ 当前已修改报障文本：离线沙盒仅回放【{{ currentScenario.title }}】预置依据与标准草稿，不随输入内容改变判定。
+        </span>
+        <button
+          type="button"
+          class="custom-prompt-reset-btn"
+          title="恢复当前案例的标准报障内容"
+          @click="resetToPresetPrompt"
+        >
+          恢复用例预设
+        </button>
+      </div>
+
       <div class="demo-input-box">
         <textarea
           ref="textareaRef"
@@ -181,6 +215,8 @@
           rows="2"
           :placeholder="isGenerating ? '正在模拟检索排障与推演草稿中，可点击右侧停止...' : '描述客户报障现象、报错日志、复现步骤或贴入工单 (按 Enter 发送，Shift+Enter 换行)...'"
           :disabled="isGenerating"
+          @compositionstart="handleCompositionStart"
+          @compositionend="handleCompositionEnd"
           @keydown="handleKeyDown"
         ></textarea>
 
@@ -270,9 +306,19 @@ defineEmits<{
   (e: 'exit'): void
 }>()
 
-const citationsWrapperRef = ref<HTMLElement | null>(null)
 const chatFeedRef = ref<HTMLElement | null>(null)
 let userAtBottom = true
+const isComposing = ref(false)
+
+function handleCompositionStart() {
+  isComposing.value = true
+}
+
+function handleCompositionEnd() {
+  setTimeout(() => {
+    isComposing.value = false
+  }, 30)
+}
 
 const {
   renderContent,
@@ -282,6 +328,7 @@ const {
 
 const {
   currentScenarioId,
+  currentScenario,
   allScenarios,
   inputPrompt,
   stage,
@@ -289,6 +336,8 @@ const {
   isEvidenceExpanded,
   isEscalated,
   isConfirmed,
+  isCustomPrompt,
+  resetToPresetPrompt,
   copiedField,
   copyFailedDraft,
   startPlayback,
@@ -315,6 +364,9 @@ function handleSend() {
 
 function handleKeyDown(e: KeyboardEvent) {
   if (e.key === 'Enter') {
+    if (e.isComposing || isComposing.value || e.keyCode === 229) {
+      return
+    }
     if (e.shiftKey) {
       // Shift + Enter 换行
       return
@@ -367,14 +419,7 @@ watch(
   { deep: true }
 )
 
-watch(isEvidenceExpanded, (expanded) => {
-  if (expanded && citationsWrapperRef.value) {
-    const details = citationsWrapperRef.value.querySelector('details')
-    if (details) {
-      details.open = true
-    }
-  }
-})
+
 </script>
 
 <style scoped>
@@ -741,6 +786,82 @@ watch(isEvidenceExpanded, (expanded) => {
   background: var(--success-bg, rgba(5, 150, 105, 0.12));
   color: var(--success, #059669);
   border: 1px solid var(--success-border, rgba(5, 150, 105, 0.28));
+}
+
+.demo-replay-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--accent-text, #7c3aed);
+  background: var(--accent-bg, rgba(124, 58, 237, 0.08));
+  border: 1px solid var(--accent-border, rgba(124, 58, 237, 0.2));
+  border-radius: var(--radius-sm, 6px);
+  padding: 4px 10px;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.demo-custom-input-tag {
+  display: inline-block;
+  font-size: 11px;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.custom-prompt-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  margin: 0 auto 10px;
+  max-width: 860px;
+  border-radius: var(--radius-md, 8px);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  font-size: 12px;
+  color: var(--text-primary);
+  animation: fadeIn 0.2s ease;
+}
+
+.custom-prompt-text {
+  color: #b45309;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+[data-theme='dark'] .custom-prompt-text {
+  color: #fbbf24;
+}
+
+.custom-prompt-reset-btn {
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: var(--bg-surface-1, #ffffff);
+  color: #b45309;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+[data-theme='dark'] .custom-prompt-reset-btn {
+  background: var(--bg-surface-2, #2d2640);
+  color: #fde68a;
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.custom-prompt-reset-btn:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #d97706;
 }
 
 /* ─── 底部工单工作台输入区（对齐真实工单工作台风格） ─── */

@@ -316,7 +316,7 @@
 
     <RagEvalPanel v-if="activeTab === 'eval'" />
 
-    <transition-group name="toast-slide" tag="div" class="toast-container">
+    <transition-group v-if="false" name="toast-slide" tag="div" class="toast-container">
       <div
         v-for="t in toast.toasts.value"
           :key="t.id"

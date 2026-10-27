@@ -27,6 +27,14 @@ export function startFeatureTour(force = false): void {
     return
   }
 
+  // 检查目标节点是否存在且可见（若用户已进入演示沙盒或切走则不启动导览，避免遮罩错位）
+  if (typeof document !== 'undefined') {
+    const demoCard = document.querySelector('[data-tour="demo-card"]') as HTMLElement | null
+    if (!demoCard || demoCard.offsetParent === null) {
+      return
+    }
+  }
+
   if (activeDriver) {
     activeDriver.destroy()
     activeDriver = null

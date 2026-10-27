@@ -669,8 +669,8 @@ v-for="(img, idx) in msg.images" :key="idx"
 
     </div><!-- /main-content -->
 
-    <!-- ── Toast 通知 ── -->
-    <transition-group name="toast-slide" tag="div" class="toast-container">
+    <!-- toast container moved to App.vue -->
+    <transition-group v-if="false" name="toast-slide" tag="div" class="toast-container">
       <div
           v-for="t in toast.toasts.value"
           :key="t.id"
@@ -763,11 +763,18 @@ const emit = defineEmits<{
   (e: 'switch-mode', mode: string): void
 }>()
 
+let tourTimer: ReturnType<typeof setTimeout> | null = null
+
 function handleOpenDemo() {
   if (isStreaming.value) {
     toast.show('当前工单正在生成中，请先等待完成或停止生成，再进入演示沙盒', 'warning')
     return
   }
+  if (tourTimer) {
+    clearTimeout(tourTimer)
+    tourTimer = null
+  }
+  destroyTour()
   emit('open-demo')
 }
 
@@ -1217,7 +1224,7 @@ function handleAdoptAndCopyDraft(id: string, content: string) {
       toast.show('已采纳草稿并复制回复内容', 'success')
     }
     if (copyTimer) clearTimeout(copyTimer)
-  destroyTour()
+    destroyTour()
     copyTimer = setTimeout(() => {
       copiedMsgId.value = null
     }, 2000)
@@ -1349,7 +1356,8 @@ onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('click', handleClickOutside)
   void loadBackendProviders()
-  setTimeout(() => {
+  tourTimer = setTimeout(() => {
+    tourTimer = null
     startFeatureTour()
   }, 800)
 })
@@ -1358,7 +1366,12 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
   window.removeEventListener('click', handleClickOutside)
   if (copyTimer) clearTimeout(copyTimer)
+  if (tourTimer) {
+    clearTimeout(tourTimer)
+    tourTimer = null
+  }
   destroyTour()
+
 })
 
 // ── 上传相关 ──────────────────────────────────────

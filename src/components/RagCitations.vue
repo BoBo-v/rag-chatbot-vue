@@ -10,7 +10,7 @@
       <p class="decision-detail">{{ evidenceBadge.detail }}</p>
     </div>
 
-    <details class="rag-citations">
+    <details class="rag-citations" :open="props.open" @toggle="handleToggle">
       <summary class="rag-citations-summary">
         <ChevronRight class="rag-citations-chevron" :size="15" aria-hidden="true" />
         <Database :size="15" aria-hidden="true" />
@@ -56,9 +56,26 @@ import { computed, type Component } from 'vue'
 import { AlertTriangle, ChevronRight, Database, ShieldAlert, ShieldCheck } from 'lucide-vue-next'
 import type { RagContextInfo } from '../types/chat'
 
-const props = defineProps<{
-  context: RagContextInfo
+const props = withDefaults(
+  defineProps<{
+    context: RagContextInfo
+    open?: boolean
+  }>(),
+  {
+    open: undefined,
+  }
+)
+
+const emit = defineEmits<{
+  (e: 'update:open', value: boolean): void
 }>()
+
+function handleToggle(e: Event) {
+  const target = e.target as HTMLDetailsElement
+  if (target) {
+    emit('update:open', target.open)
+  }
+}
 
 const displayResults = computed(() =>
   props.context.enabled

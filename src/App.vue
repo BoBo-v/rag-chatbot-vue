@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
-import { Bot, Columns2, Database, MessageSquare, Settings2, LogOut, User } from 'lucide-vue-next'
+import {
+  Bot,
+  CircleAlert,
+  CircleCheck,
+  Columns2,
+  Database,
+  LogOut,
+  MessageSquare,
+  Settings2,
+  TriangleAlert,
+  User,
+} from 'lucide-vue-next'
 import StyleChat from './views/StyleChat.vue'
 import CompareChat from './views/CompareChat.vue'
 import KnowledgeBase from './views/KnowledgeBase.vue'
@@ -31,12 +42,22 @@ function handleOpenDemo() {
     toast.show('当前工单正在生成中，请先等待完成或停止生成，再进入演示沙盒', 'warning')
     return
   }
+  authStore.closeLoginModal()
   isDemoActive.value = true
 }
 
 function handleExitDemo() {
   isDemoActive.value = false
 }
+
+// 演示沙盒模式下拦截登录弹窗打扰，退出后恢复
+watch(
+  isDemoActive,
+  (active) => {
+    authStore.setLoginModalSuppressed(active)
+  },
+  { immediate: true }
+)
 
 // ── 开发与调试辅助 ────────────────────────────────────
 if (typeof window !== 'undefined') {
@@ -173,7 +194,7 @@ watch(() => settings.theme, applyTheme)
       <section v-show="!isDemoActive && mode === 'compare'" class="mode-page" aria-label="模型对比工作区">
         <CompareChat />
       </section>
-      <section v-show="!isDemoActive && mode === 'knowledge'" class="mode-page" aria-label="知识库与评测工作区">
+      <section v-if="!isDemoActive && mode === 'knowledge'" class="mode-page" aria-label="知识库与评测工作区">
         <KnowledgeBase />
       </section>
     </main>
@@ -201,6 +222,26 @@ watch(() => settings.theme, applyTheme)
     <LoginModal />
     <ChangePasswordModal />
     <WebPreviewModal />
+
+    <!-- 全局 Toast 容器：确保沙盒、工单、知识库等所有视图反馈均统一呈现 -->
+    <transition-group name="toast-slide" tag="div" class="toast-container">
+      <div
+        v-for="t in toast.toasts.value"
+        :key="t.id"
+        class="toast-item"
+        :class="t.type"
+        :role="t.type === 'error' ? 'alert' : 'status'"
+        aria-live="polite"
+        @click="toast.dismiss(t.id)"
+      >
+        <span class="toast-icon" aria-hidden="true">
+          <CircleAlert v-if="t.type === 'error'" :size="16" />
+          <TriangleAlert v-else-if="t.type === 'warning'" :size="16" />
+          <CircleCheck v-else :size="16" />
+        </span>
+        <span class="toast-msg">{{ t.message }}</span>
+      </div>
+    </transition-group>
   </div>
 </template>
 

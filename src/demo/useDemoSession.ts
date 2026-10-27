@@ -29,6 +29,14 @@ export function useDemoSession() {
   const copiedField = ref<'draft' | 'all' | null>(null)
   const copyFailedDraft = ref<string | null>(null)
 
+  const isCustomPrompt = computed(() => {
+    return inputPrompt.value.trim() !== currentScenario.value.ticketMarkdown.trim()
+  })
+
+  function resetToPresetPrompt(): void {
+    inputPrompt.value = currentScenario.value.ticketMarkdown
+  }
+
   let copyTimer: ReturnType<typeof setTimeout> | null = null
 
   async function startPlayback(customPrompt?: string): Promise<void> {
@@ -45,6 +53,14 @@ export function useDemoSession() {
     // 1. 用户提报工单（使用输入框现有内容或案例默认报障）
     const promptText = (customPrompt ?? inputPrompt.value).trim() || scenario.ticketMarkdown
     inputPrompt.value = promptText
+
+    if (promptText !== scenario.ticketMarkdown.trim()) {
+      toast.show(
+        `已发送自定义报障：离线沙盒基于【${scenario.title}】预置知识库依据与标准草稿进行模拟推演，不调用在线大模型`,
+        'warning',
+        5000
+      )
+    }
 
     const userMsg = createDemoUserMessage(scenario)
     userMsg.content = promptText
@@ -210,6 +226,8 @@ export function useDemoSession() {
     isEvidenceExpanded,
     isEscalated,
     isConfirmed,
+    isCustomPrompt,
+    resetToPresetPrompt,
     copiedField,
     copyFailedDraft,
     startPlayback,

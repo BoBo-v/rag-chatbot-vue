@@ -15,6 +15,7 @@ interface AuthState {
     isAuthModalVisible: boolean
     isChangePasswordModalVisible: boolean
     sessionVersion: number
+    isLoginModalSuppressed: boolean
 }
 
 const state = reactive<AuthState>({
@@ -25,6 +26,7 @@ const state = reactive<AuthState>({
     isAuthModalVisible: false,
     isChangePasswordModalVisible: false,
     sessionVersion: 1,
+    isLoginModalSuppressed: false,
 })
 
 let activeProbeSeq = 0
@@ -189,11 +191,19 @@ export function useAuthStore() {
     }
 
     function openLoginModal(): void {
+        if (state.isLoginModalSuppressed) return
         state.isAuthModalVisible = true
     }
 
     function closeLoginModal(): void {
         state.isAuthModalVisible = false
+    }
+
+    function setLoginModalSuppressed(suppressed: boolean): void {
+        state.isLoginModalSuppressed = suppressed
+        if (suppressed) {
+            state.isAuthModalVisible = false
+        }
     }
 
     function openChangePasswordModal(): void {
@@ -214,6 +224,7 @@ export function useAuthStore() {
         invalidateSession,
         openLoginModal,
         closeLoginModal,
+        setLoginModalSuppressed,
         openChangePasswordModal,
         closeChangePasswordModal,
     }

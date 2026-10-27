@@ -10,15 +10,33 @@ import SettingsPanel from './components/SettingsPanel.vue'
 import LoginModal from './components/LoginModal.vue'
 import ChangePasswordModal from './components/ChangePasswordModal.vue'
 import WebPreviewModal from './components/WebPreviewModal.vue'
+import DemoWorkspace from './demo/components/DemoWorkspace.vue'
 import { settings, type ThemeType } from './stores/settings'
 import { useAuthStore } from './stores/auth'
+import { useConversations } from './stores/conversations'
+import { useToast } from './composables/useToast'
 
 type AppMode = 'chat' | 'agent' | 'compare' | 'knowledge'
 
 const mode = ref<AppMode>('chat')
+const isDemoActive = ref(false)
 const settingsOpen = ref(false)
 const authStore = useAuthStore()
 const { isAuthenticated, user } = authStore
+const { generatingConvIds } = useConversations()
+const toast = useToast()
+
+function handleOpenDemo() {
+  if (generatingConvIds.value.size > 0) {
+    toast.show('当前工单正在生成中，请先等待完成或停止生成，再进入演示沙盒', 'warning')
+    return
+  }
+  isDemoActive.value = true
+}
+
+function handleExitDemo() {
+  isDemoActive.value = false
+}
 const modes: { value: AppMode; label: string; icon: Component }[] = [
   { value: 'chat', label: '工单决策', icon: MessageSquare },
   { value: 'agent', label: '排障 Agent', icon: Bot },
@@ -76,9 +94,9 @@ watch(() => settings.theme, applyTheme)
           :key="item.value"
           type="button"
           class="rail-button"
-          :class="{ active: mode === item.value }"
-          :aria-current="mode === item.value ? 'page' : undefined"
-          @click="mode = item.value"
+          :class="{ active: !isDemoActive && mode === item.value }"
+          :aria-current="!isDemoActive && mode === item.value ? 'page' : undefined"
+          @click="mode = item.value; isDemoActive = false"
         >
           <component :is="item.icon" :size="21" :stroke-width="1.7" aria-hidden="true" />
           <span>{{ item.label }}</span>
@@ -86,7 +104,12 @@ watch(() => settings.theme, applyTheme)
       </nav>
 
       <div class="rail-footer">
-        <span class="workspace-state" title="本地工作区已就绪" aria-label="本地工作区已就绪"></span>
+        <span
+          class="workspace-state"
+          :class="{ 'is-demo': isDemoActive }"
+          :title="isDemoActive ? '演示沙盒模式（离线仿真）' : '本地工作区已就绪'"
+          :aria-label="isDemoActive ? '演示沙盒模式' : '本地工作区已就绪'"
+        ></span>
         <button
           v-if="isAuthenticated"
           type="button"
@@ -122,16 +145,19 @@ watch(() => settings.theme, applyTheme)
     </aside>
 
     <main class="app-stage">
-      <section v-show="mode === 'chat'" class="mode-page" aria-label="工单决策工作区">
-        <StyleChat />
+      <section v-if="isDemoActive" class="mode-page demo-stage" aria-label="工单演示沙盒工作区">
+        <DemoWorkspace @exit="handleExitDemo" />
       </section>
-      <section v-if="mode === 'agent'" class="mode-page" aria-label="排障 Agent 工作区">
+      <section v-show="!isDemoActive && mode === 'chat'" class="mode-page" aria-label="工单决策工作区">
+        <StyleChat @open-demo="handleOpenDemo" />
+      </section>
+      <section v-if="!isDemoActive && mode === 'agent'" class="mode-page" aria-label="排障 Agent 工作区">
         <AgentWorkspace />
       </section>
-      <section v-show="mode === 'compare'" class="mode-page" aria-label="模型对比工作区">
+      <section v-show="!isDemoActive && mode === 'compare'" class="mode-page" aria-label="模型对比工作区">
         <CompareChat />
       </section>
-      <section v-show="mode === 'knowledge'" class="mode-page" aria-label="知识库与评测工作区">
+      <section v-show="!isDemoActive && mode === 'knowledge'" class="mode-page" aria-label="知识库与评测工作区">
         <KnowledgeBase />
       </section>
     </main>
@@ -141,9 +167,9 @@ watch(() => settings.theme, applyTheme)
         v-for="item in modes"
         :key="item.value"
         type="button"
-        :class="{ active: mode === item.value }"
-        :aria-current="mode === item.value ? 'page' : undefined"
-        @click="mode = item.value"
+        :class="{ active: !isDemoActive && mode === item.value }"
+        :aria-current="!isDemoActive && mode === item.value ? 'page' : undefined"
+        @click="mode = item.value; isDemoActive = false"
       >
         <component :is="item.icon" :size="20" :stroke-width="1.8" aria-hidden="true" />
         <span>{{ item.label }}</span>
@@ -269,6 +295,11 @@ watch(() => settings.theme, applyTheme)
   border-radius: 50%;
   background: var(--success);
   box-shadow: 0 0 10px color-mix(in srgb, var(--success) 55%, transparent);
+}
+
+.workspace-state.is-demo {
+  background: #a855f7;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
 }
 
 .app-stage,

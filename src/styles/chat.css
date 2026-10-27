@@ -3908,3 +3908,87 @@ datalist option {
     .settings-panel { animation-duration: 1ms; }
     .btn-refresh .spinning { animation: none; }
 }
+
+/* 演示沙盒专属体验卡片 */
+.chat-shell .demo-entry-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 680px;
+    width: 100%;
+    margin: 4px 0 16px 0;
+    padding: 14px 18px;
+    border-radius: var(--radius-md, 10px);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08));
+    cursor: pointer;
+    text-align: left;
+    transition: all var(--motion-fast, 0.15s) ease;
+    box-sizing: border-box;
+}
+
+.chat-shell .demo-entry-card:hover {
+    border-color: rgba(99, 102, 241, 0.6);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(168, 85, 247, 0.14));
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.18);
+}
+
+.chat-shell .demo-entry-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(99, 102, 241, 0.2);
+    color: #818cf8;
+    flex-shrink: 0;
+}
+
+.chat-shell .demo-entry-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.chat-shell .demo-entry-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chat-shell .demo-entry-title strong {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary, #f0eef8);
+}
+
+.chat-shell .demo-entry-badge {
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+}
+
+.chat-shell .demo-entry-desc {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary, #a09cb4);
+    line-height: 1.45;
+}
+
+.chat-shell .demo-entry-arrow {
+    color: var(--text-tertiary, #6b7280);
+    transition: transform var(--motion-fast, 0.15s) ease;
+    flex-shrink: 0;
+}
+
+.chat-shell .demo-entry-card:hover .demo-entry-arrow {
+    transform: translateX(3px);
+    color: var(--text-primary, #f0eef8);
+}

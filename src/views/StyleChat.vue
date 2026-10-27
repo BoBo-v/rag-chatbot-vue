@@ -261,6 +261,21 @@
             <div class="empty-icon"><Sparkles :size="26" aria-hidden="true" /></div>
             <h2 class="empty-title">技术支持工单决策台</h2>
             <p class="empty-desc">选择预设工单用例或直接粘贴客户报障信息进行检索诊断与草稿生成</p>
+
+            <!-- 演示沙盒专属体验卡片 -->
+            <div class="demo-entry-card" role="button" tabindex="0" @click="handleOpenDemo" @keydown.enter="handleOpenDemo">
+              <div class="demo-entry-icon">
+                <Sparkles :size="18" aria-hidden="true" />
+              </div>
+              <div class="demo-entry-body">
+                <div class="demo-entry-title">
+                  <strong>初次体验？进入演示沙盒</strong>
+                  <span class="demo-entry-badge">免配置试玩</span>
+                </div>
+                <p class="demo-entry-desc">零配置体验完整工单排障、知识库切片检索、两段式生成与采纳闭环流程</p>
+              </div>
+              <ChevronRight :size="18" class="demo-entry-arrow" aria-hidden="true" />
+            </div>
             <div class="empty-suggestions">
               <button
                 v-for="s in suggestionPrompts"
@@ -688,6 +703,7 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
+  ChevronRight,
   CircleAlert,
   CircleCheck,
   ClipboardCheck,
@@ -732,6 +748,18 @@ import { resolveTargetBaseUrl } from '../services/api'
 
 // StyleChat 是主聊天页面组件。
 // 模板负责布局和绑定事件；具体业务逻辑尽量放在 composable 里，避免单文件过大。
+
+const emit = defineEmits<{
+  (e: 'open-demo'): void
+}>()
+
+function handleOpenDemo() {
+  if (isStreaming.value) {
+    toast.show('当前工单正在生成中，请先等待完成或停止生成，再进入演示沙盒', 'warning')
+    return
+  }
+  emit('open-demo')
+}
 
 const {
   messages,

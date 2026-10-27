@@ -190,8 +190,8 @@
                 @click.stop="modelDropdownOpen = !modelDropdownOpen"
               >
                 <span class="topbar-conn-dot" :class="{ ready: activeConnection.isConfigured }"></span>
-                <span class="topbar-model-text">{{ activeConnection.summaryLabel }}</span>
-                <ChevronDown :size="12" class="topbar-model-chevron" :class="{ open: modelDropdownOpen }" aria-hidden="true" />
+                <span class="topbar-model-text"><span class="topbar-model-provider">{{ activeConnection.providerName }}</span><span class="topbar-model-divider">/</span><span class="topbar-model-name">{{ activeConnection.model || '未选择' }}</span></span>
+                <ChevronDown :size="11" class="topbar-model-chevron" :class="{ open: modelDropdownOpen }" aria-hidden="true" />
               </button>
               <div v-if="modelDropdownOpen" class="topbar-model-dropdown" role="menu">
                 <div class="dropdown-header">

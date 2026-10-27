@@ -1770,6 +1770,7 @@
 @media (max-width: 1024px) {
     .messages-inner { max-width: 760px; padding: 20px 18px 16px; }
     .input-box      { max-width: 100%; }
+    .chat-shell .topbar-model-btn { max-width: 160px; }
 }
 
 @media (max-width: 768px) {
@@ -2588,21 +2589,29 @@ datalist option {
     position: relative;
     display: inline-flex;
     align-items: center;
+    min-width: 0;
+    flex-shrink: 1;
     z-index: 55;
 }
 
 .chat-shell .topbar-model-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+    height: 24px;
+    padding: 0 8px;
     border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    padding: 3px 8px;
+    border-radius: var(--radius-pill);
     font-family: var(--font-mono);
-    font-size: 11.5px;
+    font-size: 11px;
     color: var(--text-secondary);
-    background: var(--bg-surface-2);
+    background: rgba(255, 255, 255, 0.05);
     cursor: pointer;
+    white-space: nowrap;
+    max-width: 220px;
+    min-width: 0;
+    flex-shrink: 1;
+    box-sizing: border-box;
     transition: border-color var(--motion-fast) ease, color var(--motion-fast) ease, background var(--motion-fast) ease;
 }
 
@@ -2612,8 +2621,71 @@ datalist option {
     background: var(--accent-bg);
 }
 
+.chat-shell .topbar-model-text {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    line-height: 1;
+}
+
+.chat-shell .topbar-model-provider {
+    font-weight: 600;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+
+.chat-shell .topbar-model-divider {
+    opacity: 0.45;
+    margin: 0 2px;
+    flex-shrink: 0;
+    font-size: 10px;
+}
+
+.chat-shell .topbar-model-name {
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 浅色主题：调成清爽浅灰底色，缩小视觉突兀感 */
+[data-theme="light"] .chat-shell .topbar-model-btn {
+    background: #f3f4f6;
+    border-color: rgba(0, 0, 0, 0.08);
+    color: #4b5563;
+}
+
+[data-theme="light"] .chat-shell .topbar-model-btn:hover {
+    background: #e5e7eb;
+    border-color: rgba(124, 58, 237, 0.35);
+    color: var(--accent-text);
+}
+
+[data-theme="light"] .chat-shell .topbar-model-provider {
+    color: #1f2937;
+}
+
+[data-theme="light"] .chat-shell .topbar-model-name {
+    color: #4b5563;
+}
+
+[data-theme="light"] .chat-shell .topbar-model-dropdown {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.10);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .chat-shell .dropdown-item:hover {
+    background: #f3f4f6;
+    color: var(--text-primary);
+}
+
 .chat-shell .topbar-model-chevron {
     transition: transform var(--motion-fast) ease;
+    flex-shrink: 0;
 }
 
 .chat-shell .topbar-model-chevron.open {
@@ -3422,9 +3494,11 @@ datalist option {
         white-space: nowrap;
     }
 
-    .chat-shell .topbar-model {
-        max-width: 86px;
-        padding: 2px 5px;
+    .chat-shell .topbar-model,
+    .chat-shell .topbar-model-btn {
+        max-width: 125px;
+        height: 22px;
+        padding: 0 6px;
         font-size: 10px;
     }
 
@@ -3505,7 +3579,8 @@ datalist option {
 }
 
 @media (max-width: 374px) {
-    .chat-shell .topbar-model { display: none; }
+    .chat-shell .topbar-model,
+    .chat-shell .topbar-model-wrapper { display: none; }
     .chat-shell .toolbar-left { gap: 0; }
 
     .chat-shell .tool-btn,

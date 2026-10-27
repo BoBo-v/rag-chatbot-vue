@@ -5,14 +5,18 @@
       :current-scenario-id="currentScenarioId"
       :all-scenarios="allScenarios"
       :stage="stage"
-      @switch-scenario="(id) => switchScenario(id, true)"
+      @switch-scenario="(id) => handleSwitch(id, true)"
       @skip="skipToFinish"
-      @replay="replay"
+      @replay="handleReplay"
       @exit="$emit('exit')"
     />
 
     <!-- 主聊天消息视口 -->
-    <div ref="chatFeedRef" class="demo-chat-feed">
+    <div
+      ref="chatFeedRef"
+      class="demo-chat-feed"
+      @scroll="handleFeedScroll"
+    >
       <div class="messages-container">
         <!-- 空状态引导（当用户清空或尚未发送时） -->
         <div v-if="messages.length === 0" class="demo-empty-card">
@@ -32,7 +36,7 @@
               type="button"
               class="empty-preset-chip"
               :class="{ active: currentScenarioId === item.id }"
-              @click="switchScenario(item.id, false)"
+              @click="handleSwitch(item.id, false)"
             >
               {{ item.title }}
             </button>
@@ -75,17 +79,18 @@
                   },
                 ]"
               >
-                <!-- 加载中指示器 -->
+                <!-- 加载中指示器（跳动三点与阶段状态） -->
                 <div v-if="msg.status === 'loading'" class="loading-state-row">
-                  <div class="loading-spinner"></div>
-                  <span>AI 正在分析工单并检索技术知识库...</span>
+                  <div class="thinking-dots"><span></span><span></span><span></span></div>
+                  <span class="loading-state-text">AI 正在分析工单并检索技术知识库...</span>
                 </div>
 
-                <!-- Markdown 内容 -->
+                <!-- Markdown 内容（集成 useMessageRenderer，带真实打字机闪烁光标 ▋ 与代码块复制） -->
                 <div
                   v-else
                   class="msg-content markdown-body"
-                  v-html="renderMarkdown(msg.content)"
+                  @click="handleCodeBlockAction($event, msg.id)"
+                  v-html="renderContent(msg)"
                 ></div>
               </div>
 
@@ -178,7 +183,7 @@
             type="button"
             class="scenario-chip"
             :class="{ active: currentScenarioId === item.id }"
-            @click="switchScenario(item.id, true)"
+            @click="handleSwitch(item.id, true)"
           >
             {{ item.title }}
           </button>
@@ -217,7 +222,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   Check,
   CheckCheck,
@@ -231,7 +236,7 @@ import DemoControls from './DemoControls.vue'
 import DemoCopyModal from './DemoCopyModal.vue'
 import RagCitations from '../../components/RagCitations.vue'
 import { useDemoSession } from '../useDemoSession'
-import { renderMarkdown } from '../../utils/markdown'
+import { useMessageRenderer } from '../../composables/useMessageRenderer'
 
 defineEmits<{
   (e: 'exit'): void
@@ -239,6 +244,13 @@ defineEmits<{
 
 const citationsWrapperRef = ref<HTMLElement | null>(null)
 const chatFeedRef = ref<HTMLElement | null>(null)
+let userAtBottom = true
+
+const {
+  renderContent,
+  handleCodeBlockAction,
+  clearSnapshots,
+} = useMessageRenderer()
 
 const {
   currentScenarioId,
@@ -269,24 +281,50 @@ const isGenerating = computed(() => {
 
 function handleSend() {
   if (isGenerating.value) return
+  clearSnapshots()
   void startPlayback(inputPrompt.value)
 }
 
+function handleSwitch(id: any, autoSend: boolean) {
+  clearSnapshots()
+  switchScenario(id, autoSend)
+}
+
+function handleReplay() {
+  clearSnapshots()
+  replay()
+}
+
+function handleFeedScroll(): void {
+  const el = chatFeedRef.value
+  if (!el) return
+  userAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 80
+}
+
+function scrollToBottom(): void {
+  const el = chatFeedRef.value
+  if (!el || !userAtBottom) return
+  el.scrollTop = el.scrollHeight
+}
+
 onMounted(() => {
-  // 进入沙盒时自动发送首个演示工单，让用户立即可视化体验
+  // 进入沙盒时自动发送首个演示工单，让用户立即可视化体验打字机流式效果
   void startPlayback()
 })
 
-// 滚动跟随与展开卡片处理
+onUnmounted(() => {
+  clearSnapshots()
+})
+
+// 自动滚动跟随打字机输出
 watch(
-  () => messages.value[1]?.content,
+  () => [messages.value.length, messages.value[1]?.content, stage.value],
   () => {
     nextTick(() => {
-      if (chatFeedRef.value) {
-        chatFeedRef.value.scrollTop = chatFeedRef.value.scrollHeight
-      }
+      scrollToBottom()
     })
-  }
+  },
+  { deep: true }
 )
 
 watch(isEvidenceExpanded, (expanded) => {
@@ -479,13 +517,13 @@ watch(isEvidenceExpanded, (expanded) => {
   line-height: 1.65;
   word-break: break-word;
   position: relative;
+  transition: border-color var(--motion-fast, 140ms) ease, box-shadow var(--motion-fast, 140ms) ease;
 }
 
 .msg-bubble.user {
   background: color-mix(in srgb, var(--accent-bg) 72%, var(--bg-surface-2));
   border: 1px solid var(--accent-border, rgba(167, 139, 250, 0.35));
   color: var(--text-primary, #1e192b);
-  white-space: pre-wrap;
   border-radius: var(--radius-md) var(--radius-md) var(--radius-xs) var(--radius-md);
 }
 
@@ -497,26 +535,91 @@ watch(isEvidenceExpanded, (expanded) => {
   border-radius: var(--radius-md) var(--radius-md) var(--radius-md) var(--radius-xs);
 }
 
+/* 流式回答呼吸光环（对齐真实环境） */
+.msg-bubble.assistant.is-streaming {
+  border-color: var(--accent-border, rgba(167, 139, 250, 0.5));
+  animation: stream-glow 2s ease-in-out infinite;
+}
+
+@keyframes stream-glow {
+  0%, 100% {
+    box-shadow: var(--shadow-sm, 0 2px 10px rgba(0, 0, 0, 0.05));
+    border-color: var(--accent-border, rgba(167, 139, 250, 0.25));
+  }
+  50% {
+    box-shadow: 0 0 16px -2px var(--accent-bg, rgba(167, 139, 250, 0.35));
+    border-color: var(--accent, #7c3aed);
+  }
+}
+
+/* 流式打字机闪烁光标（对齐真实环境） */
+:deep(.cursor-blink) {
+  display: inline-block;
+  color: var(--accent-text, #7c3aed);
+  font-size: 0.9em;
+  line-height: 1;
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: blink 0.75s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%     { opacity: 0; }
+}
+
 .loading-state-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 0;
+  gap: 12px;
+  padding: 4px 0;
   color: var(--text-secondary, #574e69);
   font-size: 13.5px;
 }
 
-.loading-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border-subtle, rgba(124, 58, 237, 0.2));
-  border-top-color: var(--accent, #7c3aed);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.loading-state-text {
+  font-size: 13.5px;
+  color: var(--text-secondary, #574e69);
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+/* 跳动等待圆点（对齐真实环境） */
+.thinking-dots,
+:deep(.thinking-dots) {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 2px;
+}
+
+.thinking-dots span,
+:deep(.thinking-dots span) {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, #7c3aed);
+  opacity: 0.75;
+  animation: thinking-bounce 1.4s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(2),
+:deep(.thinking-dots span:nth-child(2)) {
+  animation-delay: 0.18s;
+}
+
+.thinking-dots span:nth-child(3),
+:deep(.thinking-dots span:nth-child(3)) {
+  animation-delay: 0.36s;
+}
+
+@keyframes thinking-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
 }
 
 .demo-citations-wrapper {

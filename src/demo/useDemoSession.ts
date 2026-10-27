@@ -70,6 +70,7 @@ export function useDemoSession() {
     const fullContent = buildFullAssistantContent(scenario)
     stage.value = 'streaming_analysis'
     assistantMsg.status = 'streaming'
+    assistantMsg.content = ''
 
     const streamOk = await controller.streamText(
       fullContent,
@@ -77,7 +78,7 @@ export function useDemoSession() {
       (chunk) => {
         assistantMsg.content = chunk
       },
-      { minChunkSize: 1, maxChunkSize: 4, intervalMs: 18 }
+      { minChunkSize: 1, maxChunkSize: 3, intervalMs: 16, punctuationPauses: true }
     )
 
     if (!streamOk) return

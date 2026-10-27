@@ -2,6 +2,11 @@ export interface PlaybackOptions {
   minChunkSize?: number
   maxChunkSize?: number
   intervalMs?: number
+  /**
+   * 是否启用标点符号自然停顿（拟真打字节奏）
+   * 当 intervalMs >= 10 且未显式关闭时默认启用
+   */
+  punctuationPauses?: boolean
 }
 
 /**
@@ -69,7 +74,7 @@ export class DemoPlaybackController {
   }
 
   /**
-   * 逐字/逐块流式推演文本
+   * 逐字/逐块流式推演文本，模拟真实大模型 Token 吐字节奏与标点停顿
    */
   public async streamText(
     text: string,
@@ -79,7 +84,8 @@ export class DemoPlaybackController {
   ): Promise<boolean> {
     const minChunk = options.minChunkSize ?? 1
     const maxChunk = options.maxChunkSize ?? 3
-    const interval = options.intervalMs ?? 20
+    const interval = options.intervalMs ?? 16
+    const enablePunctuation = options.punctuationPauses ?? (interval >= 10)
 
     let cursor = 0
     const total = text.length
@@ -106,11 +112,55 @@ export class DemoPlaybackController {
       cursor += step
       onChunk(text.slice(0, cursor))
 
+      if (cursor >= total) {
+        break
+      }
+
+      // 计算当前吐字延迟：根据标点符号与格式呈现真实打字停顿
+      let delay = interval
+      if (enablePunctuation) {
+        const lastChar = text[cursor - 1]
+        const nextChar = text[cursor]
+        const prevTwo = cursor >= 2 ? text.slice(cursor - 2, cursor) : ''
+
+        // 句末标点或双换行（段落分隔）：停顿 ~70-100ms
+        if (
+          prevTwo === '\n\n' ||
+          lastChar === '。' ||
+          lastChar === '！' ||
+          lastChar === '？' ||
+          lastChar === '!' ||
+          lastChar === '?'
+        ) {
+          delay = Math.max(interval, 75 + Math.floor(Math.random() * 25))
+        }
+        // 逗号、顿号、分号、冒号：停顿 ~38-58ms
+        else if (
+          lastChar === '，' ||
+          lastChar === '、' ||
+          lastChar === '；' ||
+          lastChar === ';' ||
+          lastChar === ',' ||
+          (lastChar === '：' && nextChar !== '\n') ||
+          (lastChar === ':' && nextChar === ' ')
+        ) {
+          delay = Math.max(interval, 40 + Math.floor(Math.random() * 18))
+        }
+        // 单换行：停顿 ~45-65ms
+        else if (lastChar === '\n') {
+          delay = Math.max(interval, 46 + Math.floor(Math.random() * 20))
+        }
+        // 常规字符：自然微抖动（±3ms）
+        else {
+          delay = Math.max(8, interval + Math.floor(Math.random() * 6) - 2)
+        }
+      }
+
       await new Promise<void>((resolve) => {
         this.currentTimer = setTimeout(() => {
           this.currentTimer = null
           resolve()
-        }, interval)
+        }, delay)
       })
     }
 

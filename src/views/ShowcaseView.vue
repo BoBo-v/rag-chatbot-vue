@@ -7,6 +7,7 @@ import {
   Code2,
   Columns2,
   Copy,
+  Cpu,
   Database,
   ExternalLink,
   Flame,
@@ -814,48 +815,276 @@ function triggerAgentSimulation() {
       </div>
     </section>
 
-    <!-- ── 5. 全栈系统架构解密 ── -->
+    <!-- ── 5. 全栈系统架构解密 (赛博拓扑工程矩阵) ── -->
     <section id="architecture" class="arch-section">
       <div class="container">
         <div class="section-heading text-center">
-          <span class="sub-badge">Architecture</span>
+          <div class="arch-badge-wrapper">
+            <span class="arch-beacon-pulse"></span>
+            <span class="sub-badge arch-badge">System Architecture</span>
+          </div>
           <h2 class="section-title">前后端协同的极致高并发架构</h2>
           <p class="section-desc">以 Fastify 5 异步事件循环为核心枢纽，贯穿本地端侧存储与本地/云端大模型。</p>
+
+          <div class="arch-telemetry-strip">
+            <div class="telemetry-stat">
+              <span class="telemetry-lbl">核心路由延迟</span>
+              <strong class="telemetry-num">&lt; 1.2ms</strong>
+            </div>
+            <div class="telemetry-divider">/</div>
+            <div class="telemetry-stat">
+              <span class="telemetry-lbl">事件循环吞吐</span>
+              <strong class="telemetry-num">40,000+ Req/s</strong>
+            </div>
+            <div class="telemetry-divider">/</div>
+            <div class="telemetry-stat">
+              <span class="telemetry-lbl">端侧数据隔离</span>
+              <strong class="telemetry-num">100% 本地闭环</strong>
+            </div>
+          </div>
         </div>
 
         <div class="arch-topology">
-          <div class="arch-node-col">
-            <div class="arch-node-header">前端工程工作台 (Vue 3)</div>
+          <!-- ── 节点 1：前端工程工作台 (Vue 3) ── -->
+          <div class="arch-node-col client-col">
+            <div class="node-glow-bar glow-client"></div>
+            <div class="arch-node-header">
+              <div class="header-icon-box icon-client">
+                <Terminal :size="18" />
+              </div>
+              <div class="header-text-group">
+                <div class="node-layer-tag">LAYER 01 · CLIENT</div>
+                <h3 class="node-main-title">前端工程工作台 (Vue 3)</h3>
+              </div>
+              <span class="status-pill status-client">Client Sandboxed</span>
+            </div>
+
             <div class="arch-node-box">
-              <div class="node-item">4 大专属工作区模式</div>
-              <div class="node-item">IndexedDB 本地隐私数据库</div>
-              <div class="node-item">Web Worker 离线全文索引</div>
-              <div class="node-item">安全隔离 iframe 代码预览</div>
+              <div class="node-tech-item">
+                <div class="node-bullet-num">01</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">4 大专属工作区模式</span>
+                    <span class="node-tag">Workspace</span>
+                  </div>
+                  <div class="node-sub">智能对话 · Agent 工坊 · 竞技场 · 知识库</div>
+                </div>
+              </div>
+
+              <div class="node-tech-item">
+                <div class="node-bullet-num">02</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">IndexedDB 本地隐私数据库</span>
+                    <span class="node-tag">Privacy</span>
+                  </div>
+                  <div class="node-sub">浏览器端离线持久化，拒绝云端隐秘泄露</div>
+                </div>
+              </div>
+
+              <div class="node-tech-item">
+                <div class="node-bullet-num">03</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">Web Worker 离线全文索引</span>
+                    <span class="node-tag">Worker</span>
+                  </div>
+                  <div class="node-sub">后台线程分词与倒排检索，主线程 0 掉帧</div>
+                </div>
+              </div>
+
+              <div class="node-tech-item">
+                <div class="node-bullet-num">04</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">安全隔离 iframe 代码预览</span>
+                    <span class="node-tag">Sandbox</span>
+                  </div>
+                  <div class="node-sub">HTML/Vue/React 实时渲染与跨域严格拦截</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="node-footer-specs">
+              <span class="spec-code">Vite 6</span>
+              <span class="spec-code">Pinia Store</span>
+              <span class="spec-code">Web Workers</span>
             </div>
           </div>
 
-          <div class="arch-flow-arrow">➔</div>
+          <!-- ── 数据流通道 1: Client ➔ Core Hub ── -->
+          <div class="arch-flow-connector">
+            <div class="connector-pipe pipe-forward">
+              <span class="pipe-pulse"></span>
+            </div>
+            <div class="connector-badge">
+              <span class="flow-symbol">⚡</span>
+              <span class="flow-text">SSE / HTTP/2</span>
+            </div>
+            <div class="connector-pipe pipe-backward">
+              <span class="pipe-pulse"></span>
+            </div>
+            <div class="connector-sub">NDJSON 流式管道</div>
+          </div>
 
+          <!-- ── 节点 2：Fastify 5 服务引擎 (Node.js) - 核心枢纽 ── -->
           <div class="arch-node-col main-hub">
-            <div class="arch-node-header hub-header">Fastify 5 服务引擎 (Node.js)</div>
+            <div class="node-glow-bar glow-hub"></div>
+            <div class="arch-node-header hub-header">
+              <div class="header-icon-box icon-hub">
+                <Cpu :size="20" />
+              </div>
+              <div class="header-text-group">
+                <div class="node-layer-tag tag-hub">CORE KERNEL HUB · 异步中枢</div>
+                <h3 class="node-main-title">Fastify 5 服务引擎 (Node.js)</h3>
+              </div>
+              <span class="status-pill status-hub">Active Engine</span>
+            </div>
+
             <div class="arch-node-box hub-box">
-              <div class="node-item">毫秒级异步路由 (TypeScript)</div>
-              <div class="node-item">SSE / NDJSON 实时事件重放</div>
-              <div class="node-item">可恢复任务管理 (Last-Event-ID)</div>
-              <div class="node-item">内置可观测性仪表盘 Dashboard</div>
-              <div class="node-item">敏感密钥自动脱敏与安全策略</div>
+              <div class="node-tech-item hub-item">
+                <div class="node-bullet-num bullet-hub">01</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">毫秒级异步路由 (TypeScript)</span>
+                    <span class="node-tag tag-purple">Fast Router</span>
+                  </div>
+                  <div class="node-sub">Find-My-Way 高速基数树分发，极低内存驻留</div>
+                </div>
+              </div>
+
+              <div class="node-tech-item hub-item">
+                <div class="node-bullet-num bullet-hub">02</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">SSE / NDJSON 实时事件重放</span>
+                    <span class="node-tag tag-purple">Streaming</span>
+                  </div>
+                  <div class="node-sub">分块背压感知直出，保障超长上下文无卡顿</div>
+                </div>
+              </div>
+
+              <div class="node-tech-item hub-item">
+                <div class="node-bullet-num bullet-hub">03</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">可恢复任务管理 (Last-Event-ID)</span>
+                    <span class="node-tag tag-purple">Resumable</span>
+                  </div>
+                  <div class="node-sub">断网与页面刷新无损回放，游标幂等状态锁</div>
+                </div>
+              </div>
+
+              <div class="node-tech-item hub-item">
+                <div class="node-bullet-num bullet-hub">04</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">内置可观测性仪表盘 Dashboard</span>
+                    <span class="node-tag tag-purple">Telemetry</span>
+                  </div>
+                  <div class="node-sub">实时吞吐量统计、Agent 执行轨迹与系统指标</div>
+                </div>
+              </div>
+
+              <div class="node-tech-item hub-item">
+                <div class="node-bullet-num bullet-hub">05</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">敏感密钥自动脱敏与安全策略</span>
+                    <span class="node-tag tag-purple">Security</span>
+                  </div>
+                  <div class="node-sub">请求日志自动过滤脱敏，CORS / 速率熔断防护</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="node-footer-specs">
+              <span class="spec-code hub-spec">Node 20+</span>
+              <span class="spec-code hub-spec">TypeScript</span>
+              <span class="spec-code hub-spec">High Concurrency</span>
+              <span class="spec-code hub-spec">Zero Leak</span>
             </div>
           </div>
 
-          <div class="arch-flow-arrow">➔</div>
+          <!-- ── 数据流通道 2: Core Hub ➔ Model & Storage ── -->
+          <div class="arch-flow-connector">
+            <div class="connector-pipe pipe-forward">
+              <span class="pipe-pulse"></span>
+            </div>
+            <div class="connector-badge">
+              <span class="flow-symbol">🔮</span>
+              <span class="flow-text">JSON-RPC / REST</span>
+            </div>
+            <div class="connector-pipe pipe-backward">
+              <span class="pipe-pulse"></span>
+            </div>
+            <div class="connector-sub">双路检索与调度</div>
+          </div>
 
-          <div class="arch-node-col">
-            <div class="arch-node-header">混合检索与模型层</div>
+          <!-- ── 节点 3：混合检索与模型层 ── -->
+          <div class="arch-node-col storage-col">
+            <div class="node-glow-bar glow-storage"></div>
+            <div class="arch-node-header">
+              <div class="header-icon-box icon-storage">
+                <Database :size="18" />
+              </div>
+              <div class="header-text-group">
+                <div class="node-layer-tag">LAYER 03 · INFERENCE</div>
+                <h3 class="node-main-title">混合检索与模型层</h3>
+              </div>
+              <span class="status-pill status-storage">Hybrid Core</span>
+            </div>
+
             <div class="arch-node-box">
-              <div class="node-item">SQLite Vector / Qdrant 向量库</div>
-              <div class="node-item">SQLite FTS5 BM25 全文检索</div>
-              <div class="node-item">本地 Ollama (对话 + 视觉 OCR)</div>
-              <div class="node-item">OpenAI / Claude / MCP 协议</div>
+              <div class="node-tech-item">
+                <div class="node-bullet-num">01</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">SQLite Vector / Qdrant 向量库</span>
+                    <span class="node-tag">Vector</span>
+                  </div>
+                  <div class="node-sub">稠密向量嵌入，余弦相似度高维语义最近邻</div>
+                </div>
+              </div>
+
+              <div class="node-tech-item">
+                <div class="node-bullet-num">02</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">SQLite FTS5 BM25 全文检索</span>
+                    <span class="node-tag">FTS5</span>
+                  </div>
+                  <div class="node-sub">关键词稀疏检索与双路 RRF 混合重排评分</div>
+                </div>
+              </div>
+
+              <div class="node-tech-item">
+                <div class="node-bullet-num">03</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">本地 Ollama (对话 + 视觉 OCR)</span>
+                    <span class="node-tag">Ollama</span>
+                  </div>
+                  <div class="node-sub">Qwen2.5 / DeepSeek / 视觉架构图结构化转 Markdown</div>
+                </div>
+              </div>
+
+              <div class="node-tech-item">
+                <div class="node-bullet-num">04</div>
+                <div class="node-content">
+                  <div class="node-title-row">
+                    <span class="node-name">OpenAI / Claude / MCP 协议</span>
+                    <span class="node-tag">Ecosystem</span>
+                  </div>
+                  <div class="node-sub">无缝对接云端旗舰模型与 Anthropic MCP 工具规范</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="node-footer-specs">
+              <span class="spec-code">SQLite Vector</span>
+              <span class="spec-code">FTS5 BM25</span>
+              <span class="spec-code">Anthropic MCP</span>
             </div>
           </div>
         </div>
@@ -2549,71 +2778,412 @@ function triggerAgentSimulation() {
   color: #38bdf8;
 }
 
-/* ── 5. 全栈系统架构解密 ── */
+/* ── 5. 全栈系统架构解密 (赛博拓扑工程矩阵) ── */
 .arch-section {
   position: relative;
   z-index: 10;
-  padding: 80px 0;
-  background: rgba(0, 0, 0, 0.25);
+  padding: 85px 0 95px;
+  background: radial-gradient(circle at 50% 20%, rgba(99, 102, 241, 0.05) 0%, rgba(10, 14, 26, 0.6) 70%);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.arch-topology {
+.arch-badge-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.arch-beacon-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6366f1;
+  box-shadow: 0 0 10px #6366f1;
+  animation: beacon-pulse 2s infinite ease-in-out;
+}
+
+.arch-telemetry-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 22px;
+  padding: 8px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  font-size: 0.78rem;
+}
+
+.telemetry-stat {
   display: flex;
   align-items: center;
+  gap: 6px;
+}
+
+.telemetry-lbl {
+  color: #94a3b8;
+}
+
+.telemetry-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: #a5b4fc;
+}
+
+.telemetry-divider {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 0.75rem;
+}
+
+/* 拓扑容器 */
+.arch-topology {
+  display: flex;
+  align-items: stretch;
   justify-content: space-between;
-  gap: 16px;
-  margin-top: 40px;
+  gap: 14px;
+  margin-top: 48px;
+  position: relative;
 }
 
 .arch-node-col {
   flex: 1;
-  background: rgba(18, 20, 32, 0.7);
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  border-radius: 18px;
   overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.5);
 }
 
+.arch-node-col:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 20px 45px -12px rgba(0, 0, 0, 0.7);
+}
+
+/* 顶部微发光条 */
+.node-glow-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  transition: all 0.3s;
+}
+
+.glow-client {
+  background: linear-gradient(90deg, transparent, #06b6d4 50%, transparent);
+}
+
+.glow-hub {
+  background: linear-gradient(90deg, transparent, #818cf8 50%, transparent);
+  height: 3px;
+  box-shadow: 0 0 14px #6366f1;
+}
+
+.glow-storage {
+  background: linear-gradient(90deg, transparent, #10b981 50%, transparent);
+}
+
+/* 节点头部 */
 .arch-node-header {
-  padding: 12px 18px;
-  background: rgba(255, 255, 255, 0.04);
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.02);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
 }
 
+.header-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.icon-client {
+  background: rgba(6, 182, 212, 0.12);
+  color: #06b6d4;
+  border: 1px solid rgba(6, 182, 212, 0.25);
+}
+
+.icon-hub {
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+}
+
+.icon-storage {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.header-text-group {
+  flex: 1;
+}
+
+.node-layer-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.tag-hub {
+  color: #818cf8;
+}
+
+.node-main-title {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.status-pill {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.status-client {
+  background: rgba(6, 182, 212, 0.1);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.2);
+}
+
+.status-hub {
+  background: rgba(99, 102, 241, 0.15);
+  color: #c7d2fe;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+}
+
+.status-storage {
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* 核心中枢主卡样式 */
 .main-hub {
-  border-color: rgba(99, 102, 241, 0.4);
-  box-shadow: 0 0 24px rgba(99, 102, 241, 0.15);
+  flex: 1.15;
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 0 35px rgba(99, 102, 241, 0.14), 0 16px 36px -10px rgba(0, 0, 0, 0.6);
+  background: linear-gradient(180deg, rgba(20, 24, 48, 0.9) 0%, rgba(15, 23, 42, 0.98) 100%);
+}
+
+.main-hub:hover {
+  border-color: rgba(99, 102, 241, 0.55);
+  box-shadow: 0 0 45px rgba(99, 102, 241, 0.22), 0 24px 50px -10px rgba(0, 0, 0, 0.75);
 }
 
 .hub-header {
-  background: rgba(99, 102, 241, 0.2);
-  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.08);
 }
 
+/* 节点内部条目 */
 .arch-node-box {
-  padding: 18px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  flex-grow: 1;
 }
 
-.node-item {
+.node-tech-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  transition: all 0.25s;
+}
+
+.node-tech-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateX(2px);
+}
+
+.hub-item {
+  background: rgba(99, 102, 241, 0.04);
+  border-color: rgba(99, 102, 241, 0.1);
+}
+
+.hub-item:hover {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+.node-bullet-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 5px;
+  border-radius: 4px;
+  margin-top: 1px;
+}
+
+.bullet-hub {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.node-content {
+  flex: 1;
+}
+
+.node-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.node-name {
   font-size: 0.82rem;
-  color: #cbd5e1;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  font-weight: 600;
+  color: #e2e8f0;
 }
 
-.arch-flow-arrow {
-  font-size: 1.4rem;
-  color: #6366f1;
-  font-weight: bold;
+.node-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.tag-purple {
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.node-sub {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+/* 节点底部规格标签 */
+.node-footer-specs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.spec-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.hub-spec {
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+/* ── 数据流通道 (Flow Connector) ── */
+.arch-flow-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 90px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.connector-pipe {
+  width: 100%;
+  height: 2px;
+  background: rgba(99, 102, 241, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.pipe-pulse {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30px;
+  background: linear-gradient(90deg, transparent, #818cf8, transparent);
+  animation: pulse-travel 2.2s infinite linear;
+}
+
+.pipe-backward .pipe-pulse {
+  animation: pulse-travel-rev 2.2s infinite linear;
+}
+
+@keyframes pulse-travel {
+  0% { left: -30px; }
+  100% { left: 100%; }
+}
+
+@keyframes pulse-travel-rev {
+  0% { right: -30px; }
+  100% { right: 100%; }
+}
+
+.connector-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #c7d2fe;
+  white-space: nowrap;
+}
+
+.flow-symbol {
+  font-size: 0.7rem;
+}
+
+.connector-sub {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 /* ── 6. 在线体验 vs 私有化部署 ── */
@@ -3030,8 +3600,20 @@ function triggerAgentSimulation() {
   .bento-span-2 { grid-column: span 1; }
   .pane-split { grid-template-columns: 1fr; }
   .compare-matrix { grid-template-columns: 1fr; }
-  .arch-topology { flex-direction: column; }
-  .arch-flow-arrow { transform: rotate(90deg); margin: 6px 0; }
+  .arch-topology {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .arch-flow-connector {
+    width: 100%;
+    flex-direction: row;
+    gap: 12px;
+    padding: 8px 0;
+  }
+  .connector-pipe {
+    width: 60px;
+    height: 2px;
+  }
   .deploy-comparison-grid { grid-template-columns: 1fr; }
   .contact-card { grid-template-columns: 1fr; }
   .metrics-grid { grid-template-columns: repeat(2, 1fr); }
@@ -3209,6 +3791,14 @@ function triggerAgentSimulation() {
 
   .section-desc {
     font-size: 0.88rem;
+  }
+
+  .arch-telemetry-strip {
+    flex-wrap: wrap;
+    justify-content: center;
+    border-radius: 14px;
+    gap: 8px 14px;
+    padding: 10px 14px;
   }
 
   .bento-card {
@@ -3822,39 +4412,129 @@ function triggerAgentSimulation() {
   color: #414862;
 }
 
-/* 架构拓扑 */
+/* 架构拓扑 (赛博拓扑工程矩阵亮色主题适配) */
 .showcase-shell.theme-light .arch-section {
-  background: rgba(244, 245, 252, 0.5);
-  border-top: 1px solid rgba(226, 232, 240, 0.8);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  background: radial-gradient(circle at 50% 20%, rgba(99, 102, 241, 0.04) 0%, rgba(248, 249, 253, 0.95) 70%);
+  border-top: 1px solid rgba(226, 232, 240, 0.85);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+}
+
+.showcase-shell.theme-light .arch-telemetry-strip {
+  background: #ffffff;
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.showcase-shell.theme-light .telemetry-lbl {
+  color: #64748b;
+}
+
+.showcase-shell.theme-light .telemetry-num {
+  color: #4f46e5;
+}
+
+.showcase-shell.theme-light .telemetry-divider {
+  color: #cbd5e1;
 }
 
 .showcase-shell.theme-light .arch-node-col {
   background: #ffffff;
-  border: 1px solid rgba(226, 232, 244, 0.9);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.02);
+  border-color: rgba(226, 232, 244, 0.95);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.03);
+}
+
+.showcase-shell.theme-light .arch-node-col:hover {
+  background: #ffffff;
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 16px 36px rgba(99, 102, 241, 0.08);
 }
 
 .showcase-shell.theme-light .arch-node-header {
-  background: #f9fafd;
-  border-bottom: 1px solid rgba(226, 232, 244, 0.9);
-  color: #2b3048;
+  background: #f8fafc;
+  border-bottom-color: #e2e8f0;
+}
+
+.showcase-shell.theme-light .node-main-title {
+  color: #1e293b;
+}
+
+.showcase-shell.theme-light .node-layer-tag {
+  color: #64748b;
 }
 
 .showcase-shell.theme-light .main-hub {
-  border-color: rgba(99, 102, 241, 0.35);
-  box-shadow: 0 0 24px rgba(99, 102, 241, 0.08);
+  background: #ffffff;
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.08), 0 10px 24px rgba(0, 0, 0, 0.04);
 }
 
 .showcase-shell.theme-light .hub-header {
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.showcase-shell.theme-light .node-tech-item {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.showcase-shell.theme-light .node-tech-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.showcase-shell.theme-light .hub-item {
+  background: rgba(99, 102, 241, 0.03);
+  border-color: rgba(99, 102, 241, 0.15);
+}
+
+.showcase-shell.theme-light .hub-item:hover {
+  background: rgba(99, 102, 241, 0.06);
+  border-color: rgba(99, 102, 241, 0.28);
+}
+
+.showcase-shell.theme-light .node-name {
+  color: #1e293b;
+}
+
+.showcase-shell.theme-light .node-sub {
+  color: #64748b;
+}
+
+.showcase-shell.theme-light .node-bullet-num {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.showcase-shell.theme-light .bullet-hub {
+  background: rgba(99, 102, 241, 0.15);
   color: #4f46e5;
 }
 
-.showcase-shell.theme-light .node-item {
-  background: #f9fafd;
-  border: 1px solid rgba(226, 232, 244, 0.8);
-  color: #475069;
+.showcase-shell.theme-light .node-footer-specs {
+  background: #f8fafc;
+  border-top-color: #e2e8f0;
+}
+
+.showcase-shell.theme-light .spec-code {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.showcase-shell.theme-light .hub-spec {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.2);
+  color: #4338ca;
+}
+
+.showcase-shell.theme-light .connector-badge {
+  background: #f1f5f9;
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #4338ca;
+}
+
+.showcase-shell.theme-light .connector-sub {
+  color: #64748b;
 }
 
 /* 部署说明 */

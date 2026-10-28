@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   ArrowRight,
   Bot,
@@ -12,17 +12,53 @@ import {
   Flame,
   Layers,
   MessageSquare,
+  Moon,
   Network,
   RotateCcw,
   Shield,
   Sparkles,
+  Sun,
   Terminal,
   Workflow,
 } from 'lucide-vue-next'
+import { settings } from '../stores/settings'
 
 const emit = defineEmits<{
   (e: 'enter-workspace', mode?: 'chat' | 'agent' | 'compare' | 'knowledge'): void
 }>()
+
+// ── 主题同步与切换逻辑 ──
+const systemPrefersDark = ref(
+  typeof window !== 'undefined'
+    ? window.matchMedia('(prefers-color-scheme: dark)').matches
+    : false
+)
+
+let sysMediaQuery: MediaQueryList | null = null
+function handleSysThemeChange(e: MediaQueryListEvent) {
+  systemPrefersDark.value = e.matches
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    sysMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    sysMediaQuery.addEventListener('change', handleSysThemeChange)
+  }
+})
+
+onBeforeUnmount(() => {
+  sysMediaQuery?.removeEventListener('change', handleSysThemeChange)
+})
+
+const isLightMode = computed(() => {
+  if (settings.theme === 'light') return true
+  if (settings.theme === 'dark') return false
+  return !systemPrefersDark.value
+})
+
+function toggleTheme() {
+  settings.theme = isLightMode.value ? 'dark' : 'light'
+}
 
 // ── 场景切换：企业工单排障 vs 个人私有知识库 ──
 type Scenario = 'enterprise' | 'personal'
@@ -89,7 +125,7 @@ function triggerAgentSimulation() {
 </script>
 
 <template>
-  <div class="showcase-shell">
+  <div class="showcase-shell" :class="{ 'theme-light': isLightMode }">
     <!-- ── 背景动态环境光晕 ── -->
     <div class="showcase-bg">
       <div class="orb orb-primary" aria-hidden="true"></div>
@@ -122,6 +158,16 @@ function triggerAgentSimulation() {
         </nav>
 
         <div class="nav-actions">
+          <button
+            type="button"
+            class="btn-theme-toggle"
+            :title="isLightMode ? '切换为暗黑模式' : '切换为亮色模式'"
+            :aria-label="isLightMode ? '切换为暗黑模式' : '切换为亮色模式'"
+            @click="toggleTheme"
+          >
+            <Moon v-if="isLightMode" :size="16" />
+            <Sun v-else :size="16" />
+          </button>
           <button type="button" class="btn-ghost" @click="scrollToSection('contact')">
             <MessageSquare :size="15" />
             <span>商务/咨询</span>
@@ -949,6 +995,26 @@ function triggerAgentSimulation() {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.btn-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .btn-ghost {
@@ -2562,6 +2628,11 @@ function triggerAgentSimulation() {
     display: none;
   }
 
+  .nav-actions .btn-theme-toggle {
+    width: 30px;
+    height: 30px;
+  }
+
   .nav-actions .btn-ghost {
     padding: 6px 8px;
     font-size: 0.75rem;
@@ -2639,5 +2710,491 @@ function triggerAgentSimulation() {
   .btn-deploy-action {
     width: 100%;
   }
+}
+
+/* ── 亮色主题 (Light Mode) 完整同步适配 ── */
+.showcase-shell.theme-light {
+  background-color: #f7f5fb;
+  color: #191424;
+}
+
+.showcase-shell.theme-light .grid-canvas {
+  background-image: radial-gradient(rgba(100, 116, 139, 0.18) 1px, transparent 1px);
+  opacity: 0.55;
+}
+
+.showcase-shell.theme-light .orb-primary {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.12), transparent 70%);
+}
+
+.showcase-shell.theme-light .orb-secondary {
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.10), transparent 70%);
+}
+
+.showcase-shell.theme-light .orb-cyan {
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.10), transparent 70%);
+}
+
+/* 顶栏 */
+.showcase-shell.theme-light .showcase-nav {
+  background: rgba(247, 245, 251, 0.85);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+.showcase-shell.theme-light .brand-name {
+  color: #191424;
+}
+
+.showcase-shell.theme-light .brand-pill {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.25);
+  color: #4f46e5;
+}
+
+.showcase-shell.theme-light .nav-links a {
+  color: #64748b;
+}
+
+.showcase-shell.theme-light .nav-links a:hover {
+  color: #191424;
+}
+
+.showcase-shell.theme-light .btn-theme-toggle {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #475569;
+}
+
+.showcase-shell.theme-light .btn-theme-toggle:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .btn-ghost {
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #334155;
+}
+
+.showcase-shell.theme-light .btn-ghost:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #0f172a;
+  border-color: rgba(0, 0, 0, 0.22);
+}
+
+/* Hero */
+.showcase-shell.theme-light .hero-badge {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.25);
+  color: #4338ca;
+}
+
+.showcase-shell.theme-light .hero-title {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .gradient-text {
+  background: linear-gradient(135deg, #0284c7 0%, #4f46e5 45%, #9333ea 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.showcase-shell.theme-light .hero-description {
+  color: #475569;
+}
+
+.showcase-shell.theme-light .hero-description strong {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .scenario-switch {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.showcase-shell.theme-light .scenario-btn {
+  color: #64748b;
+}
+
+.showcase-shell.theme-light .scenario-btn.active {
+  background: #ffffff;
+  color: #4338ca;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.showcase-shell.theme-light .scenario-hint {
+  color: #334155;
+}
+
+.showcase-shell.theme-light .btn-hero-secondary {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #1e293b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.showcase-shell.theme-light .btn-hero-secondary:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* 展台 (Mockup Dock) */
+.showcase-shell.theme-light .mockup-dock {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 24px 60px rgba(99, 102, 241, 0.12), 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.showcase-shell.theme-light .mockup-header {
+  background: rgba(248, 250, 252, 0.95);
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.showcase-shell.theme-light .mockup-tabs {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.showcase-shell.theme-light .mockup-tab {
+  color: #64748b;
+}
+
+.showcase-shell.theme-light .mockup-tab.active {
+  background: #ffffff;
+  color: #4338ca;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.showcase-shell.theme-light .window-action-link {
+  color: #4f46e5;
+}
+
+.showcase-shell.theme-light .window-action-link:hover {
+  color: #4338ca;
+}
+
+.showcase-shell.theme-light .msg-avatar {
+  background: rgba(0, 0, 0, 0.06);
+  color: #334155;
+}
+
+.showcase-shell.theme-light .msg-bubble {
+  background: #f8fafc;
+  border-color: rgba(0, 0, 0, 0.07);
+  color: #334155;
+}
+
+.showcase-shell.theme-light .user-msg .msg-bubble {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.22);
+  color: #1e1b4b;
+}
+
+.showcase-shell.theme-light .rag-citation-card {
+  background: rgba(16, 185, 129, 0.06);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.showcase-shell.theme-light .citation-source {
+  color: #475569;
+}
+
+.showcase-shell.theme-light .pane-preview-side {
+  background: #f8fafc;
+  border-color: rgba(0, 0, 0, 0.07);
+}
+
+.showcase-shell.theme-light .preview-mini-header {
+  color: #1e293b;
+}
+
+.showcase-shell.theme-light .preview-code-box {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: #334155;
+}
+
+.showcase-shell.theme-light .agent-prompt-bar {
+  background: #f8fafc;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: #1e293b;
+}
+
+.showcase-shell.theme-light .btn-micro-run {
+  background: rgba(0, 0, 0, 0.05);
+  color: #334155;
+}
+
+.showcase-shell.theme-light .trace-steps {
+  border-left-color: rgba(99, 102, 241, 0.25);
+}
+
+.showcase-shell.theme-light .trace-item {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.showcase-shell.theme-light .trace-label {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .trace-desc {
+  color: #475569;
+}
+
+.showcase-shell.theme-light .compare-col {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.showcase-shell.theme-light .model-text {
+  color: #334155;
+}
+
+.showcase-shell.theme-light .model-stat {
+  color: #64748b;
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.showcase-shell.theme-light .compare-footer-bar {
+  background: rgba(99, 102, 241, 0.06);
+  color: #4338ca;
+}
+
+.showcase-shell.theme-light .kb-pipeline-header strong {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .kb-pipeline-header p {
+  color: #64748b;
+}
+
+.showcase-shell.theme-light .pipeline-steps {
+  background: #f8fafc;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.showcase-shell.theme-light .pipe-step {
+  color: #64748b;
+}
+
+.showcase-shell.theme-light .pipe-circle {
+  background: rgba(0, 0, 0, 0.06);
+  color: #334155;
+}
+
+.showcase-shell.theme-light .eval-metric-box {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.showcase-shell.theme-light .eval-label {
+  color: #64748b;
+}
+
+.showcase-shell.theme-light .eval-metric-box strong {
+  color: #0f172a;
+}
+
+/* 标尺与特性矩阵 */
+.showcase-shell.theme-light .metrics-bar-section {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.showcase-shell.theme-light .metric-item {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+}
+
+.showcase-shell.theme-light .metric-item:hover {
+  background: #ffffff;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.showcase-shell.theme-light .metric-num {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .metric-title {
+  color: #1e293b;
+}
+
+.showcase-shell.theme-light .metric-desc {
+  color: #64748b;
+}
+
+.showcase-shell.theme-light .section-title {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .section-desc {
+  color: #475569;
+}
+
+.showcase-shell.theme-light .bento-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.07);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.03);
+}
+
+.showcase-shell.theme-light .bento-card-gradient {
+  background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%);
+}
+
+.showcase-shell.theme-light .card-title {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .card-desc {
+  color: #475569;
+}
+
+.showcase-shell.theme-light .v-pill {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #334155;
+}
+
+/* 架构拓扑 */
+.showcase-shell.theme-light .arch-section {
+  background: rgba(0, 0, 0, 0.02);
+  border-top-color: rgba(0, 0, 0, 0.06);
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.showcase-shell.theme-light .arch-node-col {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.07);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+}
+
+.showcase-shell.theme-light .arch-node-header {
+  background: #f8fafc;
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .main-hub {
+  border-color: rgba(99, 102, 241, 0.3);
+  box-shadow: 0 0 24px rgba(99, 102, 241, 0.12);
+}
+
+.showcase-shell.theme-light .hub-header {
+  background: rgba(99, 102, 241, 0.1);
+  color: #4338ca;
+}
+
+.showcase-shell.theme-light .node-item {
+  background: #f8fafc;
+  border-color: rgba(0, 0, 0, 0.05);
+  color: #334155;
+}
+
+/* 部署说明 */
+.showcase-shell.theme-light .deploy-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.07);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.03);
+}
+
+.showcase-shell.theme-light .private-card {
+  background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%);
+}
+
+.showcase-shell.theme-light .deploy-card-title {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .deploy-card-desc {
+  color: #475569;
+}
+
+.showcase-shell.theme-light .deploy-feature-list li {
+  color: #334155;
+}
+
+.showcase-shell.theme-light .deploy-notice-box {
+  background: rgba(2, 132, 199, 0.06);
+  color: #0369a1;
+  border-left-color: #0284c7;
+}
+
+.showcase-shell.theme-light .terminal-box {
+  background: #0f172a;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.showcase-shell.theme-light .terminal-code {
+  color: #e2e8f0;
+}
+
+/* 联系作者 */
+.showcase-shell.theme-light .contact-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%);
+  border-color: rgba(99, 102, 241, 0.25);
+  box-shadow: 0 16px 40px rgba(99, 102, 241, 0.08);
+}
+
+.showcase-shell.theme-light .author-name {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .contact-intro {
+  color: #475569;
+}
+
+.showcase-shell.theme-light .channel-code {
+  background: #f1f5f9;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #4338ca;
+}
+
+.showcase-shell.theme-light .service-box {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.showcase-shell.theme-light .service-title {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .service-item strong {
+  color: #1e293b;
+}
+
+.showcase-shell.theme-light .service-item p {
+  color: #64748b;
+}
+
+/* 页脚 */
+.showcase-shell.theme-light .showcase-footer {
+  background: #f1f5f9;
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+.showcase-shell.theme-light .footer-brand {
+  color: #475569;
+}
+
+.showcase-shell.theme-light .tech-tag {
+  background: rgba(0, 0, 0, 0.05);
+  color: #475569;
+}
+
+.showcase-shell.theme-light .btn-footer-link {
+  color: #64748b;
+}
+
+.showcase-shell.theme-light .btn-footer-link:hover {
+  color: #0f172a;
+}
+
+.showcase-shell.theme-light .btn-footer-enter {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #4338ca;
 }
 </style>

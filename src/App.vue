@@ -433,7 +433,7 @@ watch(() => settings.theme, applyTheme)
 .showcase-stage {
   overflow-y: auto !important;
   height: 100vh !important;
-  background: #07080e !important;
+  background: var(--bg-canvas) !important;
 }
 
 .showcase-rail-btn {

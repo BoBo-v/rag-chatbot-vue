@@ -3198,6 +3198,10 @@ function triggerAgentSimulation() {
   grid-template-columns: 1fr 1.15fr;
   gap: 28px;
   margin-top: 40px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .deploy-card {
@@ -3207,6 +3211,11 @@ function triggerAgentSimulation() {
   padding: 32px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .live-card {
@@ -3227,6 +3236,10 @@ function triggerAgentSimulation() {
   border-radius: 999px;
   font-weight: 600;
   margin-bottom: 14px;
+  max-width: 100%;
+  box-sizing: border-box;
+  line-height: 1.4;
+  word-break: break-word;
 }
 
 .purple-tag {
@@ -3239,12 +3252,15 @@ function triggerAgentSimulation() {
   font-weight: 800;
   color: #fff;
   margin-bottom: 8px;
+  word-break: break-word;
 }
 
 .deploy-card-desc {
   font-size: 0.88rem;
   color: #94a3b8;
   margin-bottom: 20px;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 .deploy-feature-list {
@@ -3254,14 +3270,25 @@ function triggerAgentSimulation() {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .deploy-feature-list li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   font-size: 0.86rem;
   color: #cbd5e1;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.green-check,
+.purple-check {
+  flex-shrink: 0;
+  margin-top: 3px;
 }
 
 .green-check { color: #10b981; }
@@ -3276,6 +3303,8 @@ function triggerAgentSimulation() {
   border-radius: 0 6px 6px 0;
   margin-top: auto;
   margin-bottom: 20px;
+  word-break: break-word;
+  line-height: 1.45;
 }
 
 .btn-deploy-action {
@@ -3292,6 +3321,9 @@ function triggerAgentSimulation() {
   font-size: 0.92rem;
   cursor: pointer;
   transition: all 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
 }
 
 .btn-deploy-action:hover {
@@ -3306,15 +3338,21 @@ function triggerAgentSimulation() {
   border-radius: 10px;
   overflow: hidden;
   margin-top: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .terminal-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  gap: 8px;
+  padding: 8px 12px;
   background: rgba(255, 255, 255, 0.04);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-sizing: border-box;
 }
 
 .term-dot {
@@ -3322,35 +3360,61 @@ function triggerAgentSimulation() {
   height: 8px;
   border-radius: 50%;
   background: #10b981;
+  flex-shrink: 0;
 }
 
 .term-title {
   font-size: 0.72rem;
   color: #94a3b8;
   font-family: monospace;
+  white-space: nowrap;
 }
 
 .btn-copy-code {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
+  padding: 4px 10px;
   background: rgba(255, 255, 255, 0.08);
   border: none;
   border-radius: 4px;
   color: #cbd5e1;
   font-size: 0.72rem;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.btn-copy-code:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .terminal-code {
   margin: 0;
-  padding: 14px;
-  font-family: 'Fira Code', monospace;
+  padding: 12px 14px;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
   font-size: 0.78rem;
   color: #a5b4fc;
-  line-height: 1.5;
+  line-height: 1.55;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.terminal-code code {
+  font-family: inherit;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 /* ── 7. 联系作者专属卡片 ── */
@@ -3809,8 +3873,19 @@ function triggerAgentSimulation() {
     font-size: 1.15rem;
   }
 
+  .deploy-comparison-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    width: 100%;
+    max-width: 100%;
+  }
+
   .deploy-card {
-    padding: 22px 16px;
+    padding: 20px 14px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .deploy-card-title {
@@ -3948,13 +4023,50 @@ function triggerAgentSimulation() {
     gap: 6px;
   }
 
+  .deploy-card {
+    padding: 16px 12px;
+    border-radius: 14px;
+  }
+
+  .deploy-status-tag {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    line-height: 1.35;
+  }
+
+  .deploy-feature-list {
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .deploy-feature-list li {
+    font-size: 0.8rem;
+    gap: 8px;
+    line-height: 1.4;
+  }
+
+  .terminal-box {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .terminal-bar {
+    padding: 6px 10px;
+  }
+
   .terminal-code {
     font-size: 0.68rem;
-    padding: 10px;
+    padding: 8px 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .btn-deploy-action {
     width: 100%;
+    padding: 10px 14px;
+    font-size: 0.86rem;
   }
 }
 

@@ -1,16 +1,22 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="dark" data-theme-preference="dark">
+<html lang="zh-CN" data-theme="light" data-theme-preference="light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#09080f" />
+    <meta name="theme-color" content="#f7f5fb" />
     <title>技术支持工单辅助决策台</title>
     <script>
       ;(() => {
-        const fallbackTheme = 'dark'
+        const fallbackTheme = 'light'
         try {
-          const saved = JSON.parse(localStorage.getItem('ai-chat-settings') || '{}')
+          const themeMigrated = localStorage.getItem('ai-chat-theme-default-v2')
+          let saved = JSON.parse(localStorage.getItem('ai-chat-settings') || '{}')
+          if (!themeMigrated) {
+            saved.theme = 'light'
+            localStorage.setItem('ai-chat-settings', JSON.stringify(saved))
+            localStorage.setItem('ai-chat-theme-default-v2', '1')
+          }
           const preference = ['dark', 'light', 'system'].includes(saved.theme)
             ? saved.theme
             : fallbackTheme

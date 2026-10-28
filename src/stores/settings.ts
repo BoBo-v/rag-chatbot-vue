@@ -78,7 +78,7 @@ export const DEFAULT_SYSTEM_PROMPT = `你是一个面向企业技术支持与工
 const defaults: AppSettings = {
     transport: 'direct',
     provider: 'ollama',
-    theme: 'dark',
+    theme: 'light',
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     maxContextTokens: 128000,
     responseTimeoutSeconds: 30,
@@ -111,6 +111,11 @@ function load(): AppSettings {
         const raw = localStorage.getItem(STORAGE_KEY)
         if (raw) {
             const saved = JSON.parse(raw)
+            const themeMigrated = localStorage.getItem('ai-chat-theme-default-v2')
+            if (!themeMigrated) {
+                saved.theme = 'light'
+                localStorage.setItem('ai-chat-theme-default-v2', '1')
+            }
             // 只读取当前版本需要的字段。旧字段只用于迁移，不再写回 settings。
             return {
                 ...defaults,

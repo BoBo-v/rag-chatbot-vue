@@ -2312,10 +2312,332 @@ function triggerAgentSimulation() {
   .eval-metrics-row { grid-template-columns: repeat(2, 1fr); }
 }
 
-@media (max-width: 640px) {
-  .metrics-grid { grid-template-columns: 1fr; }
-  .scenario-switch { flex-direction: column; }
-  .pipeline-steps { overflow-x: auto; justify-content: flex-start; gap: 16px; }
-  .pipe-line { display: none; }
+@media (max-width: 768px) {
+  .container {
+    padding: 0 16px;
+  }
+
+  .nav-container {
+    padding: 10px 16px;
+  }
+
+  .hero-section {
+    padding: 40px 16px 56px;
+  }
+
+  .hero-badge {
+    max-width: 100%;
+    font-size: 0.74rem;
+    padding: 5px 10px;
+    line-height: 1.35;
+  }
+
+  .hero-title {
+    font-size: clamp(1.85rem, 6.5vw, 2.6rem);
+  }
+
+  .hero-description {
+    font-size: 0.92rem;
+    padding: 0 4px;
+    margin-bottom: 24px;
+  }
+
+  .mockup-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .window-dots {
+    display: none;
+  }
+
+  .mockup-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    scrollbar-width: none;
+    padding: 3px;
+    gap: 4px;
+  }
+
+  .mockup-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mockup-tab {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  .window-action-link {
+    display: none;
+  }
+
+  .mockup-body {
+    padding: 14px 10px;
+  }
+
+  .chat-msg {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .msg-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.7rem;
+  }
+
+  .msg-bubble {
+    font-size: 0.82rem;
+    padding: 10px 12px;
+  }
+
+  .trace-steps {
+    margin-left: 2px;
+    padding-left: 12px;
+    gap: 10px;
+  }
+
+  .trace-dot {
+    left: -18px;
+    width: 8px;
+    height: 8px;
+  }
+
+  .trace-item {
+    padding: 8px 10px;
+  }
+
+  .trace-label {
+    font-size: 0.78rem;
+    flex-wrap: wrap;
+  }
+
+  .trace-desc {
+    font-size: 0.76rem;
+    line-height: 1.45;
+  }
+
+  .agent-prompt-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.78rem;
+  }
+
+  .btn-micro-run {
+    align-self: flex-end;
+  }
+
+  .compare-footer-bar {
+    font-size: 0.74rem;
+    text-align: center;
+    padding: 8px;
+    line-height: 1.4;
+  }
+
+  .pipeline-steps {
+    overflow-x: auto;
+    justify-content: flex-start;
+    gap: 14px;
+    padding: 12px 10px;
+  }
+
+  .pipe-step {
+    flex-shrink: 0;
+    min-width: 68px;
+    font-size: 0.7rem;
+  }
+
+  .pipe-line {
+    display: none;
+  }
+
+  .eval-metrics-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .eval-metric-box {
+    padding: 10px 6px;
+  }
+
+  .eval-metric-box strong {
+    font-size: 1rem;
+  }
+
+  .bento-section,
+  .arch-section,
+  .deploy-section {
+    padding: 56px 0;
+  }
+
+  .section-title {
+    font-size: 1.6rem;
+  }
+
+  .section-desc {
+    font-size: 0.88rem;
+  }
+
+  .bento-card {
+    padding: 22px 16px;
+  }
+
+  .card-title {
+    font-size: 1.15rem;
+  }
+
+  .deploy-card {
+    padding: 22px 16px;
+  }
+
+  .deploy-card-title {
+    font-size: 1.25rem;
+  }
+
+  .contact-section {
+    padding: 40px 0 60px;
+  }
+
+  .contact-card {
+    padding: 22px 16px;
+    gap: 24px;
+  }
+
+  .author-name {
+    font-size: 1.15rem;
+  }
+
+  .contact-intro {
+    font-size: 0.85rem;
+  }
+
+  .contact-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .channel-label {
+    width: auto;
+    font-size: 0.78rem;
+  }
+
+  .channel-code {
+    text-align: center;
+    font-size: 0.95rem;
+    padding: 8px;
+  }
+
+  .btn-copy-channel {
+    width: 100%;
+    justify-content: center;
+    padding: 8px;
+  }
+
+  .footer-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .footer-tags {
+    justify-content: center;
+  }
+
+  .footer-actions {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand-pill {
+    display: none;
+  }
+
+  .nav-actions .btn-ghost {
+    padding: 6px 8px;
+    font-size: 0.75rem;
+  }
+
+  .nav-actions .btn-ghost span {
+    display: none;
+  }
+
+  .nav-actions .btn-primary {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+
+  .hero-title {
+    font-size: 1.7rem;
+  }
+
+  .scenario-switch {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .scenario-btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.82rem;
+    padding: 8px 12px;
+  }
+
+  .hero-cta-group {
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .btn-hero-primary,
+  .btn-hero-secondary {
+    width: 100%;
+    padding: 12px 16px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .metric-item {
+    padding: 18px 14px;
+    text-align: center;
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .metric-num {
+    font-size: 1.5rem;
+  }
+
+  .v-pill {
+    font-size: 0.72rem;
+    padding: 4px 8px;
+  }
+
+  .eval-metrics-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .terminal-code {
+    font-size: 0.68rem;
+    padding: 10px;
+  }
+
+  .btn-deploy-action {
+    width: 100%;
+  }
 }
 </style>

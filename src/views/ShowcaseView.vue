@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Flame,
   Layers,
+  Lock,
   MessageSquare,
   Moon,
   Network,
@@ -20,6 +21,7 @@ import {
   Sun,
   Terminal,
   Workflow,
+  Zap,
 } from 'lucide-vue-next'
 import { settings } from '../stores/settings'
 
@@ -513,36 +515,227 @@ function triggerAgentSimulation() {
       </div>
     </section>
 
-    <!-- ── 3. 数据与硬核实力标尺 ── -->
+    <!-- ── 3. 数据与硬核实力标尺 (赛博全景指标矩阵) ── -->
     <section class="metrics-bar-section">
       <div class="container">
+        <div class="metrics-section-header">
+          <div class="metrics-header-pill">
+            <span class="pulsing-beacon"></span>
+            SYSTEM BENCHMARKS &amp; RELIABILITY
+          </div>
+          <h3 class="metrics-section-title">为苛刻的本地工程环境打造的硬核指标</h3>
+        </div>
+
         <div class="metrics-grid">
-          <div class="metric-item">
-            <div class="metric-icon"><Shield :size="20" /></div>
-            <div class="metric-num">100%</div>
-            <div class="metric-title">本地隐私安全</div>
-            <div class="metric-desc">数据保存在浏览器 IndexedDB 与本地后端，拒绝云端隐秘泄露</div>
+          <!-- 卡片 1: 本地隐私安全 -->
+          <div class="metric-card metric-card--emerald">
+            <div class="metric-card-watermark">100%</div>
+            <div class="metric-card-laser"></div>
+            
+            <div class="metric-card-top">
+              <div class="metric-tag">
+                <span class="tag-code">SEC-01</span>
+                <span class="tag-sep">/</span>
+                <span class="tag-label">物理级隔离</span>
+              </div>
+              <div class="metric-status-badge">
+                <span class="status-dot"></span>
+                <span>0-Cloud 离线</span>
+              </div>
+            </div>
+
+            <div class="metric-card-core">
+              <div class="metric-icon-wrap">
+                <Shield :size="20" />
+              </div>
+              <div class="metric-stat-group">
+                <div class="metric-num-wrap">
+                  <span class="metric-num">100</span>
+                  <span class="metric-unit">%</span>
+                </div>
+                <h4 class="metric-title">本地隐私安全</h4>
+              </div>
+            </div>
+
+            <p class="metric-desc">
+              数据保存在浏览器 IndexedDB 与本地后端，拒绝云端隐秘泄露
+            </p>
+
+            <div class="metric-tech-widget widget-storage">
+              <div class="widget-route-bar">
+                <span class="route-node">
+                  <Lock :size="11" /> IndexedDB
+                </span>
+                <span class="route-arrow">➔</span>
+                <span class="route-node">本地 SQLite</span>
+                <span class="route-deny">✖ 零云端回传</span>
+              </div>
+            </div>
+
+            <div class="metric-specs-footer">
+              <span class="spec-pill">🔒 浏览器沙盒持久化</span>
+              <span class="spec-pill">🛡️ 密钥零回传</span>
+            </div>
           </div>
 
-          <div class="metric-item">
-            <div class="metric-icon"><Layers :size="20" /></div>
-            <div class="metric-num">6 阶段</div>
-            <div class="metric-title">SSE 上传流水线</div>
-            <div class="metric-desc">支持图片视觉 OCR 识别转 Markdown，打通架构图与截图检索</div>
+          <!-- 卡片 2: SSE 上传流水线 -->
+          <div class="metric-card metric-card--cyan">
+            <div class="metric-card-watermark">06</div>
+            <div class="metric-card-laser"></div>
+
+            <div class="metric-card-top">
+              <div class="metric-tag">
+                <span class="tag-code">PIPE-02</span>
+                <span class="tag-sep">/</span>
+                <span class="tag-label">视觉 OCR 管线</span>
+              </div>
+              <div class="metric-status-badge">
+                <span class="status-dot"></span>
+                <span>SSE 实时推流</span>
+              </div>
+            </div>
+
+            <div class="metric-card-core">
+              <div class="metric-icon-wrap">
+                <Layers :size="20" />
+              </div>
+              <div class="metric-stat-group">
+                <div class="metric-num-wrap">
+                  <span class="metric-num">6</span>
+                  <span class="metric-unit">阶段</span>
+                </div>
+                <h4 class="metric-title">SSE 上传流水线</h4>
+              </div>
+            </div>
+
+            <p class="metric-desc">
+              支持图片视觉 OCR 识别转 Markdown，打通架构图与截图检索
+            </p>
+
+            <div class="metric-tech-widget widget-pipeline">
+              <div class="pipeline-track">
+                <div class="pipeline-step step-done" title="上传"><span>1</span></div>
+                <div class="pipeline-line"></div>
+                <div class="pipeline-step step-done" title="校验"><span>2</span></div>
+                <div class="pipeline-line"></div>
+                <div class="pipeline-step step-active" title="OCR"><span>3</span></div>
+                <div class="pipeline-line"></div>
+                <div class="pipeline-step" title="切块"><span>4</span></div>
+                <div class="pipeline-line"></div>
+                <div class="pipeline-step" title="向量"><span>5</span></div>
+                <div class="pipeline-line"></div>
+                <div class="pipeline-step" title="入库"><span>6</span></div>
+              </div>
+              <div class="pipeline-label">视觉提取 ➔ 语义切块 ➔ 向量入库</div>
+            </div>
+
+            <div class="metric-specs-footer">
+              <span class="spec-pill">🖼️ Qwen-VL 视觉解析</span>
+              <span class="spec-pill">⚡ 毫秒级分块广播</span>
+            </div>
           </div>
 
-          <div class="metric-item">
-            <div class="metric-icon"><Network :size="20" /></div>
-            <div class="metric-num">3 大协议</div>
-            <div class="metric-title">标准无缝集成</div>
-            <div class="metric-desc">深度支持 Ollama、OpenAI 接口规范及 Anthropic MCP 协议</div>
+          <!-- 卡片 3: 3 大协议标准集成 -->
+          <div class="metric-card metric-card--purple">
+            <div class="metric-card-watermark">03</div>
+            <div class="metric-card-laser"></div>
+
+            <div class="metric-card-top">
+              <div class="metric-tag">
+                <span class="tag-code">PROTO-03</span>
+                <span class="tag-sep">/</span>
+                <span class="tag-label">开放互联协议</span>
+              </div>
+              <div class="metric-status-badge">
+                <span class="status-dot"></span>
+                <span>开放协议族</span>
+              </div>
+            </div>
+
+            <div class="metric-card-core">
+              <div class="metric-icon-wrap">
+                <Network :size="20" />
+              </div>
+              <div class="metric-stat-group">
+                <div class="metric-num-wrap">
+                  <span class="metric-num">3</span>
+                  <span class="metric-unit">大协议</span>
+                </div>
+                <h4 class="metric-title">标准无缝集成</h4>
+              </div>
+            </div>
+
+            <p class="metric-desc">
+              深度支持 Ollama、OpenAI 接口规范及 Anthropic MCP 协议
+            </p>
+
+            <div class="metric-tech-widget widget-chips">
+              <div class="protocol-chip">
+                <span class="chip-glow"></span>
+                <strong>Ollama</strong> 本地原语
+              </div>
+              <div class="protocol-chip">
+                <span class="chip-glow"></span>
+                <strong>OpenAI</strong> 标准生态
+              </div>
+              <div class="protocol-chip">
+                <span class="chip-glow"></span>
+                <strong>MCP</strong> 协议扩展
+              </div>
+            </div>
+
+            <div class="metric-specs-footer">
+              <span class="spec-pill">🔌 零侵入热插拔</span>
+              <span class="spec-pill">🌐 工具调用标准化</span>
+            </div>
           </div>
 
-          <div class="metric-item">
-            <div class="metric-icon"><RotateCcw :size="20" /></div>
-            <div class="metric-num">0 丢包</div>
-            <div class="metric-title">断点续传恢复</div>
-            <div class="metric-desc">基于 Last-Event-ID 与幂等生成任务，断网刷新无损恢复</div>
+          <!-- 卡片 4: 0 丢包断点续传恢复 -->
+          <div class="metric-card metric-card--amber">
+            <div class="metric-card-watermark">00</div>
+            <div class="metric-card-laser"></div>
+
+            <div class="metric-card-top">
+              <div class="metric-tag">
+                <span class="tag-code">RES-04</span>
+                <span class="tag-sep">/</span>
+                <span class="tag-label">任务守护状态机</span>
+              </div>
+              <div class="metric-status-badge">
+                <span class="status-dot"></span>
+                <span>幂等生成引擎</span>
+              </div>
+            </div>
+
+            <div class="metric-card-core">
+              <div class="metric-icon-wrap">
+                <RotateCcw :size="20" />
+              </div>
+              <div class="metric-stat-group">
+                <div class="metric-num-wrap">
+                  <span class="metric-num">0</span>
+                  <span class="metric-unit">丢包</span>
+                </div>
+                <h4 class="metric-title">断点续传恢复</h4>
+              </div>
+            </div>
+
+            <p class="metric-desc">
+              基于 Last-Event-ID 与幂等生成任务，断网刷新无损恢复
+            </p>
+
+            <div class="metric-tech-widget widget-replay">
+              <div class="replay-stream">
+                <span class="pulse-icon"><Zap :size="12" /></span>
+                <span class="replay-text">Last-Event-ID 游标重放</span>
+                <span class="replay-badge">无损续接</span>
+              </div>
+            </div>
+
+            <div class="metric-specs-footer">
+              <span class="spec-pill">🔄 刷新状态不中断</span>
+              <span class="spec-pill">💾 幂等任务锁保护</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1703,12 +1896,54 @@ function triggerAgentSimulation() {
   color: #fff;
 }
 
-/* ── 3. 数据与硬核实力标尺 ── */
+/* ── 3. 数据与硬核实力标尺 (赛博全景指标矩阵) ── */
 .metrics-bar-section {
   position: relative;
   z-index: 10;
-  padding: 30px 0 60px;
+  padding: 40px 0 65px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.metrics-section-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.metrics-header-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #a5b4fc;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.pulsing-beacon {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: beacon-pulse 2s infinite ease-in-out;
+}
+
+@keyframes beacon-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(1.4); }
+}
+
+.metrics-section-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
 }
 
 .metrics-grid {
@@ -1717,51 +1952,476 @@ function triggerAgentSimulation() {
   gap: 20px;
 }
 
-.metric-item {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 14px;
-  padding: 24px;
-  transition: all 0.25s;
+.metric-card {
+  position: relative;
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.78) 0%, rgba(15, 23, 42, 0.92) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 22px 20px 18px;
+  overflow: hidden;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
 }
 
-.metric-item:hover {
+.metric-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.75);
+}
+
+.metric-card-laser {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  opacity: 0.8;
+  transition: all 0.3s;
+}
+
+.metric-card:hover .metric-card-laser {
+  opacity: 1;
+  height: 3px;
+}
+
+.metric-card-watermark {
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  font-size: 5rem;
+  font-weight: 900;
+  font-family: 'JetBrains Mono', 'Space Grotesk', system-ui, sans-serif;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.04;
+  letter-spacing: -0.05em;
+  transition: all 0.35s;
+}
+
+.metric-card:hover .metric-card-watermark {
+  opacity: 0.09;
+  transform: scale(1.05) translateX(-4px);
+}
+
+/* 顶部标签栏 */
+.metric-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 2;
+}
+
+.metric-tag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #94a3b8;
   background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(99, 102, 241, 0.3);
-  transform: translateY(-2px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 6px;
 }
 
-.metric-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: rgba(99, 102, 241, 0.12);
-  color: #818cf8;
+.metric-tag .tag-code {
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.metric-tag .tag-sep {
+  opacity: 0.4;
+}
+
+.metric-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* 核心数值展示区 */
+.metric-card-core {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  position: relative;
+  z-index: 2;
+}
+
+.metric-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 14px;
+  flex-shrink: 0;
+  transition: transform 0.3s;
+}
+
+.metric-card:hover .metric-icon-wrap {
+  transform: scale(1.08) rotate(3deg);
+}
+
+.metric-stat-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-num-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  line-height: 1.1;
 }
 
 .metric-num {
-  font-size: 1.8rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: #fff;
-  margin-bottom: 4px;
+  font-size: 2.1rem;
+  font-weight: 900;
+  font-family: 'JetBrains Mono', 'Space Grotesk', system-ui, sans-serif;
+  letter-spacing: -0.03em;
+}
+
+.metric-unit {
+  font-size: 0.95rem;
+  font-weight: 700;
+  opacity: 0.9;
 }
 
 .metric-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #e2e8f0;
-  margin-bottom: 6px;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-top: 1px;
+  letter-spacing: -0.01em;
 }
 
 .metric-desc {
   font-size: 0.82rem;
   color: #94a3b8;
-  line-height: 1.5;
+  line-height: 1.55;
+  margin-bottom: 14px;
+  position: relative;
+  z-index: 2;
+  flex-grow: 1;
+}
+
+/* 微科技视效组件 */
+.metric-tech-widget {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  position: relative;
+  z-index: 2;
+  font-size: 0.72rem;
+}
+
+/* Widget 1: 本地存储路由 */
+.widget-storage .widget-route-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.route-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #34d399;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+}
+
+.route-arrow {
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.route-deny {
+  color: #f87171;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: rgba(239, 68, 68, 0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* Widget 2: 6阶段流水线 */
+.widget-pipeline .pipeline-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.pipeline-step {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.06);
+  color: #64748b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.25s;
+}
+
+.pipeline-step.step-done {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: #06b6d4;
+  color: #67e8f9;
+}
+
+.pipeline-step.step-active {
+  background: #06b6d4;
+  color: #090d16;
+  box-shadow: 0 0 10px #06b6d4;
+  transform: scale(1.15);
+}
+
+.pipeline-line {
+  flex: 1;
+  height: 2px;
+  background: rgba(6, 182, 212, 0.3);
+  margin: 0 2px;
+}
+
+.pipeline-label {
+  font-size: 0.68rem;
+  color: #67e8f9;
+  opacity: 0.85;
+  text-align: center;
+}
+
+/* Widget 3: 协议微芯片 */
+.widget-chips {
+  display: flex;
+  gap: 5px;
+  justify-content: space-between;
+}
+
+.protocol-chip {
+  position: relative;
+  flex: 1;
+  text-align: center;
+  padding: 4px 2px;
+  border-radius: 6px;
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  font-size: 0.65rem;
+  color: #d8b4fe;
+  white-space: nowrap;
+}
+
+.protocol-chip strong {
+  color: #fff;
+  display: block;
+  font-size: 0.7rem;
+}
+
+/* Widget 4: 断点续传重播 */
+.widget-replay .replay-stream {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.pulse-icon {
+  color: #fbbf24;
+  display: flex;
+  align-items: center;
+  animation: lightning-flash 1.8s infinite ease-in-out;
+}
+
+@keyframes lightning-flash {
+  0%, 100% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 2px #fbbf24); }
+  50% { transform: scale(1.2); opacity: 0.6; filter: drop-shadow(0 0 8px #fbbf24); }
+}
+
+.replay-text {
+  font-family: 'JetBrains Mono', monospace;
+  color: #fde68a;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.replay-badge {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+/* 底部特性微标签 */
+.metric-specs-footer {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 2;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.spec-pill {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* ── 4 色系专属霓虹主题 ── */
+/* 1. Emerald - 隐私安全 */
+.metric-card--emerald {
+  border-color: rgba(16, 185, 129, 0.22);
+}
+.metric-card--emerald .metric-card-laser {
+  background: linear-gradient(90deg, transparent, #10b981 50%, transparent);
+  box-shadow: 0 0 12px #10b981;
+}
+.metric-card--emerald .status-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+.metric-card--emerald .metric-icon-wrap {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.metric-card--emerald .metric-num {
+  background: linear-gradient(135deg, #a7f3d0 0%, #10b981 60%, #059669 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.metric-card--emerald .metric-unit {
+  color: #34d399;
+}
+.metric-card--emerald:hover {
+  border-color: rgba(16, 185, 129, 0.45);
+  box-shadow: 0 20px 45px -12px rgba(16, 185, 129, 0.25);
+}
+
+/* 2. Cyan - 流水线 */
+.metric-card--cyan {
+  border-color: rgba(6, 182, 212, 0.22);
+}
+.metric-card--cyan .metric-card-laser {
+  background: linear-gradient(90deg, transparent, #06b6d4 50%, transparent);
+  box-shadow: 0 0 12px #06b6d4;
+}
+.metric-card--cyan .status-dot {
+  background: #06b6d4;
+  box-shadow: 0 0 6px #06b6d4;
+}
+.metric-card--cyan .metric-icon-wrap {
+  background: rgba(6, 182, 212, 0.12);
+  color: #06b6d4;
+  border: 1px solid rgba(6, 182, 212, 0.25);
+}
+.metric-card--cyan .metric-num {
+  background: linear-gradient(135deg, #a5f3fc 0%, #06b6d4 60%, #0891b2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.metric-card--cyan .metric-unit {
+  color: #22d3ee;
+}
+.metric-card--cyan:hover {
+  border-color: rgba(6, 182, 212, 0.45);
+  box-shadow: 0 20px 45px -12px rgba(6, 182, 212, 0.25);
+}
+
+/* 3. Purple - 协议标准 */
+.metric-card--purple {
+  border-color: rgba(168, 85, 247, 0.22);
+}
+.metric-card--purple .metric-card-laser {
+  background: linear-gradient(90deg, transparent, #a855f7 50%, transparent);
+  box-shadow: 0 0 12px #a855f7;
+}
+.metric-card--purple .status-dot {
+  background: #a855f7;
+  box-shadow: 0 0 6px #a855f7;
+}
+.metric-card--purple .metric-icon-wrap {
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.25);
+}
+.metric-card--purple .metric-num {
+  background: linear-gradient(135deg, #e9d5ff 0%, #a855f7 60%, #7e22ce 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.metric-card--purple .metric-unit {
+  color: #c084fc;
+}
+.metric-card--purple:hover {
+  border-color: rgba(168, 85, 247, 0.45);
+  box-shadow: 0 20px 45px -12px rgba(168, 85, 247, 0.25);
+}
+
+/* 4. Amber - 断点续传 */
+.metric-card--amber {
+  border-color: rgba(245, 158, 11, 0.22);
+}
+.metric-card--amber .metric-card-laser {
+  background: linear-gradient(90deg, transparent, #f59e0b 50%, transparent);
+  box-shadow: 0 0 12px #f59e0b;
+}
+.metric-card--amber .status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+}
+.metric-card--amber .metric-icon-wrap {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+.metric-card--amber .metric-num {
+  background: linear-gradient(135deg, #fef3c7 0%, #f59e0b 60%, #d97706 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.metric-card--amber .metric-unit {
+  color: #fbbf24;
+}
+.metric-card--amber:hover {
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 20px 45px -12px rgba(245, 158, 11, 0.25);
 }
 
 /* ── 4. Bento Grid 核心特性矩阵 ── */
@@ -2677,19 +3337,15 @@ function triggerAgentSimulation() {
 
   .metrics-grid {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 14px;
   }
 
-  .metric-item {
-    padding: 18px 14px;
-    text-align: center;
-    align-items: center;
-    display: flex;
-    flex-direction: column;
+  .metric-card {
+    padding: 18px 16px 14px;
   }
 
-  .metric-num {
-    font-size: 1.5rem;
+  .metric-card-watermark {
+    font-size: 3.6rem;
   }
 
   .v-pill {
@@ -3001,33 +3657,137 @@ function triggerAgentSimulation() {
   color: #24283b;
 }
 
-/* 标尺与特性矩阵 */
+/* 标尺与特性矩阵 (赛博指标卡亮色主题深度定制) */
 .showcase-shell.theme-light .metrics-bar-section {
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
 }
 
-.showcase-shell.theme-light .metric-item {
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 244, 0.9);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
-}
-
-.showcase-shell.theme-light .metric-item:hover {
-  background: #ffffff;
-  border-color: rgba(99, 102, 241, 0.35);
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.06);
-}
-
-.showcase-shell.theme-light .metric-num {
+.showcase-shell.theme-light .metrics-header-pill {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.2);
   color: #4f46e5;
 }
 
+.showcase-shell.theme-light .metrics-section-title {
+  color: #1e293b;
+}
+
+.showcase-shell.theme-light .metric-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 244, 0.95);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.03);
+}
+
+.showcase-shell.theme-light .metric-card:hover {
+  background: #ffffff;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.08);
+}
+
+.showcase-shell.theme-light .metric-card-watermark {
+  opacity: 0.04;
+  -webkit-text-stroke: 1.5px rgba(0, 0, 0, 0.15);
+}
+
+.showcase-shell.theme-light .metric-card-top .metric-tag {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.showcase-shell.theme-light .metric-card-top .metric-tag .tag-code {
+  color: #1e293b;
+}
+
+.showcase-shell.theme-light .metric-status-badge {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
 .showcase-shell.theme-light .metric-title {
-  color: #2b3048;
+  color: #1e293b;
 }
 
 .showcase-shell.theme-light .metric-desc {
-  color: #646e88;
+  color: #475569;
+}
+
+.showcase-shell.theme-light .metric-tech-widget {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.showcase-shell.theme-light .pipeline-step {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+}
+
+.showcase-shell.theme-light .pipeline-step.step-done {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: #0891b2;
+  color: #0891b2;
+}
+
+.showcase-shell.theme-light .pipeline-step.step-active {
+  background: #0891b2;
+  color: #ffffff;
+}
+
+.showcase-shell.theme-light .pipeline-line {
+  background: rgba(6, 182, 212, 0.25);
+}
+
+.showcase-shell.theme-light .pipeline-label {
+  color: #0e7490;
+}
+
+.showcase-shell.theme-light .protocol-chip {
+  background: rgba(168, 85, 247, 0.06);
+  border-color: rgba(168, 85, 247, 0.25);
+  color: #7e22ce;
+}
+
+.showcase-shell.theme-light .protocol-chip strong {
+  color: #6b21a8;
+}
+
+.showcase-shell.theme-light .widget-replay .replay-text {
+  color: #92400e;
+}
+
+.showcase-shell.theme-light .metric-specs-footer {
+  border-top-color: #e2e8f0;
+}
+
+.showcase-shell.theme-light .spec-pill {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.showcase-shell.theme-light .metric-card--emerald .metric-num {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.showcase-shell.theme-light .metric-card--cyan .metric-num {
+  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.showcase-shell.theme-light .metric-card--purple .metric-num {
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.showcase-shell.theme-light .metric-card--amber .metric-num {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .showcase-shell.theme-light .section-title {

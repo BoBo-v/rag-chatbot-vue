@@ -3667,16 +3667,41 @@ function triggerAgentSimulation() {
   .arch-topology {
     flex-direction: column;
     gap: 16px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .arch-node-col {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
   .arch-flow-connector {
     width: 100%;
-    flex-direction: row;
-    gap: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     padding: 8px 0;
+    box-sizing: border-box;
   }
   .connector-pipe {
-    width: 60px;
-    height: 2px;
+    width: 2px;
+    height: 16px;
+    background: rgba(99, 102, 241, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+  .pipe-pulse {
+    position: absolute;
+    left: 0;
+    right: 0;
+    width: 2px;
+    height: 8px;
+    background: linear-gradient(180deg, transparent, #818cf8, transparent);
+    animation: pulse-travel-v 1.8s infinite linear;
   }
   .deploy-comparison-grid { grid-template-columns: 1fr; }
   .contact-card { grid-template-columns: 1fr; }
@@ -4021,6 +4046,98 @@ function triggerAgentSimulation() {
   .eval-metrics-row {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  /* 架构矩阵移动端超小屏精细化适配 */
+  .arch-section {
+    padding: 44px 0;
+  }
+
+  .arch-badge-wrapper {
+    margin-bottom: 8px;
+  }
+
+  .arch-telemetry-strip {
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 12px;
+  }
+
+  .telemetry-divider {
+    display: none;
+  }
+
+  .telemetry-stat {
+    background: rgba(255, 255, 255, 0.04);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+  }
+
+  .arch-node-col {
+    border-radius: 14px;
+  }
+
+  .arch-node-header {
+    padding: 12px 14px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .header-icon-box {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .node-main-title {
+    font-size: 0.88rem;
+    line-height: 1.3;
+  }
+
+  .status-pill {
+    font-size: 0.6rem;
+    padding: 2px 6px;
+    margin-left: auto;
+  }
+
+  .arch-node-box {
+    padding: 12px 10px;
+    gap: 8px;
+  }
+
+  .node-tech-item {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .node-title-row {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .node-name {
+    font-size: 0.78rem;
+  }
+
+  .node-tag {
+    font-size: 0.58rem;
+    padding: 1px 4px;
+  }
+
+  .node-sub {
+    font-size: 0.68rem;
+    line-height: 1.4;
+  }
+
+  .node-footer-specs {
+    padding: 8px 10px;
+    gap: 4px;
+  }
+
+  .spec-code {
+    font-size: 0.6rem;
+    padding: 1px 5px;
   }
 
   .deploy-card {
@@ -4535,6 +4652,10 @@ function triggerAgentSimulation() {
   background: #ffffff;
   border-color: rgba(226, 232, 240, 0.95);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.showcase-shell.theme-light .telemetry-stat {
+  background: #f1f5f9;
 }
 
 .showcase-shell.theme-light .telemetry-lbl {

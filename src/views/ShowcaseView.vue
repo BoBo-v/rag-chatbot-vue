@@ -11,7 +11,6 @@ import {
   ExternalLink,
   Flame,
   Layers,
-  Mail,
   MessageSquare,
   Network,
   RotateCcw,
@@ -40,8 +39,8 @@ const copiedCommand = ref(false)
 const authorInfo = {
   name: 'AI Chat 架构作者',
   role: '全栈 AI 开发者 · 专注于本地模型工程化落地',
-  wechat: 'ai-chat-dev', // 可在后续替换为您真实的微信号
-  email: 'developer@ai-chat.local', // 可在后续替换为您真实的邮箱
+  wechat: 'zhanglaoshi117',
+  email: '', // 邮箱先隐藏
 }
 
 const deployCommand = `git clone https://github.com/your-username/ai-chat.git
@@ -124,8 +123,8 @@ function triggerAgentSimulation() {
 
         <div class="nav-actions">
           <button type="button" class="btn-ghost" @click="scrollToSection('contact')">
-            <Mail :size="15" />
-            <span>商务/合作</span>
+            <MessageSquare :size="15" />
+            <span>商务/咨询</span>
           </button>
           <button type="button" class="btn-primary" @click="handleEnterWorkspace('chat')">
             <span>进入工作台</span>
@@ -718,7 +717,8 @@ function triggerAgentSimulation() {
                 </button>
               </div>
 
-              <div class="contact-row">
+              <!-- 邮箱联系方式暂时隐藏，微信作为唯一直接咨询通道 -->
+              <div v-if="authorInfo.email" class="contact-row">
                 <span class="channel-label">电子邮箱:</span>
                 <a :href="`mailto:${authorInfo.email}`" class="channel-link">{{ authorInfo.email }}</a>
               </div>

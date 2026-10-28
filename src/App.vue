@@ -9,6 +9,7 @@ import {
   LogOut,
   MessageSquare,
   Settings2,
+  Sparkles,
   TriangleAlert,
   User,
 } from 'lucide-vue-next'
@@ -16,6 +17,7 @@ import StyleChat from './views/StyleChat.vue'
 import CompareChat from './views/CompareChat.vue'
 import KnowledgeBase from './views/KnowledgeBase.vue'
 import AgentWorkspace from './views/AgentWorkspace.vue'
+import ShowcaseView from './views/ShowcaseView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import LoginModal from './components/LoginModal.vue'
@@ -27,7 +29,7 @@ import { useAuthStore } from './stores/auth'
 import { useConversations } from './stores/conversations'
 import { useToast } from './composables/useToast'
 
-type AppMode = 'chat' | 'agent' | 'compare' | 'knowledge'
+type AppMode = 'chat' | 'agent' | 'compare' | 'knowledge' | 'showcase'
 
 const mode = ref<AppMode>('chat')
 const isDemoActive = ref(false)
@@ -36,6 +38,33 @@ const authStore = useAuthStore()
 const { isAuthenticated, user } = authStore
 const { generatingConvIds } = useConversations()
 const toast = useToast()
+
+function handleOpenShowcase() {
+  mode.value = 'showcase'
+  isDemoActive.value = false
+  if (window.location.hash !== '#/intro' && window.location.hash !== '#intro') {
+    window.location.hash = '#/intro'
+  }
+}
+
+function handleEnterWorkspace(targetMode: 'chat' | 'agent' | 'compare' | 'knowledge' = 'chat') {
+  mode.value = targetMode
+  isDemoActive.value = false
+  if (window.location.hash === '#/intro' || window.location.hash === '#intro' || window.location.hash === '#/showcase') {
+    history.replaceState(null, '', window.location.pathname + window.location.search)
+  }
+}
+
+function syncRouteFromHash() {
+  const hash = (window.location.hash || '').toLowerCase()
+  const search = new URLSearchParams(window.location.search)
+  if (hash === '#/intro' || hash === '#intro' || hash === '#/showcase' || search.get('view') === 'intro') {
+    mode.value = 'showcase'
+    isDemoActive.value = false
+  } else if (mode.value === 'showcase') {
+    mode.value = 'chat'
+  }
+}
 
 function handleOpenDemo() {
   if (generatingConvIds.value.size > 0) {
@@ -69,7 +98,7 @@ if (typeof window !== 'undefined') {
 }
 
 function handleSwitchMode(targetMode: string) {
-  if (['chat', 'agent', 'compare', 'knowledge'].includes(targetMode)) {
+  if (['chat', 'agent', 'compare', 'knowledge', 'showcase'].includes(targetMode)) {
     mode.value = targetMode as AppMode
     isDemoActive.value = false
   }
@@ -102,10 +131,13 @@ onMounted(() => {
   applyTheme(settings.theme)
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   mediaQuery.addEventListener('change', handleThemeMediaChange)
+  syncRouteFromHash()
+  window.addEventListener('hashchange', syncRouteFromHash)
 })
 
 onBeforeUnmount(() => {
   mediaQuery?.removeEventListener('change', handleThemeMediaChange)
+  window.removeEventListener('hashchange', syncRouteFromHash)
 })
 
 async function handleLogout() {
@@ -119,9 +151,9 @@ watch(() => settings.theme, applyTheme)
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'is-showcase': mode === 'showcase' }">
     <aside class="app-rail" aria-label="主导航">
-      <div class="brand-mark" title="技术支持工单辅助决策台">
+      <div class="brand-mark" title="技术支持工单辅助决策台 (点击查看产品介绍)" style="cursor: pointer;" @click="handleOpenShowcase">
         <img src="/favicon.svg" alt="技术支持工单辅助决策台" />
       </div>
 
@@ -137,6 +169,18 @@ watch(() => settings.theme, applyTheme)
         >
           <component :is="item.icon" :size="21" :stroke-width="1.7" aria-hidden="true" />
           <span>{{ item.label }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="rail-button showcase-rail-btn"
+          :class="{ active: !isDemoActive && mode === 'showcase' }"
+          title="产品宣传与特性介绍"
+          aria-label="产品介绍"
+          @click="handleOpenShowcase"
+        >
+          <Sparkles :size="21" :stroke-width="1.7" aria-hidden="true" />
+          <span>产品介绍</span>
         </button>
       </nav>
 
@@ -197,6 +241,9 @@ watch(() => settings.theme, applyTheme)
       <section v-if="!isDemoActive && mode === 'knowledge'" class="mode-page" aria-label="知识库与评测工作区">
         <KnowledgeBase />
       </section>
+      <section v-if="!isDemoActive && mode === 'showcase'" class="mode-page showcase-stage" aria-label="产品介绍与展示">
+        <ShowcaseView @enter-workspace="handleEnterWorkspace" />
+      </section>
     </main>
 
     <nav class="mobile-navigation" aria-label="移动端主导航" data-tour="mobile-nav">
@@ -210,6 +257,15 @@ watch(() => settings.theme, applyTheme)
       >
         <component :is="item.icon" :size="20" :stroke-width="1.8" aria-hidden="true" />
         <span>{{ item.label }}</span>
+      </button>
+      <button
+        type="button"
+        :class="{ active: !isDemoActive && mode === 'showcase' }"
+        aria-label="产品介绍"
+        @click="handleOpenShowcase"
+      >
+        <Sparkles :size="20" :stroke-width="1.8" aria-hidden="true" />
+        <span>介绍</span>
       </button>
       <button
         type="button"
@@ -364,6 +420,32 @@ watch(() => settings.theme, applyTheme)
   box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
 }
 
+.app-shell.is-showcase {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: 1fr !important;
+}
+
+.app-shell.is-showcase .app-rail,
+.app-shell.is-showcase .mobile-navigation {
+  display: none !important;
+}
+
+.showcase-stage {
+  overflow-y: auto !important;
+  height: 100vh !important;
+  background: #07080e !important;
+}
+
+.showcase-rail-btn {
+  color: #818cf8 !important;
+  margin-top: 4px;
+}
+
+.showcase-rail-btn:hover {
+  background: rgba(99, 102, 241, 0.12) !important;
+  color: #a5b4fc !important;
+}
+
 .app-stage,
 .mode-page {
   width: 100%;
@@ -391,7 +473,7 @@ watch(() => settings.theme, applyTheme)
     position: relative;
     z-index: var(--z-navigation);
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     padding: 5px 6px calc(5px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--border-subtle);
     background: var(--bg-sidebar);

@@ -103,11 +103,11 @@ function handleSwitchMode(targetMode: string) {
     isDemoActive.value = false
   }
 }
-const modes: { value: AppMode; label: string; icon: Component }[] = [
-  { value: 'chat', label: '工单决策', icon: MessageSquare },
-  { value: 'agent', label: '排障 Agent', icon: Bot },
-  { value: 'compare', label: '模型对比', icon: Columns2 },
-  { value: 'knowledge', label: '知识库 & 评测', icon: Database },
+const modes: { value: AppMode; label: string; mobileLabel?: string; icon: Component }[] = [
+  { value: 'chat', label: '工单决策', mobileLabel: '工单', icon: MessageSquare },
+  { value: 'agent', label: '排障 Agent', mobileLabel: 'Agent', icon: Bot },
+  { value: 'compare', label: '模型对比', mobileLabel: '对比', icon: Columns2 },
+  { value: 'knowledge', label: '知识库 & 评测', mobileLabel: '知识库', icon: Database },
 ]
 
 let mediaQuery: MediaQueryList | null = null
@@ -256,7 +256,7 @@ watch(() => settings.theme, applyTheme)
         @click="mode = item.value; isDemoActive = false"
       >
         <component :is="item.icon" :size="20" :stroke-width="1.8" aria-hidden="true" />
-        <span>{{ item.label }}</span>
+        <span>{{ item.mobileLabel || item.label }}</span>
       </button>
       <button
         type="button"

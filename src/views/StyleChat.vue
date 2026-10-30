@@ -357,6 +357,7 @@ v-for="(img, idx) in msg.images" :key="idx"
               <!-- RAG 引用文档展示 -->
               <RagCitations
                 v-if="msg.role === 'assistant' && msg.ragContext"
+                v-model:open="evidenceOpenMap[msg.id]"
                 :context="msg.ragContext"
               />
               <div v-if="msg.status === 'aborted'" class="abort-badge-row">
@@ -1161,6 +1162,7 @@ function extractCustomerReplyDraft(content: string): { text: string; isDraftOnly
 
 const escalatedMsgIds = ref<Set<string>>(new Set())
 const confirmedMsgIds = ref<Set<string>>(new Set())
+const evidenceOpenMap = ref<Record<string, boolean>>({})
 
 function handleEditDraft(content: string) {
   const { text } = extractCustomerReplyDraft(content)
@@ -1174,7 +1176,8 @@ function handleEditDraft(content: string) {
   toast.show('已将客户回复草稿载入输入框，可在下方微调修改', 'success')
 }
 
-function handleViewEvidence(msg: { ragContext?: { results?: unknown[] } }) {
+function handleViewEvidence(msg: { id?: string; ragContext?: { results?: unknown[] } }) {
+    if (msg.id) evidenceOpenMap.value[msg.id] = true
   if (msg.ragContext?.results && msg.ragContext.results.length > 0) {
     toast.show(`当前回答已关联 ${msg.ragContext.results.length} 处知识库依据，已在下方展开溯源卡片`, 'success')
   } else {

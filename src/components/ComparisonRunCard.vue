@@ -17,7 +17,12 @@
     </div>
 
     <div class="run-content">
-      <div v-if="run.content" class="run-text">{{ run.content }}</div>
+      <div
+        v-if="run.content"
+        class="run-text markdown-body"
+        @click="handleCodeBlockAction($event, run.id)"
+        v-html="renderedContent"
+      ></div>
       <div v-else class="run-empty">{{ emptyText }}</div>
     </div>
 
@@ -48,6 +53,7 @@
 import { computed } from 'vue'
 import { getCodeBlockStats } from '../services/comparisonCode'
 import { formatLatency, getRunStats } from '../services/comparisonStats'
+import { useMessageRenderer } from '../composables/useMessageRenderer'
 import type { ComparisonRun } from '../types/model'
 
 const props = defineProps<{
@@ -99,6 +105,18 @@ const canStop = computed(() => props.run.status === 'loading' || props.run.statu
 const canRetry = computed(() => props.run.status === 'done' || props.run.status === 'error' || props.run.status === 'aborted')
 const showStop = computed(() => props.showStop ?? true)
 const showRetry = computed(() => props.showRetry ?? true)
+
+const { renderContent, handleCodeBlockAction } = useMessageRenderer()
+
+const renderedContent = computed(() => {
+  if (!props.run.content) return ''
+  return renderContent({
+    id: props.run.id,
+    role: 'assistant',
+    content: props.run.content,
+    status: props.run.status === 'streaming' ? 'streaming' : (props.run.status === 'loading' ? 'loading' : 'done'),
+  })
+})
 </script>
 
 <style scoped>
@@ -271,7 +289,6 @@ const showRetry = computed(() => props.showRetry ?? true)
 }
 
 .run-text {
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--run-text);
   font-size: 14px;

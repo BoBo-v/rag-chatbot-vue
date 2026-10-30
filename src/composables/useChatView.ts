@@ -994,7 +994,7 @@ export function useChatView() {
                 updateMessage(options.aiMessageId, {
                     ...baseChanges,
                     ragContext: rag
-                        ? { mode: rag.mode, enabled: rag.enabled, results: rag.citations }
+                        ? { mode: rag.mode, enabled: rag.enabled, results: rag.citations, scenario: rag.scenario }
                         : undefined,
                 })
                 break

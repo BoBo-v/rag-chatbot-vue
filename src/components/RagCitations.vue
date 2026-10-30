@@ -23,13 +23,13 @@
           引用证据获取失败：{{ context.errorMessage }}
         </p>
         <p v-else-if="context.mode === 'off'" class="rag-citations-empty">
-          本次工单已关闭知识库检索
+          {{ isGeneral ? '本次对话已关闭知识库检索' : '本次工单已关闭知识库检索' }}
         </p>
         <p v-else-if="!context.enabled" class="rag-citations-empty">
-          未检索到达到阈值的相关依据，已直接推理排障。建议核对客户环境信息或人工介入。
+          {{ isGeneral ? '未检索到达到阈值的相关依据，已直接推理回答。建议更换关键词或补充问题背景。' : '未检索到达到阈值的相关依据，已直接推理排障。建议核对客户环境信息或人工介入。' }}
         </p>
         <p v-else-if="displayResults.length === 0" class="rag-citations-empty">
-          已检索知识库，但未命中相关技术排障条目。
+          {{ isGeneral ? '已检索知识库，但未找到匹配的相关资料条目。' : '已检索知识库，但未命中相关技术排障条目。' }}
         </p>
 
         <ol v-else class="rag-citations-list">
@@ -60,9 +60,11 @@ const props = withDefaults(
   defineProps<{
     context: RagContextInfo
     open?: boolean
+    scenario?: 'ticket' | 'general'
   }>(),
   {
     open: undefined,
+    scenario: undefined,
   }
 )
 
@@ -76,6 +78,8 @@ function handleToggle(e: Event) {
     emit('update:open', target.open)
   }
 }
+
+const isGeneral = computed(() => (props.scenario ?? props.context.scenario) === 'general')
 
 const displayResults = computed(() =>
   props.context.enabled
@@ -99,12 +103,16 @@ interface EvidenceBadge {
 
 const evidenceBadge = computed<EvidenceBadge | null>(() => {
   if (props.context.mode === 'off') return null
+  const general = isGeneral.value
+
   if (!props.context.enabled || displayResults.value.length === 0) {
     return {
       level: 'insufficient',
-      text: '证据不足，需补充信息',
-      action: '建议追问客户 / 人工介入',
-      detail: '未检索到高匹配知识库排障依据，当前回复仅供参考，请勿直接作为确诊根因发送。',
+      text: general ? '未找到直接相关依据' : '证据不足，需补充信息',
+      action: general ? '建议调整关键词提问' : '建议追问客户 / 人工介入',
+      detail: general
+        ? '知识库中未检索到与问题直接吻合的资料，模型基于已有知识直接推理，内容仅供参考。'
+        : '未检索到高匹配知识库排障依据，当前回复仅供参考，请勿直接作为确诊根因发送。',
       icon: ShieldAlert,
     }
   }
@@ -113,25 +121,35 @@ const evidenceBadge = computed<EvidenceBadge | null>(() => {
   if (score >= 0.65) {
     return {
       level: 'sufficient',
-      text: `已找到充分证据（${score.toFixed(2)}）`,
-      action: '可采纳草稿',
-      detail: '检索结果与知识库官方文档高度匹配，可核对后采纳回复草稿。',
+      text: general ? `已匹配到高置信参考材料（${score.toFixed(2)}）` : `已找到充分证据（${score.toFixed(2)}）`,
+      action: general ? '参考资料匹配度高' : '可采纳草稿',
+      detail: general
+        ? '检索到的知识库文档内容与当前提问高度相关，回答主要基于上述材料总结生成。'
+        : '检索结果与知识库官方文档高度匹配，可核对后采纳回复草稿。',
       icon: ShieldCheck,
     }
   } else if (score >= 0.45) {
     return {
       level: 'low',
-      text: `知识库证据分数较低（${score.toFixed(2)}），建议人工介入`,
-      action: '建议核对版本 / 追问客户',
-      detail: '检索到的技术文档相关度不高，可能存在版本差异或关键日志缺失，请人工复核。',
+      text: general
+        ? `参考资料相关度中等（${score.toFixed(2)}）`
+        : `知识库证据分数较低（${score.toFixed(2)}），建议人工介入`,
+      action: general ? '建议核对材料细节' : '建议核对版本 / 追问客户',
+      detail: general
+        ? '检索到的资料部分吻合提问，但可能存在场景差异，建议结合下方的具体文档段落核对。'
+        : '检索到的技术文档相关度不高，可能存在版本差异或关键日志缺失，请人工复核。',
       icon: AlertTriangle,
     }
   } else {
     return {
       level: 'insufficient',
-      text: `证据相关度不足（${score.toFixed(2)}），建议转二线研发`,
-      action: '禁止直接发送',
-      detail: '知识库证据得分严重偏低，未能确认故障因果链，建议升级二线研发团队进一步跟进。',
+      text: general
+        ? `参考资料匹配度较低（${score.toFixed(2)}）`
+        : `证据相关度不足（${score.toFixed(2)}），建议转二线研发`,
+      action: general ? '仅供参考' : '禁止直接发送',
+      detail: general
+        ? '知识库检索相关度偏低，未命中确切依据，请注意甄别模型回答内容。'
+        : '知识库证据得分严重偏低，未能确认故障因果链，建议升级二线研发团队进一步跟进。',
       icon: ShieldAlert,
     }
   }
@@ -139,8 +157,11 @@ const evidenceBadge = computed<EvidenceBadge | null>(() => {
 
 const summaryTitle = computed(() => {
   if (props.context.errorMessage) return '引用证据获取失败'
-  if (displayResults.value.length > 0) return `知识库证据溯源 (${displayResults.value.length} 条)`
-  return '知识库证据溯源'
+  const count = displayResults.value.length
+  if (isGeneral.value) {
+    return count > 0 ? `知识库参考材料 (${count} 条)` : '知识库参考材料'
+  }
+  return count > 0 ? `知识库证据溯源 (${count} 条)` : '知识库证据溯源'
 })
 
 const stateLabel = computed(() => {
@@ -148,6 +169,11 @@ const stateLabel = computed(() => {
   if (props.context.mode === 'force') return displayResults.value.length > 0 ? '强制使用知识库' : '强制检索无命中'
   if (!props.context.enabled) return '未启用 RAG'
   if (displayResults.value.length === 0) return '无命中'
+  if (isGeneral.value) {
+    if (maxScore.value >= 0.65) return `高置信 · ${maxScore.value.toFixed(2)}`
+    if (maxScore.value >= 0.45) return `部分相关 · ${maxScore.value.toFixed(2)}`
+    return `低相关 · ${maxScore.value.toFixed(2)}`
+  }
   if (maxScore.value >= 0.65) return `充分证据 · ${maxScore.value.toFixed(2)}`
   if (maxScore.value >= 0.45) return `证据偏弱 · ${maxScore.value.toFixed(2)}`
   return `低分 · ${maxScore.value.toFixed(2)}`

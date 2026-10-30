@@ -196,6 +196,7 @@ export function buildRuntimeFromDraft(draft: CompareEditorDraft, settings: AppSe
       backendRagMode: draft.backend.backendRagMode ?? settings.ragMode ?? 'off',
       backendProvider: provider,
       backendModel: draft.backend.model,
+      scenario: settings.scenario ?? 'ticket',
     }
   } else {
     const rawProvider = (draft.directProvider as string) === 'anthropic' ? 'claude' : draft.directProvider
@@ -232,6 +233,7 @@ export function buildRuntimeFromDraft(draft: CompareEditorDraft, settings: AppSe
       backendRagMode: undefined,
       backendProvider: undefined,
       backendModel: undefined,
+      scenario: settings.scenario ?? 'ticket',
     }
   }
 }

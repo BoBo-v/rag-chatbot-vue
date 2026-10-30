@@ -425,7 +425,7 @@ function abortableSleep(ms: number, signal?: AbortSignal | null): Promise<void> 
     assert.equal(snapshot.model, 'llama3.2', '草稿编辑绝不能污染进行中任务的快照模型')
     assert.equal(snapshot.baseUrl, 'http://ollama-temp:11434', '草稿编辑绝不能污染进行中任务的快照地址')
 
-    // 7. 后端 Claude 严格映射为 anthropic
+    // 7. 后端 Claude 严格映射为 anthropic，且透传 scenario
     compareDraft.transport = 'backend'
     compareDraft.provider = 'claude'
     compareDraft.model = 'claude-3-7-sonnet'
@@ -434,6 +434,7 @@ function abortableSleep(ms: number, signal?: AbortSignal | null): Promise<void> 
     const backendClaudeSnapshot = freezeRuntime(buildRuntimeFromDraft(compareDraft, settings))
     assert.equal(backendClaudeSnapshot.provider, 'anthropic', '后端 Claude 生成快照时 provider 必须映射为 anthropic')
     assert.equal(backendClaudeSnapshot.backendProvider, 'anthropic')
+    assert.equal(backendClaudeSnapshot.scenario, settings.scenario ?? 'ticket', '后端草稿构建 runtime 必须透传 scenario')
 
     // 8. 同步当前设置重置草稿
     syncDraftFromSettings(compareDraft, settings)

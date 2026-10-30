@@ -819,11 +819,21 @@ const promptStats = computed(() => ({
 }))
 
 const changedSettingCount = computed(() => {
+  const currentTicketPrompt = draft.scenario === 'general'
+    ? (draft.ticketPrompt ?? DEFAULT_TICKET_PROMPT)
+    : draft.systemPrompt
+  const currentGeneralPrompt = draft.scenario === 'general'
+    ? draft.systemPrompt
+    : (draft.generalPrompt ?? DEFAULT_GENERAL_PROMPT)
+
   const pairs: [unknown, unknown][] = [
     [draft.transport, initialDraft.transport],
     [draft.provider, initialDraft.provider],
     [draft.theme, initialDraft.theme],
     [draft.systemPrompt, initialDraft.systemPrompt],
+    [draft.scenario, initialDraft.scenario],
+    [currentTicketPrompt, initialDraft.ticketPrompt],
+    [currentGeneralPrompt, initialDraft.generalPrompt],
     [draft.maxContextTokens, initialDraft.maxContextTokens],
     [draft.responseTimeoutSeconds, initialDraft.responseTimeoutSeconds],
     [draft.showModelInTopbar, initialDraft.showModelInTopbar],
@@ -861,7 +871,10 @@ const dirtySections = computed<Record<SectionId, boolean>>(() => ({
   model: draft.maxContextTokens !== initialDraft.maxContextTokens
     || draft.responseTimeoutSeconds !== initialDraft.responseTimeoutSeconds
     || draft.showModelInTopbar !== initialDraft.showModelInTopbar,
-  prompt: draft.systemPrompt !== initialDraft.systemPrompt || draft.scenario !== initialDraft.scenario,
+  prompt: draft.systemPrompt !== initialDraft.systemPrompt
+    || draft.scenario !== initialDraft.scenario
+    || (draft.scenario === 'general' ? draft.systemPrompt : draft.generalPrompt) !== initialDraft.generalPrompt
+    || (draft.scenario === 'ticket' ? draft.systemPrompt : draft.ticketPrompt) !== initialDraft.ticketPrompt,
   knowledge: draft.ragMode !== initialDraft.ragMode,
   behavior: false,
   appearance: draft.theme !== initialDraft.theme,
@@ -919,12 +932,27 @@ function setTheme(theme: ThemeType) {
 }
 
 function restorePrompt() {
-  draft.systemPrompt = draft.scenario === 'general' ? DEFAULT_GENERAL_PROMPT : DEFAULT_TICKET_PROMPT
+  if (draft.scenario === 'general') {
+    draft.generalPrompt = DEFAULT_GENERAL_PROMPT
+    draft.systemPrompt = DEFAULT_GENERAL_PROMPT
+  } else {
+    draft.ticketPrompt = DEFAULT_TICKET_PROMPT
+    draft.systemPrompt = DEFAULT_TICKET_PROMPT
+  }
 }
 
 function applyScenarioPreset(target: 'ticket' | 'general') {
+  if (draft.scenario === target) return
+  // 保存当前正在编辑的内容到对应独立字段
+  if (draft.scenario === 'general') {
+    draft.generalPrompt = draft.systemPrompt
+  } else {
+    draft.ticketPrompt = draft.systemPrompt
+  }
   draft.scenario = target
-  draft.systemPrompt = target === 'general' ? DEFAULT_GENERAL_PROMPT : DEFAULT_TICKET_PROMPT
+  draft.systemPrompt = target === 'general'
+    ? (draft.generalPrompt?.trim() ? draft.generalPrompt : DEFAULT_GENERAL_PROMPT)
+    : (draft.ticketPrompt?.trim() ? draft.ticketPrompt : DEFAULT_TICKET_PROMPT)
 }
 
 function sectionHasChanges(sectionId: SectionId): boolean {
@@ -1272,11 +1300,20 @@ function createSettingsSnapshot(): AppSettings {
     const provider = backendServiceList.value.find(item => item.id === backend.provider)
     backend.model = resolveValidBackendModel(backend.model, provider)
   }
+  const ticketPrompt = draft.scenario === 'general'
+    ? (draft.ticketPrompt ?? DEFAULT_TICKET_PROMPT)
+    : draft.systemPrompt
+  const generalPrompt = draft.scenario === 'general'
+    ? draft.systemPrompt
+    : (draft.generalPrompt ?? DEFAULT_GENERAL_PROMPT)
+
   return {
     transport: draft.transport,
     provider: draft.provider,
     theme: draft.theme,
     systemPrompt: draft.systemPrompt,
+    ticketPrompt,
+    generalPrompt,
     maxContextTokens: draft.maxContextTokens,
     responseTimeoutSeconds: normalizeTimeout(draft.responseTimeoutSeconds),
     showModelInTopbar: draft.showModelInTopbar,
@@ -1301,6 +1338,8 @@ function save() {
       provider: nextSettings.provider,
       theme: nextSettings.theme,
       systemPrompt: nextSettings.systemPrompt,
+      ticketPrompt: nextSettings.ticketPrompt,
+      generalPrompt: nextSettings.generalPrompt,
       maxContextTokens: nextSettings.maxContextTokens,
       responseTimeoutSeconds: nextSettings.responseTimeoutSeconds,
       showModelInTopbar: nextSettings.showModelInTopbar,

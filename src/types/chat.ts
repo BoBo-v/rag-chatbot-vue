@@ -23,6 +23,8 @@ export interface FileAttachment {
     size: number
 }
 
+import type { ChatScenario } from './model'
+
 export type RagMode = 'auto' | 'off' | 'force'
 
 export interface RagCitation {
@@ -41,6 +43,7 @@ export interface RagContextInfo {
     enabled: boolean
     results: RagCitation[]
     errorMessage?: string
+    scenario?: ChatScenario
 }
 
 // UI 层使用的消息对象。它比 DBMessage 多了 formattedContent、time 等展示用字段。

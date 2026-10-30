@@ -18,6 +18,8 @@ export interface AppSettings {
     provider: ProviderType
     theme: ThemeType
     systemPrompt: string
+    ticketPrompt?: string
+    generalPrompt?: string
     maxContextTokens: number
     responseTimeoutSeconds: number
     showModelInTopbar: boolean
@@ -85,12 +87,41 @@ export const DEFAULT_GENERAL_PROMPT = `你是一个基于知识库的智能问�
 
 export const DEFAULT_SYSTEM_PROMPT = DEFAULT_TICKET_PROMPT
 
+/**
+ * 在工单排障与通用问答双场景间切换，并无损维护各自的自定义提示词
+ */
+export function switchScenario(targetSettings: AppSettings, nextScenario: ChatScenario): void {
+    const currentScenario = targetSettings.scenario ?? 'ticket'
+    // 1. 将当前 active 的 systemPrompt 存入当前场景对应的独立字段
+    if (currentScenario === 'general') {
+        targetSettings.generalPrompt = targetSettings.systemPrompt
+    } else {
+        targetSettings.ticketPrompt = targetSettings.systemPrompt
+    }
+
+    // 2. 切换 scenario
+    targetSettings.scenario = nextScenario
+
+    // 3. 将目标场景已存储的自定义提示词（若未设置则为默认模板）装载为 active 的 systemPrompt
+    if (nextScenario === 'general') {
+        targetSettings.systemPrompt = targetSettings.generalPrompt?.trim()
+            ? targetSettings.generalPrompt
+            : DEFAULT_GENERAL_PROMPT
+    } else {
+        targetSettings.systemPrompt = targetSettings.ticketPrompt?.trim()
+            ? targetSettings.ticketPrompt
+            : DEFAULT_TICKET_PROMPT
+    }
+}
+
 // 默认设置。用户第一次打开应用，或者 localStorage 读取失败时会使用这些值。
 const defaults: AppSettings = {
     transport: 'direct',
     provider: 'ollama',
     theme: 'light',
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
+    ticketPrompt: DEFAULT_TICKET_PROMPT,
+    generalPrompt: DEFAULT_GENERAL_PROMPT,
     maxContextTokens: 128000,
     responseTimeoutSeconds: 30,
     showModelInTopbar: true,
@@ -128,18 +159,45 @@ function load(): AppSettings {
                 saved.theme = 'light'
                 localStorage.setItem('ai-chat-theme-default-v2', '1')
             }
+            const scenario = (saved.scenario === 'general' ? 'general' : 'ticket') as ChatScenario
+
+            let ticketPrompt = typeof saved.ticketPrompt === 'string' && saved.ticketPrompt.trim()
+                ? saved.ticketPrompt
+                : undefined
+            let generalPrompt = typeof saved.generalPrompt === 'string' && saved.generalPrompt.trim()
+                ? saved.generalPrompt
+                : undefined
+
+            // 兼容已有旧配置迁移：如果用户之前只定制过 systemPrompt，按当时 scenario 归属
+            if (typeof saved.systemPrompt === 'string' && saved.systemPrompt.trim()) {
+                const isOldLegacyDefault = saved.systemPrompt === '你是一个专业的 AI 助手，回答要简洁清晰。' || saved.systemPrompt.startsWith('你是一个专业的技术支持')
+                if (!isOldLegacyDefault) {
+                    if (scenario === 'general') {
+                        if (!generalPrompt) generalPrompt = saved.systemPrompt
+                    } else {
+                        if (!ticketPrompt) ticketPrompt = saved.systemPrompt
+                    }
+                }
+            }
+
+            ticketPrompt = ticketPrompt ?? defaults.ticketPrompt
+            generalPrompt = generalPrompt ?? defaults.generalPrompt
+            const activeSystemPrompt = scenario === 'general' ? generalPrompt : ticketPrompt
+
             // 只读取当前版本需要的字段。旧字段只用于迁移，不再写回 settings。
             return {
                 ...defaults,
                 provider: normalizeProvider(saved.provider),
                 transport: normalizeTransportMode(saved.transport ?? saved.connectionMode, saved.ollama?.useBackendChat),
                 theme: normalizeTheme(saved.theme),
-                systemPrompt: typeof saved.systemPrompt === 'string' && saved.systemPrompt !== '你是一个专业的 AI 助手，回答要简洁清晰。' && !saved.systemPrompt.startsWith('你是一个专业的技术支持') ? saved.systemPrompt : defaults.systemPrompt,
+                systemPrompt: activeSystemPrompt,
+                ticketPrompt,
+                generalPrompt,
                 maxContextTokens: normalizeMaxContextTokens(saved.maxContextTokens),
                 responseTimeoutSeconds: normalizeTimeout(saved.responseTimeoutSeconds),
                 showModelInTopbar: typeof saved.showModelInTopbar === 'boolean' ? saved.showModelInTopbar : defaults.showModelInTopbar,
                 ragMode: normalizeBackendRagMode(saved.ragMode ?? saved.ollama?.backendRagMode, saved.ollama?.enableBackendRag),
-                scenario: (saved.scenario === 'general' ? 'general' : 'ticket') as ChatScenario,
+                scenario,
                 backend: {
                     url: stringOrDefault(saved.backend?.url, defaults.backend.url),
                     provider: normalizeBackendProvider(saved.backend?.provider ?? saved.ollama?.backendProvider),

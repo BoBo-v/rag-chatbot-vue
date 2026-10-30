@@ -13,15 +13,21 @@
     <!-- ── 侧边栏 ── -->
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
-        <span class="sidebar-title">工单记录</span>
-        <button class="new-chat-btn" type="button" title="新建工单" aria-label="新建工单" @click="handleNewConversation">
+        <span class="sidebar-title">{{ currentSettings.scenario === 'general' ? '历史对话' : '工单记录' }}</span>
+        <button
+          class="new-chat-btn"
+          type="button"
+          :title="currentSettings.scenario === 'general' ? '新建对话' : '新建工单'"
+          :aria-label="currentSettings.scenario === 'general' ? '新建对话' : '新建工单'"
+          @click="handleNewConversation"
+        >
           <Plus :size="17" aria-hidden="true" />
         </button>
       </div>
       <div class="sidebar-body">
         <button class="new-chat-big-btn" @click="handleNewConversation">
           <MessageSquarePlus class="new-chat-icon" :size="17" aria-hidden="true" />
-          新建工单
+          {{ currentSettings.scenario === 'general' ? '新建对话' : '新建工单' }}
         </button>
         <div class="sidebar-search">
           <Search class="sidebar-search-icon" :size="16" aria-hidden="true" />
@@ -29,8 +35,8 @@
               v-model="conversationSearchDraft"
               class="sidebar-search-input"
               type="search"
-              placeholder="搜索历史工单..."
-              aria-label="搜索历史工单"
+              :placeholder="currentSettings.scenario === 'general' ? '搜索历史对话...' : '搜索历史工单...'"
+              :aria-label="currentSettings.scenario === 'general' ? '搜索历史对话' : '搜索历史工单'"
           />
           <button
               v-if="conversationSearchDraft"
@@ -81,7 +87,7 @@
             </button>
           </div>
           <div v-else-if="!isSearchLoading && searchResults.length === 0" class="conv-empty search-empty">
-            没有匹配的工单记录
+            {{ currentSettings.scenario === 'general' ? '没有匹配的对话记录' : '没有匹配的工单记录' }}
           </div>
         </div>
 
@@ -154,7 +160,9 @@
               </template>
             </div>
           </template>
-          <div v-if="conversations.length === 0" class="conv-empty">暂无历史工单</div>
+          <div v-if="conversations.length === 0" class="conv-empty">
+            {{ currentSettings.scenario === 'general' ? '暂无历史对话' : '暂无历史工单' }}
+          </div>
         </template>
       </div>
     </aside>
@@ -171,8 +179,8 @@
           <button
             class="menu-btn"
             type="button"
-            :aria-label="isSidebarCollapsed ? '展开工单列表' : '收起工单列表'"
-            :title="isSidebarCollapsed ? '展开工单列表 (Ctrl+[)' : '收起工单列表 (Ctrl+[)'"
+            :aria-label="isSidebarCollapsed ? (currentSettings.scenario === 'general' ? '展开对话列表' : '展开工单列表') : (currentSettings.scenario === 'general' ? '收起对话列表' : '收起工单列表')"
+            :title="isSidebarCollapsed ? (currentSettings.scenario === 'general' ? '展开对话列表 (Ctrl+[)' : '展开工单列表 (Ctrl+[)') : (currentSettings.scenario === 'general' ? '收起对话列表 (Ctrl+[)' : '收起工单列表 (Ctrl+[)')"
             @click="toggleSidebar"
           >
             <PanelLeftClose v-if="!isSidebarCollapsed" :size="18" aria-hidden="true" />
@@ -369,6 +377,7 @@ v-for="(img, idx) in msg.images" :key="idx"
                 v-if="msg.role === 'assistant' && msg.ragContext"
                 v-model:open="evidenceOpenMap[msg.id]"
                 :context="msg.ragContext"
+                :scenario="msg.ragContext.scenario ?? currentSettings.scenario ?? 'ticket'"
               />
               <div v-if="msg.status === 'aborted'" class="abort-badge-row">
                 <div class="badge-aborted">
@@ -697,10 +706,10 @@ v-for="(img, idx) in msg.images" :key="idx"
         </div>
         <div class="input-hint">
           <template v-if="isStreaming">
-            正在检索知识库并生成排障建议 · 可在此预先键入下一条工单信息或点击右下角停止
+            {{ currentSettings.scenario === 'general' ? '正在检索知识库并生成回答 · 可在此预先键入下一条提问信息或点击右下角停止' : '正在检索知识库并生成排障建议 · 可在此预先键入下一条工单信息或点击右下角停止' }}
           </template>
           <template v-else>
-            <span class="hint-key">Enter</span> 提交排障 · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 纸夹添加日志附件，书本上传至技术知识库
+            <span class="hint-key">Enter</span> {{ currentSettings.scenario === 'general' ? '发送提问' : '提交排障' }} · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 纸夹添加文件，书本上传至技术知识库
           </template>
         </div>
       </div>
@@ -781,7 +790,7 @@ import { useSpeechRecognition } from '../composables/useSpeechRecognition'
 import { useConversationSearch } from '../composables/useConversationSearch'
 import { useMessageRenderer } from '../composables/useMessageRenderer'
 import { useConversationGroups } from '../composables/useConversationGroups'
-import { persistSettings, settings as currentSettings, DEFAULT_TICKET_PROMPT, DEFAULT_GENERAL_PROMPT } from '../stores/settings'
+import { persistSettings, settings as currentSettings, switchScenario } from '../stores/settings'
 import type { BackendRagMode } from '../stores/settings'
 import { getClaudeModels } from '../services/providers/claude'
 import { uploadKnowledgeFile, getBackendProvidersCatalog, getSharedBackendProvidersCatalog, type BackendProvidersCatalog, type UploadProgress } from '../services/knowledge'
@@ -1205,8 +1214,7 @@ function hasCustomerDraft(content: string): boolean {
 
 function toggleScenario() {
   const next = currentSettings.scenario === 'general' ? 'ticket' : 'general'
-  currentSettings.scenario = next
-  currentSettings.systemPrompt = next === 'general' ? DEFAULT_GENERAL_PROMPT : DEFAULT_TICKET_PROMPT
+  switchScenario(currentSettings, next)
   persistSettings(currentSettings)
   toast.show(`已切换至【${next === 'general' ? '通用知识库问答' : '工单排障辅助决策'}】模式`, 'success')
 }
@@ -1299,7 +1307,7 @@ function handleCopyFullMessage(id: string, content: string) {
 function handleCopyUserMessage(id: string, content: string) {
   navigator.clipboard.writeText(content).then(() => {
     copiedUserMsgId.value = id
-    toast.show('已复制工单报障内容', 'success')
+    toast.show(currentSettings.scenario === 'general' ? '已复制提问内容' : '已复制工单报障内容', 'success')
     if (copyUserTimer) clearTimeout(copyUserTimer)
     copyUserTimer = setTimeout(() => {
       copiedUserMsgId.value = null

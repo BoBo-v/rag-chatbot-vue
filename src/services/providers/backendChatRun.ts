@@ -209,6 +209,7 @@ export function ragContextFromRunEvent(event: BackendChatRunEvent): {
     enabled: boolean
     mode: 'auto' | 'off' | 'force'
     citations: RagCitation[]
+    scenario?: 'ticket' | 'general'
 } | null {
     if (event.type !== 'rag_context') return null
     const mode = event.data.mode
@@ -218,6 +219,7 @@ export function ragContextFromRunEvent(event: BackendChatRunEvent): {
         enabled: event.data.enabled === true,
         mode,
         citations: citations.filter(isRagCitation),
+        scenario: event.data.scenario === 'general' ? 'general' : event.data.scenario === 'ticket' ? 'ticket' : undefined,
     }
 }
 

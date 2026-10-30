@@ -113,8 +113,13 @@ export function startFeatureTour(force = false): void {
     return
   }
 
-  // 检查目标节点是否存在且可见（若用户已进入演示沙盒或切走则不启动导览，避免遮罩错位）
+  // 检查目标节点是否存在且可见（若用户已进入演示沙盒、切走或正在展示设置/弹窗，则不启动导览）
   if (typeof document !== 'undefined') {
+    const activeOverlay = document.querySelector('.settings-overlay, .auth-overlay, .preview-overlay, .vk-modal')
+    if (activeOverlay) {
+      return
+    }
+
     const demoCard = document.querySelector('[data-tour="demo-card"]') as HTMLElement | null
     if (!demoCard || demoCard.offsetParent === null) {
       return

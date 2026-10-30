@@ -304,6 +304,7 @@ async function main() {
             const context = await browser.newContext()
             // 独立 Context 写入 deleted-legacy-model
             await context.addInitScript(() => {
+                localStorage.setItem('ai_chat_feature_tour_v1', 'completed')
                 localStorage.setItem('ai-chat-settings', JSON.stringify({
                     transport: 'backend',
                     backend: {

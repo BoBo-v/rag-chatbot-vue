@@ -270,8 +270,11 @@
         </div>
       </header>
 
-      <!-- ── 消息区 ── -->
-      <div ref="containerRef" class="chat">
+      <!-- ── 消息流与输入框布局舞台 ── -->
+      <div class="chat-main-stage">
+        <div class="chat-conversation-pane">
+          <!-- ── 消息区 ── -->
+          <div ref="containerRef" class="chat">
         <div class="messages-inner">
 
           <!-- 空状态 -->
@@ -340,6 +343,35 @@ class="msg-bubble"
                      'is-aborted':   msg.status === 'aborted',
                    }]"
               >
+                <!-- 前置 RAG 检索状态条 (当且仅当助手消息命中知识库) -->
+                <div
+                  v-if="msg.role === 'assistant' && msg.ragContext?.enabled"
+                  class="msg-rag-preface-bar"
+                  role="button"
+                  tabindex="0"
+                  title="点击在右侧展开 RAG 链路与切片解释"
+                  @click="handleOpenRagDrawer(msg)"
+                  @keydown.enter="handleOpenRagDrawer(msg)"
+                >
+                  <div class="rag-bar-left">
+                    <span class="rag-mode-chip font-mono">
+                      {{ msg.ragContext.mode === 'force' ? 'RAG: 强制开启' : 'RAG: AUTO (已触发)' }}
+                    </span>
+                    <span class="rag-hit-text">
+                      已检索知识库 · 命中 <strong class="font-mono">{{ msg.ragContext.results?.length || 0 }}</strong> 处切片
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    class="rag-view-link-btn font-mono"
+                    title="在右侧展开 RAG 链路与切片解释"
+                    @click.stop="handleOpenRagDrawer(msg)"
+                  >
+                    <span>链路详情</span>
+                    <ChevronRight :size="13" aria-hidden="true" />
+                  </button>
+                </div>
+
                 <div v-if="msg.files?.length" class="msg-files">
                   <div v-for="(file, idx) in msg.files" :key="idx" class="msg-file-chip">
                     <FileText class="file-icon" :size="14" aria-hidden="true" />
@@ -372,13 +404,6 @@ v-for="(img, idx) in msg.images" :key="idx"
                   </div>
                 </template>
               </div>
-              <!-- RAG 引用文档展示 -->
-              <RagCitations
-                v-if="msg.role === 'assistant' && msg.ragContext"
-                v-model:open="evidenceOpenMap[msg.id]"
-                :context="msg.ragContext"
-                :scenario="msg.ragContext.scenario ?? currentSettings.scenario ?? 'ticket'"
-              />
               <div v-if="msg.status === 'aborted'" class="abort-badge-row">
                 <div class="badge-aborted">
                   <div class="abort-dot"></div>
@@ -712,9 +737,20 @@ v-for="(img, idx) in msg.images" :key="idx"
             <span class="hint-key">Enter</span> {{ currentSettings.scenario === 'general' ? '发送提问' : '提交排障' }} · <span class="hint-key">Shift</span> + <span class="hint-key">Enter</span> 换行 · 纸夹添加文件，书本上传至技术知识库
           </template>
         </div>
-      </div>
+      </div><!-- /input-area -->
+    </div><!-- /chat-conversation-pane -->
 
-    </div><!-- /main-content -->
+    <!-- ── 右侧 RAG 链路透视与切片抽屉 ── -->
+    <RagDrawerPanel
+      v-if="activeRagMessage?.ragContext"
+      v-model:open="isRagDrawerOpen"
+      :context="activeRagMessage.ragContext"
+      :scenario="activeRagMessage.ragContext.scenario ?? currentSettings.scenario ?? 'ticket'"
+      :user-question="findUserQuestionForAssistant(activeRagMessage.id)"
+    />
+  </div><!-- /chat-main-stage -->
+
+  </div><!-- /main-content -->
 
     <!-- toast container moved to App.vue -->
     <transition-group v-if="false" name="toast-slide" tag="div" class="toast-container">
@@ -797,7 +833,7 @@ import { uploadKnowledgeFile, getBackendProvidersCatalog, getSharedBackendProvid
 import type { BackendProviderId, DirectProviderId, ModelTransport } from '../types/model'
 import { resolveActiveConnection, getDefaultBackendProviderName, getValidBackendModels } from '../services/activeConnection'
 import SettingsPanel from '../components/SettingsPanel.vue'
-import RagCitations from '../components/RagCitations.vue'
+import RagDrawerPanel from '../components/RagDrawerPanel.vue'
 import OnboardingChecklist from '../demo/components/OnboardingChecklist.vue'
 import { startFeatureTour, destroyTour } from '../demo/tour'
 import { useAuthStore } from '../stores/auth'
@@ -1221,7 +1257,39 @@ function toggleScenario() {
 
 const escalatedMsgIds = ref<Set<string>>(new Set())
 const confirmedMsgIds = ref<Set<string>>(new Set())
-const evidenceOpenMap = ref<Record<string, boolean>>({})
+const isRagDrawerOpen = ref(false)
+const activeRagMessageId = ref<string | null>(null)
+
+const activeRagMessage = computed(() => {
+  if (activeRagMessageId.value) {
+    const matched = messages.value.find(m => m.id === activeRagMessageId.value)
+    if (matched) return matched
+  }
+  // 缺省回退查找最后一条带有 RAG 依据的助手消息
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    const m = messages.value[i]
+    if (m.role === 'assistant' && m.ragContext?.enabled) {
+      return m
+    }
+  }
+  return null
+})
+
+function findUserQuestionForAssistant(assistantMsgId: string): string {
+  const idx = messages.value.findIndex(m => m.id === assistantMsgId)
+  if (idx <= 0) return ''
+  for (let i = idx - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'user') {
+      return messages.value[i].content
+    }
+  }
+  return ''
+}
+
+function handleOpenRagDrawer(msg: { id: string }) {
+  activeRagMessageId.value = msg.id
+  isRagDrawerOpen.value = true
+}
 
 function handleEditDraft(content: string) {
   const { text } = extractCustomerReplyDraft(content)
@@ -1236,9 +1304,12 @@ function handleEditDraft(content: string) {
 }
 
 function handleViewEvidence(msg: { id?: string; ragContext?: { results?: unknown[] } }) {
-    if (msg.id) evidenceOpenMap.value[msg.id] = true
+  if (msg.id) {
+    activeRagMessageId.value = msg.id
+  }
   if (msg.ragContext?.results && msg.ragContext.results.length > 0) {
-    toast.show(`当前回答已关联 ${msg.ragContext.results.length} 处知识库依据，已在下方展开溯源卡片`, 'success')
+    isRagDrawerOpen.value = true
+    toast.show(`已在右侧展开 ${msg.ragContext.results.length} 处知识库依据与三维分值`, 'success')
   } else {
     toast.show('当前回答未命中知识库检索切片，属于通用模型推理', 'warning')
   }

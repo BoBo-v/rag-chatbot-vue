@@ -332,7 +332,35 @@
               </template>
             </section>
 
-            <!-- 2. 模型参数 -->
+            <!-- 2. 外观 -->
+            <section v-show="activeSection === 'appearance'" class="settings-section" aria-labelledby="section-appearance">
+              <div class="section-heading">
+                <div>
+                  <span class="section-kicker">APPEARANCE</span>
+                  <h2 id="section-appearance">外观</h2>
+                  <p>选择界面主题，变更会立即生效。</p>
+                </div>
+              </div>
+              <div class="theme-switcher" role="group" aria-label="主题">
+                <button
+                  v-for="theme in themes"
+                  :key="theme.value"
+                  type="button"
+                  class="theme-btn"
+                  :class="{ active: draft.theme === theme.value }"
+                  :aria-pressed="draft.theme === theme.value"
+                  @click="setTheme(theme.value)"
+                >
+                  <Moon v-if="theme.value === 'dark'" :size="17" aria-hidden="true" />
+                  <Sun v-else-if="theme.value === 'light'" :size="17" aria-hidden="true" />
+                  <Monitor v-else :size="17" aria-hidden="true" />
+                  <span>{{ theme.label }}</span>
+                </button>
+              </div>
+              <span class="settings-hint">主题设置立即生效；点击取消会恢复打开面板前的主题。</span>
+            </section>
+
+            <!-- 3. 模型参数 -->
             <section v-show="activeSection === 'model'" class="settings-section" aria-labelledby="section-model">
               <div class="section-heading">
                 <div>
@@ -401,7 +429,7 @@
               </div>
             </section>
 
-            <!-- 3. 系统提示词 -->
+            <!-- 4. 系统提示词 -->
             <section v-show="activeSection === 'prompt'" class="settings-section" aria-labelledby="section-prompt">
               <div class="section-heading">
                 <div>
@@ -427,7 +455,7 @@
               </div>
             </section>
 
-            <!-- 4. 知识库 -->
+            <!-- 5. 知识库 -->
             <section v-show="activeSection === 'knowledge'" class="settings-section" aria-labelledby="section-knowledge">
               <div class="section-heading">
                 <div>
@@ -463,7 +491,7 @@
               </div>
             </section>
 
-            <!-- 5. 对话行为 -->
+            <!-- 6. 对话行为 -->
             <section v-show="activeSection === 'behavior'" class="settings-section" aria-labelledby="section-behavior">
               <div class="section-heading">
                 <div>
@@ -493,34 +521,6 @@
                 <Settings2 :size="17" aria-hidden="true" />
                 <span>这些行为由工单决策工作区统一管理，当前没有额外的持久化开关。</span>
               </div>
-            </section>
-
-            <!-- 6. 外观 -->
-            <section v-show="activeSection === 'appearance'" class="settings-section" aria-labelledby="section-appearance">
-              <div class="section-heading">
-                <div>
-                  <span class="section-kicker">APPEARANCE</span>
-                  <h2 id="section-appearance">外观</h2>
-                  <p>选择界面主题，变更会立即生效。</p>
-                </div>
-              </div>
-              <div class="theme-switcher" role="group" aria-label="主题">
-                <button
-                  v-for="theme in themes"
-                  :key="theme.value"
-                  type="button"
-                  class="theme-btn"
-                  :class="{ active: draft.theme === theme.value }"
-                  :aria-pressed="draft.theme === theme.value"
-                  @click="setTheme(theme.value)"
-                >
-                  <Moon v-if="theme.value === 'dark'" :size="17" aria-hidden="true" />
-                  <Sun v-else-if="theme.value === 'light'" :size="17" aria-hidden="true" />
-                  <Monitor v-else :size="17" aria-hidden="true" />
-                  <span>{{ theme.label }}</span>
-                </button>
-              </div>
-              <span class="settings-hint">主题设置立即生效；点击取消会恢复打开面板前的主题。</span>
             </section>
           </main>
         </div>
@@ -610,16 +610,16 @@ const { confirm } = useConfirm()
 const toast = useToast()
 const UNLIMITED = 1100000
 
-type SectionId = 'connection' | 'model' | 'prompt' | 'knowledge' | 'behavior' | 'appearance'
+type SectionId = 'connection' | 'appearance' | 'model' | 'prompt' | 'knowledge' | 'behavior'
 type ConnectionTestState = 'idle' | 'loading' | 'success' | 'error'
 
 const sections: { id: SectionId; label: string; icon: Component }[] = [
   { id: 'connection', label: '模型连接', icon: Waypoints },
+  { id: 'appearance', label: '外观', icon: Monitor },
   { id: 'model', label: '模型参数', icon: SlidersHorizontal },
   { id: 'prompt', label: '系统提示词', icon: MessageSquareText },
   { id: 'knowledge', label: '知识库', icon: Database },
   { id: 'behavior', label: '对话行为', icon: CornerDownLeft },
-  { id: 'appearance', label: '外观', icon: Monitor },
 ]
 
 const themes: { value: ThemeType; label: string }[] = [

@@ -94,8 +94,33 @@
               </div>
             </div>
 
-            <!-- 空状态提示 -->
-            <div v-if="props.context.errorMessage" class="rag-drawer-empty">
+            <!-- 空状态 / 待命状态提示 -->
+            <div v-if="!props.context" class="rag-drawer-empty rag-drawer-standby">
+              <div class="standby-icon-badge">
+                <Layers :size="28" class="standby-icon" aria-hidden="true" />
+              </div>
+              <h3 class="standby-title">知识库检索链路已就绪</h3>
+              <p class="empty-text">
+                {{ isGeneral
+                  ? '在左侧发送问题后，系统将自动检索知识库，并在此实时呈现 Top-K 命中切片、向量与关键词三维分值柱条及注入模型 Prompt 的完整材料。'
+                  : '在左侧发送工单排障需求后，系统将在此实时呈现排障官方文档切片、置信度分值与二线人工流转建议。' }}
+              </p>
+              <div class="standby-features-list">
+                <div class="standby-feature-item">
+                  <Sparkles :size="14" class="feature-bullet" aria-hidden="true" />
+                  <span>实时三维分值透视（向量 + 关键词 + 综合权重）</span>
+                </div>
+                <div class="standby-feature-item">
+                  <FileText :size="14" class="feature-bullet" aria-hidden="true" />
+                  <span>Prompt 注入透明化预览（支持一键复制完整上下文）</span>
+                </div>
+                <div class="standby-feature-item">
+                  <ShieldCheck :size="14" class="feature-bullet" aria-hidden="true" />
+                  <span>置信度定性分级与工单采纳 / 转人工智能联动</span>
+                </div>
+              </div>
+            </div>
+            <div v-else-if="props.context.errorMessage" class="rag-drawer-empty">
               <p class="empty-text error-text">引用证据获取失败：{{ props.context.errorMessage }}</p>
             </div>
             <div v-else-if="props.context.mode === 'off'" class="rag-drawer-empty">
@@ -180,8 +205,12 @@
               </p>
             </div>
 
+            <div v-if="!props.context || !displayResults.length" class="rag-drawer-empty">
+              <p class="empty-text">当前暂无注入模型的知识库上下文。当检索命中切片后，将在此展示注入模型的 &lt;context&gt; 提示词与用户提问预览。</p>
+            </div>
+
             <!-- 代码块容器 (高对比度极客风格) -->
-            <div class="prompt-terminal-card font-mono">
+            <div v-else class="prompt-terminal-card font-mono">
               <div class="terminal-header">
                 <span class="terminal-tag">SYSTEM PROMPT INJECTION</span>
                 <button
@@ -246,12 +275,13 @@ import type { ChatScenario } from '../types/model'
 
 const props = withDefaults(
   defineProps<{
-    context: RagContextInfo
+    context?: RagContextInfo | null
     open: boolean
     scenario?: ChatScenario
     userQuestion?: string
   }>(),
   {
+    context: null,
     scenario: 'ticket',
     userQuestion: '',
   }
@@ -286,11 +316,12 @@ onUnmounted(() => {
 
 const isGeneral = computed(() => props.scenario === 'general')
 
-const displayResults = computed(() =>
-  props.context.enabled
-    ? props.context.results.filter(item => item.text && item.text.trim().length > 0)
-    : []
-)
+const displayResults = computed(() => {
+  if (!props.context || !props.context.enabled || !props.context.results) {
+    return []
+  }
+  return props.context.results.filter(item => item.text && item.text.trim().length > 0)
+})
 
 const maxScore = computed(() => {
   if (!displayResults.value.length) return 0
@@ -326,6 +357,7 @@ interface EvidenceBadge {
 }
 
 const evidenceBadge = computed<EvidenceBadge | null>(() => {
+  if (!props.context) return null
   if (props.context.mode === 'off') return null
   const general = isGeneral.value
 
@@ -429,7 +461,7 @@ function handleCopyPrompt() {
 
 /* ── 抽屉整体容器 ── */
 .rag-drawer-pane {
-  width: 380px;
+  width: 500px;
   height: 100%;
   background: var(--bg-surface, #ffffff);
   border-left: 1px solid var(--border, #e2e8f0);
@@ -447,7 +479,7 @@ function handleCopyPrompt() {
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(100vw, 420px);
+    width: min(100vw, 500px);
     z-index: var(--z-overlay, 100);
     box-shadow: -8px 0 32px rgba(0, 0, 0, 0.16);
   }
@@ -705,6 +737,63 @@ function handleCopyPrompt() {
   border: 1px dashed var(--border, #cbd5e1);
   border-radius: 10px;
   background: var(--bg-surface-2, #f8fafc);
+}
+
+.rag-drawer-standby {
+  padding: 32px 18px 24px;
+  border-style: solid;
+  border-color: var(--border-subtle, #e2e8f0);
+  background: var(--bg-surface-2, #f8fafc);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.standby-icon-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-bg, rgba(99, 102, 241, 0.1));
+  border: 1px solid var(--accent-border, rgba(99, 102, 241, 0.25));
+  color: var(--accent, #4f46e5);
+}
+
+.standby-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.standby-features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.standby-feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  background: var(--bg-surface);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+}
+
+.standby-feature-item .feature-bullet {
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .empty-text {

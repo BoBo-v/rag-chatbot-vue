@@ -264,6 +264,17 @@
             <span class="status-dot"></span>
             <span>{{ isStreaming ? 'Thinking...' : 'Ready' }}</span>
           </div>
+          <button
+            type="button"
+            class="topbar-rag-toggle-btn"
+            :class="{ active: isRagDrawerOpen }"
+            :title="isRagDrawerOpen ? '收起知识库链路透视面板 (Esc)' : '展开知识库参考材料与链路透视面板'"
+            :aria-label="isRagDrawerOpen ? '收起知识库链路透视面板' : '展开知识库参考材料与链路透视面板'"
+            @click="isRagDrawerOpen = !isRagDrawerOpen"
+          >
+            <PanelRight :size="15" aria-hidden="true" />
+            <span class="rag-toggle-label">链路透视</span>
+          </button>
           <button class="settings-btn" type="button" title="设置" aria-label="打开聊天设置" @click="settingsOpen = true">
             <Settings2 :size="17" aria-hidden="true" />
           </button>
@@ -740,13 +751,12 @@ v-for="(img, idx) in msg.images" :key="idx"
       </div><!-- /input-area -->
     </div><!-- /chat-conversation-pane -->
 
-    <!-- ── 右侧 RAG 链路透视与切片抽屉 ── -->
+    <!-- ── 右侧 RAG 链路透视与切片抽屉 (默认桌面端常驻展开) ── -->
     <RagDrawerPanel
-      v-if="activeRagMessage?.ragContext"
       v-model:open="isRagDrawerOpen"
-      :context="activeRagMessage.ragContext"
-      :scenario="activeRagMessage.ragContext.scenario ?? currentSettings.scenario ?? 'ticket'"
-      :user-question="findUserQuestionForAssistant(activeRagMessage.id)"
+      :context="activeRagMessage?.ragContext ?? null"
+      :scenario="activeRagMessage?.ragContext?.scenario ?? currentSettings.scenario ?? 'ticket'"
+      :user-question="activeRagMessage ? findUserQuestionForAssistant(activeRagMessage.id) : ''"
     />
   </div><!-- /chat-main-stage -->
 
@@ -807,6 +817,7 @@ import {
   Mic,
   PanelLeft,
   PanelLeftClose,
+  PanelRight,
   Pencil,
   Plus,
   Presentation,
@@ -1257,7 +1268,7 @@ function toggleScenario() {
 
 const escalatedMsgIds = ref<Set<string>>(new Set())
 const confirmedMsgIds = ref<Set<string>>(new Set())
-const isRagDrawerOpen = ref(false)
+const isRagDrawerOpen = ref(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true)
 const activeRagMessageId = ref<string | null>(null)
 
 const activeRagMessage = computed(() => {
@@ -1269,6 +1280,13 @@ const activeRagMessage = computed(() => {
   for (let i = messages.value.length - 1; i >= 0; i--) {
     const m = messages.value[i]
     if (m.role === 'assistant' && m.ragContext?.enabled) {
+      return m
+    }
+  }
+  // 若无带依据的消息，回退到最后一条助手消息
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    const m = messages.value[i]
+    if (m.role === 'assistant') {
       return m
     }
   }

@@ -68,20 +68,22 @@
           :title="historyCollapsed ? '展开会话记录' : '收起会话记录'"
           :aria-label="historyCollapsed ? '展开会话记录' : '收起会话记录'"
           :aria-expanded="!historyCollapsed"
-          @click="historyCollapsed = !historyCollapsed"
+          @click="toggleHistory"
         >
           <PanelLeft :size="16" aria-hidden="true" />
         </button>
 
         <button
           type="button"
-          class="agent-icon-button"
+          class="agent-icon-button agent-activity-toggle-btn"
+          :class="{ 'has-active': agent.isRunning.value }"
           :title="activityCollapsed ? '展开执行过程' : '收起执行过程'"
           :aria-label="activityCollapsed ? '展开执行过程' : '收起执行过程'"
           :aria-expanded="!activityCollapsed"
-          @click="activityCollapsed = !activityCollapsed"
+          @click="toggleActivity"
         >
           <PanelRight :size="16" aria-hidden="true" />
+          <span v-if="agent.isRunning.value" class="agent-activity-badge" aria-hidden="true"></span>
         </button>
 
         <button
@@ -106,6 +108,16 @@
       </button>
     </div>
 
+    <!-- 移动端侧滑抽屉遮罩 -->
+    <transition name="drawer-fade">
+      <div
+        v-if="isNarrowScreen && (!historyCollapsed || !activityCollapsed)"
+        class="agent-drawer-backdrop"
+        aria-hidden="true"
+        @click="closeMobileDrawers"
+      ></div>
+    </transition>
+
     <div
       class="agent-main"
       :class="{
@@ -119,15 +131,27 @@
             <span class="agent-eyebrow">History</span>
             <strong>会话记录</strong>
           </div>
-          <button
-            type="button"
-            title="新建 Agent 会话"
-            aria-label="新建 Agent 会话"
-            :disabled="agent.isRunning.value"
-            @click="clearWorkspace"
-          >
-            <Plus :size="17" aria-hidden="true" />
-          </button>
+          <div class="agent-history-actions">
+            <button
+              type="button"
+              title="新建 Agent 会话"
+              aria-label="新建 Agent 会话"
+              :disabled="agent.isRunning.value"
+              @click="clearWorkspace"
+            >
+              <Plus :size="17" aria-hidden="true" />
+            </button>
+            <button
+              v-if="isNarrowScreen"
+              type="button"
+              class="agent-drawer-close"
+              title="关闭会话记录"
+              aria-label="关闭会话记录"
+              @click="historyCollapsed = true"
+            >
+              <X :size="16" aria-hidden="true" />
+            </button>
+          </div>
         </header>
 
         <div v-if="historyLoading" class="agent-history-state">
@@ -317,21 +341,24 @@
           <button
             v-if="agent.isRunning.value"
             type="button"
-            class="agent-action-button is-stop"
+            class="agent-action-btn stop-btn"
             :disabled="agent.status.value === 'cancelling'"
+            :title="agent.status.value === 'cancelling' ? '正在停止...' : '停止运行'"
+            :aria-label="agent.status.value === 'cancelling' ? '正在停止' : '停止运行'"
             @click="agent.cancel"
           >
-            <CircleStop :size="17" aria-hidden="true" />
-            {{ agent.status.value === 'cancelling' ? '停止中' : '停止' }}
+            <CircleStop :size="18" aria-hidden="true" />
           </button>
           <button
             v-else
             type="submit"
-            class="agent-action-button"
+            class="agent-action-btn send-btn"
+            :class="{ ready: canSubmit }"
             :disabled="!canSubmit"
+            title="运行任务 (Enter 发送，Shift+Enter 换行)"
+            aria-label="运行任务"
           >
-            <Play :size="17" fill="currentColor" aria-hidden="true" />
-            运行
+            <Play :size="16" fill="currentColor" aria-hidden="true" />
           </button>
         </form>
       </section>
@@ -345,6 +372,17 @@
           <div class="agent-activity-actions">
             <span v-if="agent.currentStep.value > 0" class="agent-step">Step {{ agent.currentStep.value }}/3</span>
             <button
+              v-if="isNarrowScreen"
+              type="button"
+              class="agent-drawer-close"
+              title="关闭执行过程"
+              aria-label="关闭执行过程"
+              @click="activityCollapsed = true"
+            >
+              <X :size="16" aria-hidden="true" />
+            </button>
+            <button
+              v-else
               type="button"
               class="agent-activity-toggle"
               title="展开或收起执行过程"
@@ -458,6 +496,7 @@ import {
   TriangleAlert,
   UserRound,
   Wrench,
+  X,
 } from 'lucide-vue-next'
 import { useAgentRun } from '../composables/useAgentRun'
 import { useConfirm } from '../composables/useConfirm'
@@ -518,6 +557,40 @@ const accessKeyInput = ref<HTMLInputElement | null>(null)
 const showAccessKey = ref(false)
 const activityCollapsed = ref(false)
 const historyCollapsed = ref(false)
+const isNarrowScreen = ref(false)
+
+function updateNarrowScreen(): void {
+  if (typeof window !== 'undefined') {
+    isNarrowScreen.value = window.matchMedia('(max-width: 1024px)').matches
+  }
+}
+
+function closeMobileDrawers(): void {
+  if (isNarrowScreen.value) {
+    historyCollapsed.value = true
+    activityCollapsed.value = true
+  }
+}
+
+function toggleHistory(): void {
+  historyCollapsed.value = !historyCollapsed.value
+  if (!historyCollapsed.value && isNarrowScreen.value) {
+    activityCollapsed.value = true
+  }
+}
+
+function toggleActivity(): void {
+  activityCollapsed.value = !activityCollapsed.value
+  if (!activityCollapsed.value && isNarrowScreen.value) {
+    historyCollapsed.value = true
+  }
+}
+
+function handleKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape' && isNarrowScreen.value) {
+    closeMobileDrawers()
+  }
+}
 const prompt = ref('')
 const messages = ref<WorkspaceMessage[]>([])
 const sessions = ref<AgentSessionListItem[]>([])
@@ -663,12 +736,22 @@ watch(modelOptions, options => {
 watch(() => [agent.events.value.length, messages.value.length], scrollToLatest)
 
 onMounted(() => {
-  activityCollapsed.value = window.matchMedia('(max-width: 820px)').matches
+  updateNarrowScreen()
+  window.addEventListener('resize', updateNarrowScreen)
+  window.addEventListener('keydown', handleKeydown)
+  activityCollapsed.value = window.matchMedia('(max-width: 1024px)').matches
   historyCollapsed.value = window.matchMedia('(max-width: 1180px)').matches
   void loadProviders()
   void restoreAgentHistory()
 })
-onBeforeUnmount(() => providerController?.abort())
+
+onBeforeUnmount(() => {
+  providerController?.abort()
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', updateNarrowScreen)
+    window.removeEventListener('keydown', handleKeydown)
+  }
+})
 
 async function loadProviders(): Promise<void> {
   providerController?.abort()
@@ -789,6 +872,7 @@ function clearWorkspace(): void {
   prompt.value = ''
   agent.reset()
   clearSnapshots()
+  if (isNarrowScreen.value) historyCollapsed.value = true
 }
 
 async function restoreAgentHistory(): Promise<void> {
@@ -844,7 +928,7 @@ async function openAgentSession(sessionId: string): Promise<void> {
   prompt.value = ''
   agent.reset()
   applyAgentSessionRuntime(session)
-  if (window.matchMedia('(max-width: 1050px)').matches) historyCollapsed.value = true
+  if (isNarrowScreen.value) historyCollapsed.value = true
   scrollToLatest()
 }
 
@@ -1342,6 +1426,7 @@ function describeAgentError(code: string, fallback: string): string {
 }
 
 .agent-icon-button {
+  position: relative;
   width: 32px;
   height: 32px;
   display: inline-flex;
@@ -1353,6 +1438,22 @@ function describeAgentError(code: string, fallback: string): string {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--motion-fast) ease;
+}
+
+.agent-activity-toggle-btn {
+  position: relative;
+}
+
+.agent-activity-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning, #f59e0b);
+  box-shadow: 0 0 6px var(--warning, #f59e0b);
+  animation: agent-pulse 1.4s ease-in-out infinite;
 }
 
 .agent-icon-button:hover:not(:disabled) {
@@ -1414,14 +1515,14 @@ textarea:disabled {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 320px;
+  grid-template-columns: 240px minmax(0, 1fr) 420px;
   overflow: hidden;
   transition: grid-template-columns var(--motion-slow) var(--ease-standard);
 }
 
 /* 左侧历史折叠 */
 .agent-main.is-history-collapsed {
-  grid-template-columns: 0px minmax(0, 1fr) 320px;
+  grid-template-columns: 0px minmax(0, 1fr) 420px;
 }
 
 .agent-main.is-history-collapsed .agent-history {
@@ -1473,7 +1574,13 @@ textarea:disabled {
   color: var(--text-primary);
 }
 
-.agent-history-header > button {
+.agent-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-history-actions button {
   width: 28px;
   height: 28px;
   display: grid;
@@ -1486,10 +1593,16 @@ textarea:disabled {
   transition: all var(--motion-fast) ease;
 }
 
-.agent-history-header > button:hover:not(:disabled) {
+.agent-history-actions button:hover:not(:disabled) {
   border-color: var(--accent-border);
   color: var(--accent-text);
   background: var(--accent-bg);
+}
+
+.agent-drawer-close:hover {
+  border-color: var(--danger-border) !important;
+  color: var(--danger) !important;
+  background: var(--danger-bg) !important;
 }
 
 .agent-history-list {
@@ -1612,7 +1725,7 @@ textarea:disabled {
 .agent-message-feed {
   min-height: 0;
   overflow-y: auto;
-  padding: 24px max(24px, calc((100% - 820px) / 2));
+  padding: 24px max(24px, calc((100% - 920px) / 2));
 }
 
 /* 空状态与引导卡片 */
@@ -1709,7 +1822,8 @@ textarea:disabled {
 
 /* 消息行 */
 .agent-message {
-  max-width: 820px;
+  max-width: 920px;
+  width: 100%;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -1741,7 +1855,7 @@ textarea:disabled {
 
 .agent-message-content {
   min-width: 0;
-  max-width: min(84%, 720px);
+  max-width: min(88%, 840px);
 }
 
 .agent-message-role {
@@ -1760,31 +1874,54 @@ textarea:disabled {
 /* 用户气泡 */
 .agent-user-bubble {
   margin: 0;
-  padding: 11px 16px;
-  border-radius: 16px 16px 4px 16px;
+  padding: 12px 18px;
+  border-radius: 18px 18px 4px 18px;
   color: #fff;
-  background: linear-gradient(135deg, var(--accent-deeper), var(--accent-deep));
-  box-shadow: 0 4px 18px var(--bubble-user-shadow);
-  font-size: 14px;
+  background: linear-gradient(135deg, var(--accent-deep, #7c3aed), var(--accent, #6366f1));
+  box-shadow: 0 4px 18px var(--bubble-user-shadow, rgba(99, 102, 241, 0.25));
+  font-size: 15px;
   line-height: 1.6;
   overflow-wrap: break-word;
   user-select: text;
 }
 
-/* 助手 Markdown 气泡（彻底消除 pre-wrap 强制断行缺陷） */
+/* 助手 Markdown 气泡 */
 .agent-markdown-bubble {
   margin: 0;
-  padding: 14px 18px;
+  padding: 18px 22px;
   border: 1px solid var(--bubble-ai-border, var(--border-subtle));
   border-radius: 16px 16px 16px 4px;
   color: var(--text-primary);
   background: var(--bubble-ai-bg, var(--bg-surface));
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow-sm);
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 15.5px;
+  line-height: 1.75;
+  letter-spacing: -0.005em;
   overflow-wrap: break-word;
   white-space: normal;
+}
+
+.agent-markdown-bubble h1,
+.agent-markdown-bubble h2,
+.agent-markdown-bubble h3 {
+  color: var(--text-primary);
+  font-weight: 650;
+  margin-top: 1.2em;
+  margin-bottom: 0.6em;
+  line-height: 1.35;
+}
+
+.agent-markdown-bubble h2::before,
+.agent-markdown-bubble h3::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: -2px;
 }
 
 /* 消息底部快捷操作栏 */
@@ -1915,7 +2052,7 @@ textarea:disabled {
 
 /* 失败/取消卡片 */
 .agent-run-message {
-  max-width: 820px;
+  max-width: 920px;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -1978,7 +2115,7 @@ textarea:disabled {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 12px max(24px, calc((100% - 820px) / 2)) 16px;
+  padding: 14px max(24px, calc((100% - 920px) / 2)) 16px;
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-topbar);
   backdrop-filter: blur(16px);
@@ -2022,39 +2159,64 @@ textarea:disabled {
   pointer-events: none;
 }
 
-.agent-action-button {
-  min-width: 82px;
-  height: 40px;
-  display: inline-flex;
+/* ─── 圆形流光运行 / 停止按钮 ─────────────────────── */
+.agent-action-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-sm);
-  padding: 0 14px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent-deep), var(--accent));
+  flex-shrink: 0;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
   transition: all var(--motion-fast) ease;
 }
 
-.agent-action-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-accent);
-  filter: brightness(1.08);
+.agent-action-btn.send-btn {
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
 }
 
-.agent-action-button.is-stop {
-  border-color: var(--danger-border);
-  color: var(--danger);
-  background: var(--danger-bg);
+.agent-action-btn.send-btn.ready {
+  border: none;
+  background: linear-gradient(135deg, var(--accent-deep, #7c3aed), var(--accent-deeper, #6d28d9));
+  color: #ffffff;
+  box-shadow: 0 0 16px var(--accent-glow, rgba(124, 58, 237, 0.35));
 }
 
-.agent-action-button.is-stop:hover:not(:disabled) {
+.agent-action-btn.send-btn.ready:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 24px var(--accent-glow, rgba(124, 58, 237, 0.5));
+}
+
+.agent-action-btn.send-btn:disabled:not(.ready) {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.agent-action-btn.stop-btn {
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger, #ef4444);
+  animation: stop-btn-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.agent-action-btn.stop-btn:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(248, 113, 113, 0.7);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.35);
+  transform: scale(1.06);
+}
+
+.agent-action-btn.stop-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@keyframes stop-btn-in {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 /* ─── 右侧执行过程时间轴 (Activity Panel) ──────── */
@@ -2401,104 +2563,175 @@ textarea:disabled {
 }
 
 /* ─── 响应式断点 ───────────────────────────────── */
-@media (max-width: 1050px) {
+@media (max-width: 1024px) {
   .agent-toolbar {
     flex-wrap: wrap;
     min-height: auto;
-  }
-
-  .agent-main {
-    position: relative;
-    grid-template-columns: minmax(0, 1fr) 290px;
-  }
-
-  .agent-history {
-    position: absolute;
-    z-index: var(--z-navigation);
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: min(280px, calc(100% - 48px));
-    box-shadow: 12px 0 28px rgba(0, 0, 0, 0.28);
-  }
-}
-
-@media (max-width: 820px) {
-  .agent-controls {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px 32px 32px;
-    width: 100%;
-  }
-
-  .agent-select-wrapper select,
-  .agent-key-input {
-    width: 100%;
+    gap: 8px;
   }
 
   .agent-main,
-  .agent-main.is-history-collapsed {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(180px, 32vh);
+  .agent-main.is-history-collapsed,
+  .agent-main.is-activity-collapsed,
+  .agent-main.is-history-collapsed.is-activity-collapsed {
+    grid-template-columns: minmax(0, 1fr) !important;
+    position: relative;
   }
 
-  .agent-main.is-activity-collapsed {
-    grid-template-rows: minmax(0, 1fr) 46px;
+  /* 移动端/平板端侧滑抽屉：左侧历史面板 */
+  .agent-history {
+    position: fixed !important;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 90;
+    width: min(310px, 86vw);
+    background: var(--bg-surface);
+    backdrop-filter: blur(20px);
+    box-shadow: 12px 0 36px rgba(0, 0, 0, 0.35);
+    transform: translateX(0);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    display: grid !important;
   }
 
+  .agent-main.is-history-collapsed .agent-history {
+    display: grid !important;
+    transform: translateX(-105%);
+    pointer-events: none;
+    box-shadow: none;
+  }
+
+  /* 移动端/平板端侧滑抽屉：右侧执行过程面板 */
   .agent-activity {
-    border-top: 1px solid var(--border-subtle);
-    border-left: 0;
+    position: fixed !important;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    z-index: 90;
+    width: min(420px, 92vw);
+    background: var(--bg-surface);
+    backdrop-filter: blur(20px);
+    border-left: 1px solid var(--border-subtle);
+    box-shadow: -12px 0 36px rgba(0, 0, 0, 0.35);
+    transform: translateX(0);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    display: grid !important;
   }
 
-  .agent-activity-header {
-    min-height: 46px;
+  .agent-main.is-activity-collapsed .agent-activity {
+    display: grid !important;
+    transform: translateX(105%);
+    pointer-events: none;
+    box-shadow: none;
+  }
+
+  /* 移动端遮罩层 */
+  .agent-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 85;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+  }
+
+  .drawer-fade-enter-active,
+  .drawer-fade-leave-active {
+    transition: opacity 0.2s ease;
+  }
+
+  .drawer-fade-enter-from,
+  .drawer-fade-leave-to {
+    opacity: 0;
   }
 
   .agent-activity-toggle {
-    display: grid;
-  }
-
-  .agent-activity.is-collapsed {
-    grid-template-rows: auto;
-  }
-
-  .agent-activity.is-collapsed .agent-activity-list,
-  .agent-activity.is-collapsed .agent-run-meta {
-    display: none;
+    display: none !important;
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 768px) {
   .agent-toolbar {
     padding: 8px 12px;
-  }
-
-  .agent-title-row h1 {
-    font-size: 15px;
+    gap: 8px;
   }
 
   .agent-controls {
-    grid-template-columns: minmax(0, 1fr) 32px 32px;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 6px;
   }
 
-  .agent-model-field {
-    grid-column: 1 / -1;
+  .agent-model-field,
+  .agent-key-field {
+    flex: 1 1 auto;
   }
 
-  .agent-empty-suggestions {
-    grid-template-columns: minmax(0, 1fr);
+  .agent-select-wrapper select {
+    max-width: 100%;
+    width: 100%;
+    font-size: 11px;
+    height: 30px;
+  }
+
+  .agent-key-input {
+    width: 100%;
+    max-width: 100%;
+    height: 30px;
+  }
+
+  .agent-key-input:focus-within {
+    width: 100%;
   }
 
   .agent-message-feed {
-    padding: 16px 12px;
+    padding: 14px 12px;
+  }
+
+  .agent-message {
+    gap: 8px;
+    margin-bottom: 16px;
   }
 
   .agent-message-content {
     max-width: calc(100% - 38px);
   }
 
+  .agent-user-bubble {
+    font-size: 14px;
+    padding: 10px 14px;
+  }
+
+  .agent-markdown-bubble {
+    font-size: 14.5px;
+    padding: 14px 16px;
+  }
+
   .agent-composer {
-    padding: 10px 12px 14px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .agent-composer textarea {
+    min-height: 56px;
+    font-size: 13px;
+  }
+
+  .agent-empty-suggestions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .agent-title-row h1 {
+    font-size: 14px;
+  }
+
+  .agent-status {
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+
+  .field-label {
+    display: none;
   }
 
   .agent-msg-action-btn[data-tooltip]::after,

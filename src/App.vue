@@ -9,7 +9,7 @@ import {
   LogOut,
   MessageSquare,
   Settings2,
-  Sparkles,
+  Presentation,
   TriangleAlert,
   User,
 } from 'lucide-vue-next'
@@ -170,18 +170,6 @@ watch(() => settings.theme, applyTheme)
           <component :is="item.icon" :size="21" :stroke-width="1.7" aria-hidden="true" />
           <span>{{ item.label }}</span>
         </button>
-
-        <button
-          type="button"
-          class="rail-button showcase-rail-btn"
-          :class="{ active: !isDemoActive && mode === 'showcase' }"
-          title="产品宣传与特性介绍"
-          aria-label="产品介绍"
-          @click="handleOpenShowcase"
-        >
-          <Sparkles :size="21" :stroke-width="1.7" aria-hidden="true" />
-          <span>产品介绍</span>
-        </button>
       </nav>
 
       <div class="rail-footer">
@@ -230,7 +218,7 @@ watch(() => settings.theme, applyTheme)
         <DemoWorkspace @exit="handleExitDemo" />
       </section>
       <section v-show="!isDemoActive && mode === 'chat'" class="mode-page" aria-label="工单决策工作区">
-        <StyleChat @open-demo="handleOpenDemo" @switch-mode="handleSwitchMode" />
+        <StyleChat @open-demo="handleOpenDemo" @switch-mode="handleSwitchMode" @open-showcase="handleOpenShowcase" />
       </section>
       <section v-if="!isDemoActive && mode === 'agent'" class="mode-page" aria-label="排障 Agent 工作区">
         <AgentWorkspace />
@@ -264,7 +252,7 @@ watch(() => settings.theme, applyTheme)
         aria-label="产品介绍"
         @click="handleOpenShowcase"
       >
-        <Sparkles :size="20" :stroke-width="1.8" aria-hidden="true" />
+        <Presentation :size="20" :stroke-width="1.8" aria-hidden="true" />
         <span>介绍</span>
       </button>
       <button

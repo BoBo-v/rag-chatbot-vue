@@ -222,6 +222,16 @@
           </div>
         </div>
         <div class="topbar-right">
+          <button
+            type="button"
+            class="topbar-showcase-btn"
+            title="技术支持工单辅助决策台产品介绍与特性演示"
+            aria-label="产品介绍"
+            @click="emit('open-showcase')"
+          >
+            <Presentation :size="14" aria-hidden="true" />
+            <span>产品介绍</span>
+          </button>
           <div
               class="transport-status"
               :class="currentSettings.transport === 'backend' ? 'is-backend' : 'is-direct'"
@@ -727,6 +737,7 @@ import {
   PanelLeftClose,
   Pencil,
   Plus,
+  Presentation,
   RotateCcw,
   Search,
   Send,
@@ -762,6 +773,7 @@ import { resolveTargetBaseUrl } from '../services/api'
 const emit = defineEmits<{
   (e: 'open-demo'): void
   (e: 'switch-mode', mode: string): void
+  (e: 'open-showcase'): void
 }>()
 
 let tourTimer: ReturnType<typeof setTimeout> | null = null

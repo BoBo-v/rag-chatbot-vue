@@ -2883,6 +2883,39 @@ datalist option {
 
 .chat-shell .topbar-right { gap: 10px; }
 
+.chat-shell .topbar-showcase-btn {
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: var(--bg-surface-2);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.chat-shell .topbar-showcase-btn:hover {
+    color: var(--color-primary);
+    border-color: rgba(99, 102, 241, 0.35);
+    background: var(--bg-hover);
+    box-shadow: 0 1px 4px rgba(99, 102, 241, 0.08);
+}
+
+.chat-shell .topbar-showcase-btn:active {
+    transform: scale(0.98);
+}
+
+.chat-shell .topbar-showcase-btn svg {
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
 .chat-shell .transport-status {
     min-height: 28px;
     display: inline-flex;
@@ -3510,6 +3543,12 @@ datalist option {
 
     .chat-shell .topbar-right { gap: 6px; }
 
+    .chat-shell .topbar-showcase-btn {
+        min-height: 28px;
+        padding: 0 7px;
+        font-size: 10px;
+    }
+
     .chat-shell .transport-status {
         min-height: 28px;
         padding: 0 7px;
@@ -3585,6 +3624,7 @@ datalist option {
 }
 
 @media (max-width: 374px) {
+    .chat-shell .topbar-showcase-btn span { display: none; }
     .chat-shell .topbar-model,
     .chat-shell .topbar-model-wrapper { display: none; }
     .chat-shell .toolbar-left { gap: 0; }

@@ -5,6 +5,7 @@ export type DirectProviderId = ProviderType
 export type BackendProviderId = BackendChatProviderType
 export type ModelProvider = DirectProviderId | BackendProviderId
 export type ModelTransport = 'direct' | 'backend'
+export type ChatScenario = 'ticket' | 'general'
 
 export interface ActiveConnectionCapabilities {
     chatStream: boolean
@@ -40,6 +41,7 @@ export interface ModelRuntimeConfig {
     backendRagMode?: BackendRagMode
     backendProvider?: BackendChatProviderType
     backendModel?: string
+    scenario?: ChatScenario
 }
 
 export type ComparisonRunStatus =

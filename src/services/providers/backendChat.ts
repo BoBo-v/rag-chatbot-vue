@@ -26,6 +26,7 @@ export interface BackendChatRequestBody {
     model: string
     messages: Array<{ role: ChatMessage['role']; content: string }>
     rag: 'auto' | boolean
+    scenario?: 'ticket' | 'general'
 }
 
 function resolveBackendProvider(runtime: ModelRuntimeConfig): NonNullable<ModelRuntimeConfig['backendProvider']> {
@@ -59,6 +60,7 @@ export function buildBackendChatBody(
             content: message.content,
         })),
         rag: toBackendRagValue(runtime),
+        scenario: runtime.scenario ?? 'ticket',
     }
 }
 

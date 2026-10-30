@@ -439,6 +439,29 @@
                 </div>
                 <span class="prompt-badge">新对话生效</span>
               </div>
+              <div class="settings-field" style="margin-bottom: 12px;">
+                <label class="settings-label" style="margin-bottom: 6px;">场景预设模板</label>
+                <div class="segmented-control two-up" role="group" aria-label="场景预设模板">
+                  <button
+                    type="button"
+                    class="segmented-option"
+                    :class="{ active: draft.scenario !== 'general' }"
+                    :aria-pressed="draft.scenario !== 'general'"
+                    @click="applyScenarioPreset('ticket')"
+                  >
+                    🛠️ 工单排障决策
+                  </button>
+                  <button
+                    type="button"
+                    class="segmented-option"
+                    :class="{ active: draft.scenario === 'general' }"
+                    :aria-pressed="draft.scenario === 'general'"
+                    @click="applyScenarioPreset('general')"
+                  >
+                    📚 通用知识库问答
+                  </button>
+                </div>
+              </div>
               <div class="prompt-editor">
                 <textarea v-model="draft.systemPrompt" class="settings-textarea" rows="8" placeholder="输入系统提示词…"></textarea>
                 <div class="prompt-editor-footer">
@@ -592,7 +615,7 @@ import {
   Waypoints,
   X,
 } from 'lucide-vue-next'
-import { persistSettings, settings, DEFAULT_SYSTEM_PROMPT } from '../stores/settings'
+import { persistSettings, settings, DEFAULT_TICKET_PROMPT, DEFAULT_GENERAL_PROMPT } from '../stores/settings'
 import { fetchModels } from '../services/stream'
 import { createRuntimeFromSettings } from '../services/runtime'
 import { getClaudeModels } from '../services/providers/claude'
@@ -838,7 +861,7 @@ const dirtySections = computed<Record<SectionId, boolean>>(() => ({
   model: draft.maxContextTokens !== initialDraft.maxContextTokens
     || draft.responseTimeoutSeconds !== initialDraft.responseTimeoutSeconds
     || draft.showModelInTopbar !== initialDraft.showModelInTopbar,
-  prompt: draft.systemPrompt !== initialDraft.systemPrompt,
+  prompt: draft.systemPrompt !== initialDraft.systemPrompt || draft.scenario !== initialDraft.scenario,
   knowledge: draft.ragMode !== initialDraft.ragMode,
   behavior: false,
   appearance: draft.theme !== initialDraft.theme,
@@ -896,7 +919,12 @@ function setTheme(theme: ThemeType) {
 }
 
 function restorePrompt() {
-  draft.systemPrompt = DEFAULT_SYSTEM_PROMPT
+  draft.systemPrompt = draft.scenario === 'general' ? DEFAULT_GENERAL_PROMPT : DEFAULT_TICKET_PROMPT
+}
+
+function applyScenarioPreset(target: 'ticket' | 'general') {
+  draft.scenario = target
+  draft.systemPrompt = target === 'general' ? DEFAULT_GENERAL_PROMPT : DEFAULT_TICKET_PROMPT
 }
 
 function sectionHasChanges(sectionId: SectionId): boolean {
@@ -1253,6 +1281,7 @@ function createSettingsSnapshot(): AppSettings {
     responseTimeoutSeconds: normalizeTimeout(draft.responseTimeoutSeconds),
     showModelInTopbar: draft.showModelInTopbar,
     ragMode: draft.ragMode,
+    scenario: draft.scenario,
     backend,
     ollama: { ...draft.ollama },
     openai: { ...draft.openai },
@@ -1276,6 +1305,7 @@ function save() {
       responseTimeoutSeconds: nextSettings.responseTimeoutSeconds,
       showModelInTopbar: nextSettings.showModelInTopbar,
       ragMode: nextSettings.ragMode,
+      scenario: nextSettings.scenario,
     })
     Object.assign(settings.backend, nextSettings.backend)
     Object.assign(settings.ollama, nextSettings.ollama)

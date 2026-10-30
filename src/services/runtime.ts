@@ -13,6 +13,7 @@ export function createRuntimeFromSettings(
         systemPrompt: appSettings.systemPrompt,
         maxContextTokens: appSettings.maxContextTokens,
         responseTimeoutSeconds: appSettings.responseTimeoutSeconds,
+        scenario: appSettings.scenario ?? 'ticket',
     }
 
     if (active.transport === 'backend') {

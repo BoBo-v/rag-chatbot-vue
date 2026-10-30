@@ -180,7 +180,7 @@
           </button>
           <div class="topbar-logo">
             <img class="logo-mark" src="/favicon.svg" alt="" aria-hidden="true" />
-            <span class="logo-text">技术支持工单决策台</span>
+            <span class="logo-text">{{ currentSettings.scenario === 'general' ? '知识库智能问答台' : '技术支持工单决策台' }}</span>
             <!-- 顶栏快速切换模型下拉 -->
             <div v-if="currentSettings.showModelInTopbar" class="topbar-model-wrapper" data-tour="topbar-model">
               <button
@@ -269,8 +269,8 @@
           <!-- 空状态 -->
           <div v-if="messages.length === 0" class="empty-state">
             <div class="empty-icon"><Sparkles :size="26" aria-hidden="true" /></div>
-            <h2 class="empty-title">技术支持工单决策台</h2>
-            <p class="empty-desc">选择预设工单用例或直接粘贴客户报障信息进行检索诊断与草稿生成</p>
+            <h2 class="empty-title">{{ currentSettings.scenario === 'general' ? '企业知识库智能问答台' : '技术支持工单决策台' }}</h2>
+            <p class="empty-desc">{{ currentSettings.scenario === 'general' ? '基于已上传知识库文档检索事实依据，直接解答业务与技术疑问' : '选择预设工单用例或直接粘贴客户报障信息进行检索诊断与草稿生成' }}</p>
 
             <!-- 演示沙盒专属体验卡片 -->
             <div class="demo-entry-card" role="button" tabindex="0" data-tour="demo-card" @click="handleOpenDemo" @keydown.enter="handleOpenDemo">
@@ -295,7 +295,7 @@
 
             <div class="empty-suggestions" data-tour="empty-suggestions">
               <button
-                v-for="s in suggestionPrompts"
+                v-for="s in activeSuggestions"
                 :key="s.title"
                 type="button"
                 class="suggestion-card"
@@ -421,8 +421,22 @@ v-for="(img, idx) in msg.images" :key="idx"
                     <CheckCheck :size="12" aria-hidden="true" /> 方案已确认闭环
                   </span>
 
-                  <!-- 采纳草稿并复制回复 -->
+                  <!-- 采纳草稿 或 通用复制回答 -->
                   <button
+                    v-if="currentSettings.scenario === 'general' && !hasCustomerDraft(msg.content)"
+                    type="button"
+                    class="msg-action-btn btn-adopt-draft"
+                    :class="{ copied: copiedFullMsgId === msg.id }"
+                    data-tooltip="复制完整回答"
+                    aria-label="复制回答"
+                    @click="handleCopyFullMessage(msg.id, msg.content)"
+                  >
+                    <Check v-if="copiedFullMsgId === msg.id" :size="14" :stroke-width="2" aria-hidden="true" />
+                    <Copy v-else :size="14" :stroke-width="1.75" aria-hidden="true" />
+                    <span class="action-btn-text">复制回答</span>
+                  </button>
+                  <button
+                    v-else
                     type="button"
                     class="msg-action-btn btn-adopt-draft"
                     :class="{ copied: copiedMsgId === msg.id }"
@@ -437,6 +451,7 @@ v-for="(img, idx) in msg.images" :key="idx"
 
                   <!-- 编辑草稿 -->
                   <button
+                    v-if="currentSettings.scenario !== 'general' || hasCustomerDraft(msg.content)"
                     type="button"
                     class="msg-action-btn"
                     data-tooltip="载入草稿到输入框编辑"
@@ -462,6 +477,7 @@ v-for="(img, idx) in msg.images" :key="idx"
 
                   <!-- 转人工 -->
                   <button
+                    v-if="currentSettings.scenario !== 'general'"
                     type="button"
                     class="msg-action-btn btn-action-escalate"
                     :class="{ active: escalatedMsgIds.has(msg.id) }"
@@ -475,6 +491,7 @@ v-for="(img, idx) in msg.images" :key="idx"
 
                   <!-- 标记为已确认 -->
                   <button
+                    v-if="currentSettings.scenario !== 'general'"
                     type="button"
                     class="msg-action-btn btn-action-confirm"
                     :class="{ active: confirmedMsgIds.has(msg.id) }"
@@ -501,6 +518,7 @@ v-for="(img, idx) in msg.images" :key="idx"
 
                   <!-- 复制完整排障分析 -->
                   <button
+                    v-if="currentSettings.scenario !== 'general'"
                     type="button"
                     class="msg-action-btn"
                     :class="{ copied: copiedFullMsgId === msg.id }"
@@ -595,7 +613,7 @@ v-for="(img, idx) in msg.images" :key="idx"
               ref="textareaRef"
               v-model="inputValue"
               class="input-field"
-              :placeholder="isStreaming ? '正在检索排障并生成回复中，可在此准备下一条工单信息...' : '描述客户报障现象、报错日志、复现步骤或贴入工单 (按 ↑ 可恢复上一条)...'"
+              :placeholder="isStreaming ? '正在检索并生成回复中，可在此准备下一条提问信息...' : (currentSettings.scenario === 'general' ? '输入问题基于知识库材料智能检索与解答 (按 ↑ 可恢复上一条)...' : '描述客户报障现象、报错日志、复现步骤或贴入工单 (按 ↑ 可恢复上一条)...')"
               rows="1"
               @keydown.enter.exact.prevent="handleKeyEnter"
               @compositionstart="handleCompositionStart"
@@ -652,6 +670,15 @@ v-for="(img, idx) in msg.images" :key="idx"
               >
                 <FileSearch :size="13" aria-hidden="true" />
                 <span>{{ ragPillLabel }}</span>
+              </button>
+              <button
+                type="button"
+                class="scenario-pill-btn"
+                :class="'scenario-' + (currentSettings.scenario || 'ticket')"
+                :title="'当前模式：' + (currentSettings.scenario === 'general' ? '通用知识库问答' : '技术支持工单决策') + ' (点击切换模式与提示词预设)'"
+                @click="toggleScenario"
+              >
+                <span>{{ currentSettings.scenario === 'general' ? '📚 知识库问答' : '🛠️ 工单决策' }}</span>
               </button>
             </div>
             <div class="toolbar-right">
@@ -754,7 +781,7 @@ import { useSpeechRecognition } from '../composables/useSpeechRecognition'
 import { useConversationSearch } from '../composables/useConversationSearch'
 import { useMessageRenderer } from '../composables/useMessageRenderer'
 import { useConversationGroups } from '../composables/useConversationGroups'
-import { persistSettings, settings as currentSettings } from '../stores/settings'
+import { persistSettings, settings as currentSettings, DEFAULT_TICKET_PROMPT, DEFAULT_GENERAL_PROMPT } from '../stores/settings'
 import type { BackendRagMode } from '../stores/settings'
 import { getClaudeModels } from '../services/providers/claude'
 import { uploadKnowledgeFile, getBackendProvidersCatalog, getSharedBackendProvidersCatalog, type BackendProvidersCatalog, type UploadProgress } from '../services/knowledge'
@@ -1172,6 +1199,18 @@ function extractCustomerReplyDraft(content: string): { text: string; isDraftOnly
 }
 
 
+function hasCustomerDraft(content: string): boolean {
+  return extractCustomerReplyDraft(content).isDraftOnly
+}
+
+function toggleScenario() {
+  const next = currentSettings.scenario === 'general' ? 'ticket' : 'general'
+  currentSettings.scenario = next
+  currentSettings.systemPrompt = next === 'general' ? DEFAULT_GENERAL_PROMPT : DEFAULT_TICKET_PROMPT
+  persistSettings(currentSettings)
+  toast.show(`已切换至【${next === 'general' ? '通用知识库问答' : '工单排障辅助决策'}】模式`, 'success')
+}
+
 const escalatedMsgIds = ref<Set<string>>(new Set())
 const confirmedMsgIds = ref<Set<string>>(new Set())
 const evidenceOpenMap = ref<Record<string, boolean>>({})
@@ -1357,6 +1396,31 @@ server: {
     icon: FileSearch,
   },
 ]
+
+const generalSuggestionPrompts = [
+  {
+    title: '【知识检索】架构规范与协议原则',
+    desc: '基于知识库文档，检索并梳理系统技术架构、前后端接口规范与设计约束。',
+    prompt: '请基于当前已收录的知识库文档，详细梳理系统的技术架构原则、前后端通信协议与设计约束。',
+    icon: FileText,
+  },
+  {
+    title: '【故障总结】典型构建与配置排查',
+    desc: '汇总检索当前知识库中记录的常见构建故障、代理转发陷阱与解决步骤。',
+    prompt: '请从知识库中检索并总结常见的构建报错、代理配置陷阱与官方推荐解决步骤。',
+    icon: Search,
+  },
+  {
+    title: '【概念咨询】向量切片与混合检索',
+    desc: '了解系统的知识库切片分块、RAG 混合检索评分与证据评估机制。',
+    prompt: '请介绍系统的知识库向量分块策略、BM25 混合检索与证据充分度评估机制是如何工作的？',
+    icon: Sparkles,
+  },
+]
+
+const activeSuggestions = computed(() => {
+  return currentSettings.scenario === 'general' ? generalSuggestionPrompts : suggestionPrompts
+})
 
 function applySuggestion(promptText: string) {
   inputValue.value = promptText

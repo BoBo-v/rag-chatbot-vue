@@ -56,6 +56,17 @@
 
       <button
         type="button"
+        class="ctrl-btn btn-rag-toggle"
+        :class="{ active: isRagDrawerOpen }"
+        :title="isRagDrawerOpen ? '收起知识库链路透视面板 (Esc)' : '展开知识库参考材料与链路透视面板'"
+        @click="$emit('toggle-rag-drawer')"
+      >
+        <PanelRight :size="14" aria-hidden="true" />
+        <span>链路透视</span>
+      </button>
+
+      <button
+        type="button"
         class="ctrl-btn btn-exit"
         title="退出沙盒，返回真实工作区"
         @click="$emit('exit')"
@@ -75,20 +86,28 @@ import {
   FastForward,
   RotateCcw,
   LogOut,
+  PanelRight,
 } from 'lucide-vue-next'
 import type { DemoScenarioDefinition, DemoScenarioId, PlaybackStage } from '../types'
 
-const props = defineProps<{
-  currentScenarioId: DemoScenarioId
-  allScenarios: DemoScenarioDefinition[]
-  stage: PlaybackStage
-}>()
+const props = withDefaults(
+  defineProps<{
+    currentScenarioId: DemoScenarioId
+    allScenarios: DemoScenarioDefinition[]
+    stage: PlaybackStage
+    isRagDrawerOpen?: boolean
+  }>(),
+  {
+    isRagDrawerOpen: false,
+  }
+)
 
 defineEmits<{
   (e: 'switch-scenario', id: DemoScenarioId): void
   (e: 'skip'): void
   (e: 'replay'): void
   (e: 'exit'): void
+  (e: 'toggle-rag-drawer'): void
 }>()
 
 const stageLabel = computed(() => {
@@ -261,6 +280,25 @@ const stageClass = computed(() => {
   border-color: var(--border, rgba(124, 58, 237, 0.25));
 }
 
+.btn-rag-toggle {
+  background: var(--bg-surface-2, #f0ecf7);
+  border-color: var(--border-subtle, rgba(124, 58, 237, 0.12));
+  color: var(--text-secondary, #574e69);
+}
+
+.btn-rag-toggle:hover {
+  background: var(--accent-bg, rgba(124, 58, 237, 0.12));
+  border-color: var(--accent-border, rgba(124, 58, 237, 0.3));
+  color: var(--accent, #7c3aed);
+}
+
+.btn-rag-toggle.active {
+  background: var(--accent, #7c3aed);
+  border-color: var(--accent, #7c3aed);
+  color: #ffffff;
+  box-shadow: 0 1px 6px rgba(124, 58, 237, 0.25);
+}
+
 .btn-exit {
   background: var(--danger-bg, rgba(220, 38, 38, 0.08));
   border-color: var(--danger-border, rgba(220, 38, 38, 0.25));
@@ -363,7 +401,8 @@ const stageClass = computed(() => {
   }
 
   .btn-action span,
-  .btn-secondary span {
+  .btn-secondary span,
+  .btn-rag-toggle span {
     display: none;
   }
 

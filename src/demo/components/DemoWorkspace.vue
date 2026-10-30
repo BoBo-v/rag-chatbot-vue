@@ -5,19 +5,24 @@
       :current-scenario-id="currentScenarioId"
       :all-scenarios="allScenarios"
       :stage="stage"
+      :is-rag-drawer-open="isRagDrawerOpen"
       @switch-scenario="(id) => handleSwitch(id, true)"
       @skip="skipToFinish"
       @replay="handleReplay"
       @exit="$emit('exit')"
+      @toggle-rag-drawer="isRagDrawerOpen = !isRagDrawerOpen"
     />
 
-    <!-- 主聊天消息视口 -->
-    <div
-      ref="chatFeedRef"
-      class="demo-chat-feed"
-      @scroll="handleFeedScroll"
-    >
-      <div class="messages-container">
+    <!-- 主展示舞台：消息区与右侧 RAG 详情面板并列 -->
+    <div class="demo-main-stage">
+      <div class="demo-conversation-pane">
+        <!-- 主聊天消息视口 -->
+        <div
+          ref="chatFeedRef"
+          class="demo-chat-feed"
+          @scroll="handleFeedScroll"
+        >
+          <div class="messages-container">
         <!-- 空状态引导（当用户清空或尚未发送时） -->
         <div v-if="messages.length === 0" class="demo-empty-card">
           <div class="empty-icon-box">
@@ -79,6 +84,34 @@
                   },
                 ]"
               >
+                <!-- 前置 RAG 检索状态条 (当且仅当助手消息命中知识库) -->
+                <div
+                  v-if="msg.role === 'assistant' && msg.ragContext?.enabled"
+                  class="demo-rag-preface-bar"
+                  role="button"
+                  tabindex="0"
+                  title="点击在右侧展开知识库检索链路与切片解释"
+                  @click="isRagDrawerOpen = true"
+                >
+                  <div class="rag-bar-left">
+                    <span class="rag-mode-chip font-mono">
+                      {{ msg.ragContext.results?.length ? 'RAG: 离线推演 (已命中)' : 'RAG: 离线推演中' }}
+                    </span>
+                    <span class="rag-hit-text">
+                      已检索知识库 · 命中 <strong class="font-mono">{{ msg.ragContext.results?.length || 0 }}</strong> 处切片
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    class="rag-view-link-btn font-mono"
+                    title="在右侧展开知识库检索链路与切片解释"
+                    @click.stop="isRagDrawerOpen = true"
+                  >
+                    <span>链路详情</span>
+                    <ChevronRight :size="13" aria-hidden="true" />
+                  </button>
+                </div>
+
                 <!-- 用户自定义报障标记 -->
                 <div
                   v-if="msg.role === 'user' && msg.content.trim() !== currentScenario.ticketMarkdown.trim()"
@@ -109,17 +142,6 @@
                   @click="handleCodeBlockAction($event, msg.id)"
                   v-html="renderContent(msg)"
                 ></div>
-              </div>
-
-              <!-- RAG 引用文档展示组件（通过双向绑定控制 details 展开收起，无需脆弱的 DOM 查询） -->
-              <div
-                v-if="msg.role === 'assistant' && msg.ragContext"
-                class="demo-citations-wrapper"
-              >
-                <RagCitations
-                  v-model:open="isEvidenceExpanded"
-                  :context="msg.ragContext"
-                />
               </div>
 
               <!-- 消息快捷操作栏（模拟完整工单闭环动作） -->
@@ -153,11 +175,12 @@
                 <button
                   type="button"
                   class="demo-action-btn"
-                  title="展开下方官方文档知识库依据卡片"
-                  @click="toggleEvidence"
+                  :class="{ active: isRagDrawerOpen }"
+                  title="在右侧展开知识库检索依据与三维分值面板"
+                  @click="handleToggleEvidence"
                 >
                   <Database :size="14" aria-hidden="true" />
-                  <span>{{ isEvidenceExpanded ? '收起知识库依据' : '查看知识库依据' }}</span>
+                  <span>{{ isRagDrawerOpen ? '收起知识库依据' : '查看知识库依据' }}</span>
                 </button>
 
                 <!-- 标记转二线研发 -->
@@ -278,10 +301,20 @@
         </template>
       </div>
     </footer>
+    </div><!-- /demo-conversation-pane -->
 
-    <!-- 剪贴板受阻降级弹窗 -->
-    <DemoCopyModal :text="copyFailedDraft" @close="copyFailedDraft = null" />
-  </div>
+    <!-- 右侧知识库参考材料与链路透视抽屉 (500px, 默认桌面端展开) -->
+    <RagDrawerPanel
+      v-model:open="isRagDrawerOpen"
+      :context="currentAssistantMsg?.ragContext ?? null"
+      scenario="ticket"
+      :user-question="currentUserQuestion"
+    />
+  </div><!-- /demo-main-stage -->
+
+  <!-- 剪贴板受阻降级弹窗 -->
+  <DemoCopyModal :text="copyFailedDraft" @close="copyFailedDraft = null" />
+</div>
 </template>
 
 <script setup lang="ts">
@@ -289,6 +322,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   Check,
   CheckCheck,
+  ChevronRight,
   Copy,
   Database,
   Headphones,
@@ -298,7 +332,7 @@ import {
 } from 'lucide-vue-next'
 import DemoControls from './DemoControls.vue'
 import DemoCopyModal from './DemoCopyModal.vue'
-import RagCitations from '../../components/RagCitations.vue'
+import RagDrawerPanel from '../../components/RagDrawerPanel.vue'
 import { useDemoSession } from '../useDemoSession'
 import { useMessageRenderer } from '../../composables/useMessageRenderer'
 
@@ -349,6 +383,22 @@ const {
   toggleEscalate,
   toggleConfirm,
 } = useDemoSession()
+
+const isRagDrawerOpen = ref(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true)
+
+const currentAssistantMsg = computed(() => {
+  return messages.value.find(m => m.role === 'assistant') || null
+})
+
+const currentUserQuestion = computed(() => {
+  const userMsg = messages.value.find(m => m.role === 'user')
+  return userMsg ? userMsg.content : inputPrompt.value
+})
+
+function handleToggleEvidence() {
+  toggleEvidence()
+  isRagDrawerOpen.value = isEvidenceExpanded.value
+}
 
 const isGenerating = computed(() => {
   return stage.value === 'presenting_ticket' ||
@@ -434,20 +484,42 @@ watch(
   overflow: hidden;
 }
 
+.demo-main-stage {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.demo-conversation-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
 .demo-chat-feed {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 20px;
+  padding: 0 24px;
   display: flex;
   justify-content: center;
 }
 
 .messages-container {
   width: 100%;
-  max-width: 860px;
+  max-width: 960px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  padding: 32px 0 28px;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 /* 空状态卡片 */
@@ -587,37 +659,78 @@ watch(
 .msg-col {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.msg-row.user .msg-col {
+  max-width: min(760px, 85%);
+  align-items: flex-end;
+}
+
+.msg-row.assistant .msg-col {
   flex: 1;
   min-width: 0;
-  width: calc(100% - 46px);
+  max-width: 100%;
+  width: 100%;
 }
 
 .msg-bubble {
   width: 100%;
   box-sizing: border-box;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md, 12px);
   padding: 14px 18px;
-  font-size: 14px;
-  line-height: 1.65;
   word-break: break-word;
   position: relative;
   transition: border-color var(--motion-fast, 140ms) ease, box-shadow var(--motion-fast, 140ms) ease;
 }
 
 .msg-bubble.user {
-  background: color-mix(in srgb, var(--accent-bg) 72%, var(--bg-surface-2));
-  border: 1px solid var(--accent-border, rgba(167, 139, 250, 0.35));
-  color: var(--text-primary, #1e192b);
+  border: 1px solid var(--accent-border);
   border-radius: var(--radius-md) var(--radius-md) var(--radius-xs) var(--radius-md);
+  color: #ffffff;
+  background: var(--accent, #4f46e5);
+  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.18);
+}
+
+.msg-bubble.user .msg-content {
+  color: #ffffff;
 }
 
 .msg-bubble.assistant {
-  background: var(--bg-surface, #ffffff);
-  border: 1px solid var(--border, rgba(124, 58, 237, 0.18));
-  color: var(--text-primary, #1e192b);
-  box-shadow: var(--shadow-sm, 0 2px 10px rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--border, #e2e8f0);
   border-radius: var(--radius-md) var(--radius-md) var(--radius-md) var(--radius-xs);
+  color: var(--text-primary);
+  background: var(--bg-surface, #ffffff);
+  backdrop-filter: none;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.04);
+}
+
+.msg-content {
+  font-family: var(--font-sans);
+  font-size: 16.5px;
+  line-height: 1.75;
+  letter-spacing: -0.005em;
+  word-break: break-word;
+}
+
+/* 标题高亮指示胶囊 (对标 ai_rag.html 风格) */
+:deep(.markdown-body h2),
+:deep(.markdown-body h3) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+:deep(.markdown-body h2::before),
+:deep(.markdown-body h3::before) {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--accent, #4f46e5);
+  flex-shrink: 0;
 }
 
 /* 流式回答呼吸光环（对齐真实环境） */
@@ -651,6 +764,74 @@ watch(
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50%     { opacity: 0; }
+}
+
+/* ── AI 消息气泡内前置轻量 RAG 状态条 ── */
+.demo-rag-preface-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  color: #1e1b4b;
+}
+
+.demo-rag-preface-bar:hover {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.38);
+}
+
+.rag-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.rag-mode-chip {
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--accent, #4f46e5);
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.rag-hit-text {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.rag-view-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid var(--accent-border, rgba(99, 102, 241, 0.35));
+  background: var(--bg-surface, #ffffff);
+  color: var(--accent, #4f46e5);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.rag-view-link-btn:hover {
+  background: var(--accent, #4f46e5);
+  color: #ffffff;
+  border-color: var(--accent, #4f46e5);
 }
 
 .loading-state-row {
@@ -821,7 +1002,9 @@ watch(
   gap: 12px;
   padding: 8px 14px;
   margin: 0 auto 10px;
-  max-width: 860px;
+  max-width: 960px;
+  width: 100%;
+  box-sizing: border-box;
   border-radius: var(--radius-md, 8px);
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.28);
@@ -866,10 +1049,10 @@ watch(
 
 /* ─── 底部工单工作台输入区（对齐真实工单工作台风格） ─── */
 .demo-input-area {
-  padding: 12px 20px 16px;
+  padding: 12px 24px 14px;
   background: var(--bg-topbar, var(--bg-surface));
   backdrop-filter: blur(16px);
-  border-top: 1px solid var(--border-subtle, rgba(124, 58, 237, 0.15));
+  border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
@@ -877,11 +1060,13 @@ watch(
   display: flex;
   flex-direction: column;
   background: var(--bg-input, var(--bg-surface));
-  border: 1px solid var(--accent-border, rgba(167, 139, 250, 0.35));
+  border: 1px solid var(--accent-border);
   border-radius: var(--radius-md, 12px);
-  padding: 12px 16px 10px;
-  max-width: 860px;
+  padding: 13px 14px 9px;
+  max-width: 960px;
+  width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
   box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.04));
   transition: border-color var(--motion-fast, 140ms) ease, box-shadow var(--motion-fast, 140ms) ease;
 }
@@ -1056,14 +1241,44 @@ watch(
   color: var(--text-secondary, #574e69);
 }
 
+/* ─── 深色主题适配 ─── */
+[data-theme='dark'] .demo-rag-preface-bar {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #e0e7ff;
+}
+
+[data-theme='dark'] .demo-rag-preface-bar:hover {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+[data-theme='dark'] .rag-view-link-btn {
+  background: rgba(15, 23, 42, 0.7);
+  color: #c7d2fe;
+}
+
+[data-theme='dark'] .msg-bubble.user {
+  background: #3730a3;
+  border-color: #4f46e5;
+}
+
+[data-theme='dark'] .msg-bubble.assistant {
+  background: var(--bg-surface);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
 /* ─── 小屏幕与移动端响应式适配 ─── */
 @media (max-width: 768px) {
   .demo-chat-feed {
-    padding: 14px 10px;
+    padding: 0 10px;
   }
 
   .messages-container {
     gap: 14px;
+    padding: 16px 0 14px;
+    max-width: 100%;
   }
 
   .msg-row {
@@ -1082,12 +1297,23 @@ watch(
   }
 
   .msg-col {
-    width: calc(100% - 38px);
+    max-width: calc(100% - 38px);
+  }
+
+  .msg-row.assistant .msg-col {
+    max-width: calc(100% - 38px);
+    width: 100%;
   }
 
   .msg-bubble {
-    padding: 11px 13px;
-    font-size: 13.5px;
+    padding: 11px 14px;
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .msg-content {
+    font-size: 15px;
+    line-height: 1.65;
   }
 
   .msg-actions-bar {
@@ -1124,13 +1350,14 @@ watch(
   }
 
   .demo-input-box {
-    padding: 8px 12px 6px;
+    max-width: 100%;
+    padding: 10px 10px 7px;
     border-radius: 10px;
   }
 
   .demo-input-field {
     min-height: 38px;
-    font-size: 13.5px;
+    font-size: 14px;
   }
 
   .demo-input-toolbar {

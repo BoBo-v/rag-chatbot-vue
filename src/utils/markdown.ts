@@ -116,6 +116,16 @@ export function renderMarkdownDocument(source: string, ownerMessageId?: string):
         }
     }
 
+    // 为技术支持工单双段式结构注入视觉语义徽章与分区容器标识
+    finalHtml = finalHtml.replace(
+        /<h3>(.*?(?:🛠️|内部分析区).*?)<\/h3>/gi,
+        '<div class="ticket-header-box internal-box"><span class="ticket-section-badge internal-badge">内部诊断 · 严禁对外</span><h3 class="ticket-section-title internal-title">$1</h3></div>'
+    )
+    finalHtml = finalHtml.replace(
+        /<h3>(.*?(?:✉️|客户回复草稿).*?)<\/h3>/gi,
+        '<div class="ticket-header-box draft-box"><span class="ticket-section-badge draft-badge">建议客户回复草稿 · 审核后可一键采纳</span><h3 class="ticket-section-title draft-title">$1</h3></div>'
+    )
+
     return {
         html: finalHtml,
         blocks,

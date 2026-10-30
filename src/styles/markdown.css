@@ -521,3 +521,102 @@
     .markdown-body pre code { font-size: 12.5px; }
     .code-copy-btn { min-height: 36px; }
 }
+
+/* ══════════════════════════════════════════════════
+   工单决策专属结构化双段式面板（内部分析 vs 客户回复草稿）
+   ══════════════════════════════════════════════════ */
+.markdown-body .ticket-header-box {
+    margin: 18px 0 10px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease;
+}
+
+.markdown-body .ticket-header-box.internal-box {
+    background: color-mix(in srgb, var(--accent-bg) 55%, var(--bg-surface-2));
+    border: 1px solid var(--accent-border);
+    border-left: 4px solid var(--accent);
+}
+
+.markdown-body .ticket-header-box.draft-box {
+    background: color-mix(in srgb, var(--success-bg) 65%, var(--bg-surface-2));
+    border: 1px solid var(--success-border);
+    border-left: 4px solid var(--success);
+}
+
+.markdown-body .ticket-section-badge {
+    font-size: 10px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.markdown-body .ticket-section-badge.internal-badge {
+    color: var(--accent-text);
+}
+
+.markdown-body .ticket-section-badge.draft-badge {
+    color: var(--success);
+}
+
+.markdown-body .ticket-section-title {
+    margin: 0 !important;
+    font-size: 13.5px !important;
+    font-weight: 700 !important;
+    color: var(--text-primary) !important;
+    line-height: 1.4 !important;
+}
+
+/* 工单分割线美化 */
+.markdown-body hr {
+    border: none;
+    border-top: 1px dashed var(--border);
+    margin: 20px 0 14px;
+    opacity: 0.75;
+}
+
+/* 表格边框与圆角强化 */
+.markdown-body table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 12px 0;
+    font-size: 13.5px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+}
+
+.markdown-body thead tr {
+    background: var(--bg-surface-2);
+}
+
+.markdown-body th {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border-subtle);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.markdown-body td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--border-subtle);
+}
+
+.markdown-body th:last-child,
+.markdown-body td:last-child {
+    border-right: none;
+}
+
+.markdown-body tbody tr:last-child td {
+    border-bottom: none;
+}

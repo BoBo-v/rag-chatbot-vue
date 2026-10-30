@@ -2189,17 +2189,17 @@ textarea:disabled {
 
 /* 语义彩色节点 */
 .agent-event.event-kind-web_search .agent-event-dot {
-  background: var(--cyan-400);
+  background: var(--data-accent);
   box-shadow: 0 0 0 1px var(--data-accent-border);
 }
 
 .agent-event.event-kind-calculator .agent-event-dot {
-  background: var(--amber-400);
+  background: var(--warning);
   box-shadow: 0 0 0 1px var(--warning-border);
 }
 
 .agent-event.event-kind-mcp .agent-event-dot {
-  background: var(--violet-400);
+  background: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-border);
 }
 
@@ -2275,14 +2275,14 @@ textarea:disabled {
 }
 
 .search-result-icon {
-  color: var(--cyan-400);
+  color: var(--data-accent);
   flex-shrink: 0;
 }
 
 .search-result-source {
   font-family: var(--font-mono);
   font-size: 9.5px;
-  color: var(--cyan-400);
+  color: var(--data-accent);
 }
 
 .agent-search-result strong {

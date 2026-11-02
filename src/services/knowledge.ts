@@ -7,6 +7,9 @@ export interface StoredKnowledgeFile {
     chunkCount: number
     createdAt: string
     contentHash?: string
+    embeddingModel?: string
+    embeddingDim?: number | null
+    embeddingDimText?: string
 }
 
 export interface KnowledgeChunk {
@@ -82,6 +85,8 @@ export type { BackendChatProvider, BackendProvidersCatalog, CatalogState } from 
 
 export interface VectorStoreStatus {
     currentEmbeddingModel?: string
+    currentEmbeddingDim?: number | null
+    backend?: string
     fileCount?: number
     chunkCount?: number
     compatibleChunkCount?: number

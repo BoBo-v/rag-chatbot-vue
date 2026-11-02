@@ -40,7 +40,7 @@
         <strong :title="vectorStatusTitle">{{ vectorStatusTitle }}</strong>
         <div class="kb-vector-status-meta">
           <span>模型: <strong>{{ vectorStatus?.currentEmbeddingModel || '-' }}</strong></span>
-          <span>维度: <strong>{{ vectorEmbeddingDimension ?? '-' }}</strong></span>
+          <span>维度: <strong>{{ targetEmbeddingDimension ? targetEmbeddingDimension + ' 维' : '待确认' }}</strong></span>
           <span>{{ formatOptionalNumber(vectorStatus?.chunkCount ?? totalChunks) }} chunks</span>
           <span v-if="incompatibleChunkCount && incompatibleChunkCount > 0" class="incompatible-badge">
             不兼容: <strong>{{ formatOptionalNumber(incompatibleChunkCount) }}</strong>
@@ -235,11 +235,10 @@
           <button
             v-for="file in filteredFiles"
             :key="file.id"
-            type="button"
             class="kb-file-item"
             :class="{
               active: selectedFileId === file.id,
-              'is-incompatible': fileIsIncompatible(file)
+              'is-incompatible': getFileCompatibility(file).isIncompatible
             }"
             @click="selectFile(file.id)"
           >
@@ -249,12 +248,14 @@
                 {{ file.filename }}
               </span>
               <span v-if="isImageFilename(file.filename)" class="kb-pill-tag tag-vision">视觉解析</span>
-              <span v-else-if="fileIsIncompatible(file)" class="kb-pill-tag tag-incompatible">维度不兼容</span>
+              <span v-else-if="getFileCompatibility(file).badgeText" class="kb-pill-tag" :class="getFileCompatibility(file).badgeClass">
+                {{ getFileCompatibility(file).badgeText }}
+              </span>
             </div>
             <div class="kb-file-meta-row font-mono">
               <span>{{ file.chunkCount }} chunks · {{ formatFileSize(file.size) }}</span>
-              <span class="kb-dim-tag" :class="{ 'dim-incompatible': fileIsIncompatible(file) }">
-                {{ fileEmbeddingDimension(file) }}维{{ fileIsIncompatible(file) ? ' (旧)' : '' }} · {{ formatDate(file.createdAt) }}
+              <span class="kb-dim-tag" :class="{ 'dim-incompatible': getFileCompatibility(file).isIncompatible }">
+                {{ getFileCompatibility(file).dimText }}{{ getFileCompatibility(file).isIncompatible ? ' (旧)' : '' }} · {{ formatDate(file.createdAt) }}
               </span>
             </div>
           </button>
@@ -328,7 +329,7 @@
                 <header class="kb-chunk-header font-mono">
                   <div class="kb-chunk-header-left">
                     <span class="kb-chunk-index">#{{ chunk.chunkIndex }}</span>
-                    <span class="kb-chunk-dim">{{ chunk.embeddingSize || vectorEmbeddingDimension || 1024 }} 维</span>
+                    <span class="kb-chunk-dim">{{ chunk.embeddingSize ? chunk.embeddingSize + ' 维' : '未知' }}</span>
                     <span class="kb-chunk-chars">| {{ chunk.text.length }} chars</span>
                     <span v-if="chunk.pageNumber" class="kb-chunk-page">第 {{ chunk.pageNumber }} 页</span>
                   </div>
@@ -590,13 +591,16 @@ const totalChunks = computed(() => files.value.reduce((sum, file) => sum + file.
 const totalChars = computed(() => files.value.reduce((sum, file) => sum + file.charCount, 0))
 const selectedFile = computed(() => files.value.find(file => file.id === selectedFileId.value))
 
-const vectorEmbeddingDimension = computed(() => {
+const targetEmbeddingDimension = computed<number | null>(() => {
   const status = vectorStatus.value
-  if (!status?.embeddingDistributions?.length) return undefined
-  const current = status.embeddingDistributions.find(item =>
+  if (!status) return null
+  if (status.currentEmbeddingDim !== undefined && status.currentEmbeddingDim !== null) {
+    return status.currentEmbeddingDim
+  }
+  const current = status.embeddingDistributions?.find(item =>
     item.embeddingModel === status.currentEmbeddingModel && item.embeddingDim !== null
   )
-  return current?.embeddingDim ?? status.embeddingDistributions.find(item => item.embeddingDim !== null)?.embeddingDim
+  return current?.embeddingDim ?? null
 })
 
 const incompatibleChunkCount = computed(() => vectorStatus.value?.incompatibleChunkCount)
@@ -655,13 +659,64 @@ function isImageFilename(filename: string): boolean {
   return IMAGE_EXTENSIONS.has(ext)
 }
 
-function fileIsIncompatible(file: StoredKnowledgeFile): boolean {
-  return file.filename === 'legacy.txt' || (Boolean(incompatibleChunkCount.value) && file.filename.includes('legacy'))
-}
+function getFileCompatibility(file: StoredKnowledgeFile) {
+  const status = vectorStatus.value
+  const targetDim = targetEmbeddingDimension.value
+  const currentModel = status?.currentEmbeddingModel
 
-function fileEmbeddingDimension(file: StoredKnowledgeFile): number {
-  if (fileIsIncompatible(file)) return 768
-  return vectorEmbeddingDimension.value ?? 1024
+  // 1. 缺少元信息：显示“未知”
+  const hasNoMeta = (!file.embeddingModel || file.embeddingModel === 'unknown') && (!file.embeddingDim || file.embeddingDimText === '未知')
+  if (hasNoMeta) {
+    return {
+      isIncompatible: true,
+      badgeText: '未知',
+      badgeClass: 'tag-unknown',
+      dimText: '未知',
+    }
+  }
+
+  // 2. 存在多种模型或维度：显示“混合”
+  const isMixed = file.embeddingModel === 'mixed' || file.embeddingDimText === '混合'
+  if (isMixed) {
+    return {
+      isIncompatible: true,
+      badgeText: '混合',
+      badgeClass: 'tag-incompatible',
+      dimText: '混合',
+    }
+  }
+
+  const dimText = file.embeddingDimText || (file.embeddingDim ? `${file.embeddingDim}维` : '未知')
+
+  // 3. 当前目标维度未经确认：显示“待确认”
+  if (!currentModel || targetDim === null) {
+    return {
+      isIncompatible: false,
+      badgeText: '待确认',
+      badgeClass: 'tag-pending',
+      dimText,
+    }
+  }
+
+  // 4. 目标模型与维度均已确认，对比真实值
+  const modelMatch = file.embeddingModel === currentModel
+  const dimMatch = file.embeddingDim !== null && file.embeddingDim === targetDim
+
+  if (!modelMatch || !dimMatch) {
+    return {
+      isIncompatible: true,
+      badgeText: !modelMatch ? '模型不兼容' : '维度不兼容',
+      badgeClass: 'tag-incompatible',
+      dimText,
+    }
+  }
+
+  return {
+    isIncompatible: false,
+    badgeText: '',
+    badgeClass: '',
+    dimText,
+  }
 }
 
 async function loadFiles() {

@@ -70,44 +70,46 @@
       </div>
 
       <div class="rag-eval-summary">
-        <div>
-          <span>总数</span>
+        <div class="summary-card">
+          <span>总用例数</span>
           <strong>{{ summary.total }}</strong>
         </div>
-        <div>
-          <span>通过率</span>
-          <strong>{{ formatPercent(summary.passRate) }}</strong>
+        <div class="summary-card">
+          <span>评测通过率</span>
+          <strong :class="{ 'rate-high': summary.passRate >= 0.8, 'rate-mid': summary.passRate >= 0.5 && summary.passRate < 0.8, 'rate-low': summary.passRate < 0.5 }">
+            {{ formatPercent(summary.passRate) }}
+          </strong>
         </div>
-        <div>
+        <div class="summary-card">
           <span>相关问题 Top1</span>
           <strong>{{ formatPercent(summary.top1HitRate) }}</strong>
         </div>
-        <div>
+        <div class="summary-card">
           <span>相关问题 TopK</span>
           <strong>{{ formatPercent(summary.topKHitRate) }}</strong>
         </div>
-        <div>
+        <div class="summary-card">
           <span>无关问题拒绝率</span>
           <strong>{{ formatPercent(summary.negativeRejectionRate) }}</strong>
         </div>
-        <div>
+        <div class="summary-card">
           <span>误召回率</span>
           <strong>{{ formatPercent(summary.falseRecallRate) }}</strong>
         </div>
-        <div>
+        <div class="summary-card">
           <span>平均最高分</span>
           <strong>{{ formatOptionalScore(summary.averageBestScore) }}</strong>
         </div>
-        <div>
-          <span>平均排名</span>
+        <div class="summary-card">
+          <span>平均期望排名</span>
           <strong>{{ formatOptionalScore(summary.averageExpectedRank) }}</strong>
         </div>
-        <div>
+        <div class="summary-card">
           <span>无结果</span>
           <strong>{{ summary.noResultCount }}</strong>
         </div>
-        <div>
-          <span>低分</span>
+        <div class="summary-card">
+          <span>低分召回</span>
           <strong>{{ summary.lowScoreCount }}</strong>
         </div>
       </div>
@@ -206,17 +208,32 @@
                 class="rag-eval-hit"
                 :class="{ matched: hit.passed }"
               >
-                <header>
-                  <strong>#{{ hit.rank }} {{ hit.result.filename }}</strong>
-                  <span>{{ formatScore(hit.result.score) }}</span>
+                <header class="font-mono">
+                  <div class="rag-eval-hit-title">
+                    <span class="rag-eval-hit-rank">#{{ hit.rank }}</span>
+                    <strong>{{ hit.result.filename }}</strong>
+                  </div>
+                  <span class="rag-eval-hit-score-badge">{{ formatScore(hit.result.score) }}</span>
                 </header>
-                <div class="rag-eval-score-row">
-                  <span>vector {{ formatScore(hit.result.vectorScore) }}</span>
-                  <span>keyword {{ formatScore(hit.result.keywordScore) }}</span>
-                  <span>chunk #{{ hit.result.chunkIndex }}</span>
-                  <span>{{ hit.fileMatched ? '文件命中' : '文件未命中' }}</span>
-                  <span>{{ hit.keywordMatched ? '关键词命中' : '关键词未命中' }}</span>
+
+                <!-- 3D 分数芯片行 (Score, Vec, FTS5) -->
+                <div class="rag-eval-3d-scores font-mono">
+                  <div class="rag-eval-score-chip score-total">Score: <strong>{{ formatScore(hit.result.score) }}</strong></div>
+                  <div class="rag-eval-score-chip score-vec">Vec: <strong>{{ formatScore(hit.result.vectorScore) }}</strong></div>
+                  <div class="rag-eval-score-chip score-fts">FTS5: <strong>{{ formatScore(hit.result.keywordScore) }}</strong></div>
                 </div>
+
+                <!-- 命中标签行 -->
+                <div class="rag-eval-match-tags font-mono">
+                  <span class="rag-eval-chunk-tag">chunk #{{ hit.result.chunkIndex }}</span>
+                  <span class="rag-eval-match-pill" :class="{ 'is-matched': hit.fileMatched }">
+                    {{ hit.fileMatched ? '✓ 文件命中' : '✗ 文件未命中' }}
+                  </span>
+                  <span class="rag-eval-match-pill" :class="{ 'is-matched': hit.keywordMatched }">
+                    {{ hit.keywordMatched ? '✓ 关键词命中' : '✗ 关键词未命中' }}
+                  </span>
+                </div>
+
                 <p>{{ hit.result.text }}</p>
               </article>
 
@@ -810,6 +827,82 @@ function formatOptionalScore(value: number | undefined): string {
 .rag-eval-hit header span {
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.rag-eval-summary strong.rate-high {
+  color: #10b981;
+}
+
+.rag-eval-summary strong.rate-mid {
+  color: #f59e0b;
+}
+
+.rag-eval-summary strong.rate-low {
+  color: #f43f5e;
+}
+
+.rag-eval-hit-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rag-eval-hit-rank {
+  color: #818cf8;
+  font-weight: 700;
+}
+
+.rag-eval-hit-score-badge {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #6366f1;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.rag-eval-3d-scores {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border-subtle);
+  font-size: 10px;
+  text-align: center;
+}
+
+.rag-eval-score-chip.score-total strong { color: #6366f1; }
+.rag-eval-score-chip.score-vec strong { color: #0284c7; }
+.rag-eval-score-chip.score-fts strong { color: #059669; }
+
+.rag-eval-match-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 10px;
+}
+
+.rag-eval-chunk-tag {
+  color: var(--text-muted);
+}
+
+.rag-eval-match-pill {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(244, 63, 94, 0.12);
+  color: #f43f5e;
+  font-weight: 600;
+}
+
+.rag-eval-match-pill.is-matched {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
 }
 
 .rag-eval-score-row {

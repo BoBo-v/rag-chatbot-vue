@@ -438,6 +438,14 @@ export async function getVectorStoreStatus(): Promise<VectorStoreStatus> {
     return data.status ?? data
 }
 
+export async function reindexVectorStore(fileId?: string): Promise<{ ok?: boolean; message?: string }> {
+    return fetchJson('/api/vector-store/reindex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fileId ? { fileId } : {}),
+    })
+}
+
 async function fetchJson<T>(path: string, init?: RequestInit, options?: { baseUrl?: string }): Promise<T> {
     let response: Response
     try {

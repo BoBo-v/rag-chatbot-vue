@@ -438,7 +438,14 @@ export async function getVectorStoreStatus(): Promise<VectorStoreStatus> {
     return data.status ?? data
 }
 
-export async function reindexVectorStore(fileId?: string): Promise<{ ok?: boolean; message?: string }> {
+export interface ReindexVectorStoreResult {
+    backend: string
+    filesIndexed: number
+    chunksIndexed: number
+    skipped: boolean
+}
+
+export async function reindexVectorStore(fileId?: string): Promise<ReindexVectorStoreResult> {
     return fetchJson('/api/vector-store/reindex', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

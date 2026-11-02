@@ -50,7 +50,7 @@
       <div class="kb-vector-status-actions">
         <button type="button" class="kb-secondary" :disabled="reindexing || loadingVectorStatus" @click="handleReindex">
           <RefreshCw :size="13" :class="{ spinning: reindexing }" aria-hidden="true" />
-          {{ reindexing ? '重建中...' : '🔄 重建向量索引' }}
+          {{ reindexing ? '同步中...' : '🔄 同步已有向量索引' }}
         </button>
         <button type="button" class="kb-primary" :disabled="uploading" @click="fileInputRef?.click()">
           <Upload :size="13" aria-hidden="true" />
@@ -604,7 +604,7 @@ const incompatibleChunkCount = computed(() => vectorStatus.value?.incompatibleCh
 const vectorStatusTitle = computed(() => {
   if (vectorStatusError.value) return vectorStatusError.value
   if (loadingVectorStatus.value && !vectorStatus.value) return '正在检查向量库'
-  if (vectorStatus.value?.needsReindex) return '存在旧模型或旧维度 chunk，建议重建索引'
+  if (vectorStatus.value?.needsReindex) return '存在旧模型或旧维度切片，需要使用当前 embedding 模型重新入库'
   return '索引兼容'
 })
 
@@ -712,19 +712,23 @@ async function selectFile(id: string) {
 
 async function handleReindex() {
   const confirmed = await confirm({
-    title: '重建向量索引',
-    message: '确定要重建向量索引吗？这将会使用当前 embedding 模型重新计算所有切片的向量嵌入。',
-    confirmText: '重建',
+    title: '同步已有向量索引',
+    message: '确定要同步全库已有向量索引吗？此操作仅将本地已计算的切片向量同步至当前向量存储后端，不会重新调用模型计算 embedding。',
+    confirmText: '开始同步',
   })
   if (!confirmed) return
 
   reindexing.value = true
   try {
-    const res = await reindexVectorStore(selectedFileId.value || undefined)
-    toast.show(res.message || '向量索引重建完成', 'success')
+    const res = await reindexVectorStore()
+    if (res.skipped) {
+      toast.show('当前后端无需执行索引同步', 'warning')
+    } else {
+      toast.show(`向量索引同步完成：已处理 ${res.filesIndexed} 个文件，${res.chunksIndexed} 个切片`, 'success')
+    }
     await loadKnowledgeOverview()
   } catch (err) {
-    toast.show(err instanceof Error ? err.message : '重建索引失败', 'error')
+    toast.show(err instanceof Error ? err.message : '同步向量索引失败', 'error')
   } finally {
     reindexing.value = false
   }

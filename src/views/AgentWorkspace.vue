@@ -551,7 +551,7 @@ const providers = ref<AgentProviderInfo[]>([])
 const providersLoading = ref(false)
 const providerError = ref('')
 const selectedModelKey = ref('')
-const selectedProfile = ref<AgentProfileId>('tools-v0')
+const selectedProfile = ref<AgentProfileId>('troubleshoot-v1')
 const accessKey = ref(loadAgentAccessKey())
 const accessKeyInput = ref<HTMLInputElement | null>(null)
 const showAccessKey = ref(false)
@@ -674,6 +674,7 @@ function applySuggestion(text: string) {
 let providerController: AbortController | null = null
 
 const profileOptions: Array<{ id: AgentProfileId; label: string }> = [
+  { id: 'troubleshoot-v1', label: 'troubleshoot-v1 · 知识库排障' },
   { id: 'calculator-v0', label: 'calculator-v0 · calculator' },
   { id: 'tools-v0', label: 'tools-v0 · calculator + datetime' },
   { id: 'agent-v1', label: 'agent-v1 · calculator + web_search + readonly_mcp' },
@@ -682,7 +683,7 @@ const profileOptions: Array<{ id: AgentProfileId; label: string }> = [
 const modelOptions = computed<AgentModelOption[]>(() => providers.value.flatMap(provider =>
   provider.agentModels.map(model => ({
     key: `${provider.id}:${model}`,
-    provider: provider.id as AgentProviderId,
+    provider: provider.id,
     providerName: provider.name,
     model,
   })),
@@ -870,6 +871,7 @@ function clearWorkspace(): void {
   messages.value = []
   lastRequest.value = null
   prompt.value = ''
+  selectedProfile.value = 'troubleshoot-v1'
   agent.reset()
   clearSnapshots()
   if (isNarrowScreen.value) historyCollapsed.value = true

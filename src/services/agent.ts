@@ -2,8 +2,19 @@ export const AGENT_EVENT_VERSION = 1 as const
 export const AGENT_ACCESS_KEY_STORAGE_KEY = 'ai-chat.agent-access-key'
 import { apiFetch } from './api'
 
-export type AgentProviderId = 'ollama'
-export type AgentProfileId = 'calculator-v0' | 'tools-v0' | 'agent-v1'
+export const AGENT_PROVIDER_IDS = ['ollama', 'openai', 'anthropic'] as const
+export type AgentProviderId = typeof AGENT_PROVIDER_IDS[number]
+
+export const AGENT_PROFILE_IDS = ['troubleshoot-v1', 'calculator-v0', 'tools-v0', 'agent-v1'] as const
+export type AgentProfileId = typeof AGENT_PROFILE_IDS[number]
+
+export function isAgentProviderId(value: unknown): value is AgentProviderId {
+    return typeof value === 'string' && (AGENT_PROVIDER_IDS as readonly string[]).includes(value)
+}
+
+export function isAgentProfileId(value: unknown): value is AgentProfileId {
+    return typeof value === 'string' && (AGENT_PROFILE_IDS as readonly string[]).includes(value)
+}
 export type AgentRequestRole = 'user' | 'assistant'
 export type AgentTerminalEventType = 'agent_completed' | 'agent_failed' | 'agent_cancelled'
 
@@ -49,7 +60,7 @@ export interface AgentEvent {
 }
 
 export interface AgentProviderInfo {
-    id: string
+    id: AgentProviderId
     name: string
     defaultModel: string
     configured: boolean
@@ -285,7 +296,7 @@ function normalizeNetworkError(error: unknown, signal?: AbortSignal): AgentClien
 
 function isAgentProviderInfo(value: unknown): value is AgentProviderInfo {
     return isRecord(value)
-        && typeof value.id === 'string'
+        && isAgentProviderId(value.id)
         && typeof value.name === 'string'
         && typeof value.defaultModel === 'string'
         && typeof value.configured === 'boolean'

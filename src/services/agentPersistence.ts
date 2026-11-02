@@ -1,5 +1,5 @@
 import { db, type DBAgentMessage, type DBAgentSession } from '../db'
-import type { AgentProfileId, AgentProviderId, AgentRequestMessage } from './agent'
+import { isAgentProfileId, isAgentProviderId, type AgentProfileId, type AgentProviderId, type AgentRequestMessage } from './agent'
 
 export interface AgentSessionRuntime {
     agentProfile: AgentProfileId
@@ -45,8 +45,8 @@ export async function createAgentSession(
 
     return {
         ...row,
-        agentProfile: row.agentProfile as AgentProfileId,
-        provider: row.provider as AgentProviderId,
+        agentProfile: isAgentProfileId(row.agentProfile) ? row.agentProfile : 'troubleshoot-v1',
+        provider: isAgentProviderId(row.provider) ? row.provider : 'ollama',
         messageCount: 1,
         messages: [{ ...firstMessage }],
     }
@@ -121,8 +121,8 @@ function toSessionListItem(row: DBAgentSession, messageCount: number): AgentSess
     return {
         id: row.id,
         title: row.title,
-        agentProfile: row.agentProfile as AgentProfileId,
-        provider: row.provider as AgentProviderId,
+        agentProfile: isAgentProfileId(row.agentProfile) ? row.agentProfile : 'troubleshoot-v1',
+        provider: isAgentProviderId(row.provider) ? row.provider : 'ollama',
         model: row.model,
         messageCount,
         createdAt: row.createdAt,

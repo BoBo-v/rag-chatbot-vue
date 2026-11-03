@@ -23,8 +23,18 @@ export interface KnowledgeChunk {
     embeddingSize?: number
 }
 
+export interface VisionInfo {
+    available: boolean
+    model?: string
+    sourcePath?: string
+    markdown?: string
+    rawUrl?: string
+    error?: string
+}
+
 export interface KnowledgeFileDetail extends StoredKnowledgeFile {
     chunks: KnowledgeChunk[]
+    visionInfo?: VisionInfo
 }
 
 export interface KnowledgeSearchResult {

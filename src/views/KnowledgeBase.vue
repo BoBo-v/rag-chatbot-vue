@@ -286,7 +286,7 @@
 
           <div v-if="selectedFile" class="kb-detail-actions">
             <!-- 视图切换按钮：双列切片 vs 图片视觉解析对照 -->
-            <div class="kb-view-toggle">
+            <div v-if="isStoredImageFile(selectedFile)" class="kb-view-toggle">
               <button
                 type="button"
                 class="kb-toggle-btn"
@@ -321,10 +321,10 @@
             <div v-if="fileDetail?.chunks && fileDetail.chunks.length > 0" class="kb-chunk-grid">
               <article
                 v-for="chunk in fileDetail.chunks"
-                :id="'kb-chunk-' + chunk.chunkIndex"
+                :id="'kb-chunk-' + (chunk.id || chunk.chunkIndex)"
                 :key="chunk.id"
                 class="kb-chunk-card"
-                :class="{ 'is-highlighted': highlightedChunkIndex === chunk.chunkIndex }"
+                :class="{ 'is-highlighted': isChunkHighlighted(chunk) }"
               >
                 <header class="kb-chunk-header font-mono">
                   <div class="kb-chunk-header-left">
@@ -334,8 +334,8 @@
                     <span v-if="chunk.pageNumber" class="kb-chunk-page">第 {{ chunk.pageNumber }} 页</span>
                   </div>
                   <div class="kb-chunk-header-right">
-                    <span v-if="highlightedChunkIndex === chunk.chunkIndex" class="kb-hit-badge">
-                      右侧调试命中 Top-1
+                    <span v-if="isChunkHighlighted(chunk)" class="kb-hit-badge">
+                      {{ getChunkHitBadgeText(chunk) }}
                     </span>
                     <button type="button" class="kb-chunk-copy-btn" @click="copyText(chunk.text)">
                       复制切片
@@ -358,47 +358,52 @@
           <!-- 子视图 B：多模态图片入库「左原图 vs 右 Ollama 视觉模型生成 Markdown」分屏对照 -->
           <div v-else-if="kbView === 'vision'" class="kb-vision-scroll-area">
             <div class="kb-vision-container">
-              <!-- 左：原始入库图片预览 (内置矢量拓扑架构图保证绝不黑屏) -->
+              <!-- 左：原始入库图片真实预览 -->
               <div class="kb-vision-card">
                 <div class="kb-vision-header">
                   <span class="kb-vision-title">🖼️ 原始入库图片 ({{ selectedFile.filename }})</span>
-                  <span class="kb-vision-meta font-mono">{{ formatFileSize(selectedFile.size) }} · WebP / 架构拓扑</span>
+                  <span class="kb-vision-meta font-mono">{{ formatFileSize(selectedFile.size) }} · {{ selectedFile.mimeType || 'Image' }}</span>
                 </div>
                 <div class="kb-vision-preview">
-                  <svg class="kb-arch-svg" viewBox="0 0 400 220" fill="none">
-                    <rect x="10" y="80" width="80" height="50" rx="8" fill="#4F46E5" />
-                    <text x="50" y="110" fill="white" font-size="11" text-anchor="middle" font-family="monospace">Vue3 Web</text>
-                    <path d="M90 105 L145 105" stroke="#94A3B8" stroke-width="2" />
-                    <rect x="150" y="65" width="100" height="80" rx="10" fill="#0F172A" stroke="#6366F1" stroke-width="2" />
-                    <text x="200" y="98" fill="#38BDF8" font-size="11" text-anchor="middle" font-family="monospace">Fastify 5</text>
-                    <text x="200" y="118" fill="#94A3B8" font-size="9" text-anchor="middle" font-family="monospace">/api/chat + SSE</text>
-                    <path d="M250 85 L305 55" stroke="#94A3B8" stroke-width="2" />
-                    <path d="M250 125 L305 155" stroke="#94A3B8" stroke-width="2" />
-                    <rect x="310" y="30" width="80" height="45" rx="8" fill="#059669" />
-                    <text x="350" y="57" fill="white" font-size="10" text-anchor="middle" font-family="monospace">Ollama LLM</text>
-                    <rect x="310" y="135" width="80" height="45" rx="8" fill="#D97706" />
-                    <text x="350" y="162" fill="white" font-size="10" text-anchor="middle" font-family="monospace">SQLite FTS5</text>
-                  </svg>
+                  <div v-if="rawImageLoading" class="kb-vision-state">
+                    <RefreshCw :size="20" class="spinning" aria-hidden="true" />
+                    <span>原图加载中...</span>
+                  </div>
+                  <div v-else-if="rawImageError" class="kb-vision-state kb-vision-error">
+                    <span>⚠️ {{ rawImageError }}</span>
+                  </div>
+                  <img
+                    v-else-if="rawImageUrl"
+                    :src="rawImageUrl"
+                    :alt="selectedFile.filename"
+                    class="kb-vision-img"
+                  />
+                  <div v-else class="kb-vision-state">
+                    <span>源图不可用</span>
+                  </div>
                 </div>
               </div>
 
-              <!-- 右：Ollama 视觉模型转换后的 Markdown 与切块 -->
+              <!-- 右：视觉模型转换后的真实 Markdown -->
               <div class="kb-vision-card">
                 <div class="kb-vision-header">
-                  <span class="kb-vision-title text-indigo">✨ Ollama 视觉模型 (qwen2.5-vl) 解析生成的 Markdown</span>
+                  <span class="kb-vision-title text-indigo">
+                    ✨ 视觉模型 ({{ fileDetail?.visionInfo?.model || '未知模型' }}) 识别结果
+                  </span>
                   <span class="kb-pill-tag tag-success font-mono">已切分为 {{ selectedFile.chunkCount }} Chunks</span>
                 </div>
                 <div class="kb-vision-markdown font-mono">
-                  <div class="kb-vision-md-header"># 系统核心拓扑结构解析 (自动视觉转写)</div>
-                  <div v-if="fileDetail?.chunks && fileDetail.chunks.length > 0" class="kb-vision-chunk-texts">
-                    <p v-for="chunk in fileDetail.chunks" :key="chunk.id" class="kb-vision-chunk-p">
-                      {{ chunk.text }}
-                    </p>
+                  <div v-if="fileDetail?.visionInfo?.markdown" class="kb-vision-markdown-body">
+                    <pre class="kb-chunk-pre">{{ fileDetail.visionInfo.markdown }}</pre>
                   </div>
-                  <div v-else class="kb-vision-chunk-texts">
-                    <p>1. **前端接入层 (Vue3 Web)**：通过同源 /api/chat 与 /api/chat/context 请求后端代理。</p>
-                    <p>2. **核心网关层 (Fastify 5)**：统一管理多模型路由、可恢复 SSE 聊天快照及 Agent 工具队列。</p>
-                    <p>3. **下游推理与存储**：并发连接本地 **Ollama LLM** (视觉与文本推理) 与 **SQLite FTS5** 混合向量库。</p>
+                  <div v-else-if="fileDetail?.visionInfo?.error" class="kb-vision-state kb-vision-error">
+                    <span>{{ fileDetail.visionInfo.error }}</span>
+                  </div>
+                  <div v-else-if="loadingDetail" class="kb-vision-state">
+                    <span>识别结果加载中...</span>
+                  </div>
+                  <div v-else class="kb-vision-state">
+                    <span>缺少视觉模型识别结果</span>
                   </div>
                 </div>
               </div>
@@ -466,8 +471,8 @@
             v-for="(result, index) in searchResults"
             :key="result.id"
             class="kb-result-card"
-            :class="{ 'is-selected': highlightedChunkIndex === result.chunkIndex }"
-            @click="highlightKbChunk(result.chunkIndex, result.filename)"
+            :class="{ 'is-selected': isSearchResultSelected(result) }"
+            @click="highlightSearchResult(result, index + 1)"
           >
             <header class="kb-result-card-header font-mono">
               <span class="kb-result-rank" :class="{ 'rank-top': index === 0 }">
@@ -503,7 +508,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { apiFetch } from '../services/api'
 import { RefreshCw, Search, Upload, X } from 'lucide-vue-next'
 import { useToast } from '../composables/useToast'
 import { useConfirm } from '../composables/useConfirm'
@@ -517,6 +523,7 @@ import {
   searchKnowledge,
   uploadKnowledgeFile,
   type UploadProgress,
+  type KnowledgeChunk,
   type KnowledgeFileDetail,
   type KnowledgeSearchResult,
   type StoredKnowledgeFile,
@@ -548,7 +555,73 @@ const activeTab = ref<KnowledgeTab>('manage')
 
 // 视图切换：doc (双列切片) vs vision (多模态图片视觉解析对照)
 const kbView = ref<'doc' | 'vision'>('doc')
-const highlightedChunkIndex = ref<number | null>(null)
+interface HighlightedChunkTarget {
+  fileId?: string
+  chunkId?: string
+  chunkIndex: number
+  rank: number
+}
+const highlightedTarget = ref<HighlightedChunkTarget | null>(null)
+const rawImageUrl = ref<string>('')
+const rawImageLoading = ref<boolean>(false)
+const rawImageError = ref<string>('')
+
+function revokeRawImageUrl(): void {
+  if (rawImageUrl.value && rawImageUrl.value.startsWith('blob:')) {
+    URL.revokeObjectURL(rawImageUrl.value)
+    rawImageUrl.value = ''
+  }
+}
+
+async function loadRawImage(fileId: string): Promise<void> {
+  revokeRawImageUrl()
+  rawImageLoading.value = true
+  rawImageError.value = ''
+  try {
+    const res = await apiFetch(`/api/files/${fileId}/raw`)
+    if (!res.ok) {
+      if (res.status === 404) throw new Error('源图片文件不存在或已损坏')
+      throw new Error(`加载原图失败 (${res.status})`)
+    }
+    const blob = await res.blob()
+    rawImageUrl.value = URL.createObjectURL(blob)
+  } catch (err) {
+    rawImageError.value = err instanceof Error ? err.message : '原图加载失败'
+  } finally {
+    rawImageLoading.value = false
+  }
+}
+
+function isStoredImageFile(file: StoredKnowledgeFile | null | undefined): boolean {
+  if (!file) return false
+  if (file.mimeType && ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimeType)) return true
+  return isImageFilename(file.filename)
+}
+
+function isChunkHighlighted(chunk: KnowledgeChunk): boolean {
+  if (!highlightedTarget.value) return false
+  if (highlightedTarget.value.chunkId && chunk.id) {
+    return highlightedTarget.value.chunkId === chunk.id
+  }
+  return highlightedTarget.value.chunkIndex === chunk.chunkIndex
+}
+
+function getChunkHitBadgeText(chunk: KnowledgeChunk): string {
+  if (!isChunkHighlighted(chunk) || !highlightedTarget.value) return ''
+  return `右侧调试命中 Top-${highlightedTarget.value.rank}`
+}
+
+function isSearchResultSelected(result: KnowledgeSearchResult): boolean {
+  if (!highlightedTarget.value) return false
+  if (highlightedTarget.value.chunkId && result.id) {
+    return highlightedTarget.value.chunkId === result.id
+  }
+  return highlightedTarget.value.chunkIndex === result.chunkIndex
+}
+
+onUnmounted(() => {
+  revokeRawImageUrl()
+})
 const searchDuration = ref<number>(18)
 
 type UploadItemStatus = 'uploading' | 'done' | 'failed'
@@ -754,6 +827,10 @@ async function loadVectorStatus() {
 
 async function selectFile(id: string) {
   selectedFileId.value = id
+  revokeRawImageUrl()
+  if (highlightedTarget.value && highlightedTarget.value.fileId !== id) {
+    highlightedTarget.value = null
+  }
   loadingDetail.value = true
   try {
     fileDetail.value = await getKnowledgeFile(id)
@@ -762,6 +839,13 @@ async function selectFile(id: string) {
     toast.show(error instanceof Error ? error.message : '文件详情加载失败', 'error')
   } finally {
     loadingDetail.value = false
+  }
+
+  const file = files.value.find(f => f.id === id)
+  if (isStoredImageFile(file)) {
+    await loadRawImage(id)
+  } else {
+    kbView.value = 'doc'
   }
 }
 
@@ -983,23 +1067,30 @@ async function runSearch() {
 }
 
 let flashTimer: number | null = null
-async function highlightKbChunk(chunkIndex: number, filename?: string) {
+async function highlightSearchResult(result: KnowledgeSearchResult, rank: number) {
   if (kbView.value === 'vision') {
     kbView.value = 'doc'
   }
-  if (filename && selectedFile.value?.filename !== filename) {
-    const match = files.value.find(f => f.filename === filename)
-    if (match) {
-      await selectFile(match.id)
-    }
+  if (result.fileId && selectedFile.value?.id !== result.fileId) {
+    await selectFile(result.fileId)
+  } else if (result.filename && selectedFile.value?.filename !== result.filename) {
+    const match = files.value.find(f => f.filename === result.filename)
+    if (match) await selectFile(match.id)
   }
-  highlightedChunkIndex.value = chunkIndex
+
+  highlightedTarget.value = {
+    fileId: result.fileId || selectedFile.value?.id,
+    chunkId: result.id,
+    chunkIndex: result.chunkIndex,
+    rank,
+  }
+
   await nextTick()
-  const chunkEl = document.getElementById(`kb-chunk-${chunkIndex}`)
+  const targetId = result.id ? `kb-chunk-${result.id}` : `kb-chunk-${result.chunkIndex}`
+  const chunkEl = document.getElementById(targetId) || document.getElementById(`kb-chunk-${result.chunkIndex}`)
   if (chunkEl) {
     chunkEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
     chunkEl.classList.remove('chunk-flash')
-    // 强制触发回流以重启动画
     void chunkEl.offsetWidth
     chunkEl.classList.add('chunk-flash')
     if (flashTimer) window.clearTimeout(flashTimer)
@@ -2062,6 +2153,35 @@ onMounted(loadKnowledgeOverview)
   border-radius: var(--radius-sm);
   background: #0f172a;
   padding: 20px;
+}
+
+
+.kb-vision-img {
+  max-width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.kb-vision-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.kb-vision-state.kb-vision-error {
+  color: #f43f5e;
+}
+
+.kb-vision-markdown-body {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .kb-arch-svg {

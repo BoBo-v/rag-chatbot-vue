@@ -197,6 +197,12 @@ async function main() {
             return
         }
 
+        if (path.extname(reqUrl) && path.extname(reqUrl) !== '.html') {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+            res.end('Static Asset Not Found')
+            return
+        }
+
         // SPA fallback
         const indexPath = path.join(distDir, 'index.html')
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })

@@ -58,6 +58,11 @@ const server = http.createServer((req, res) => {
             fs.createReadStream(filePath).pipe(res)
             return
         }
+        if (path.extname(reqUrl)) {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+            res.end('Static Asset Not Found')
+            return
+        }
     }
 
     // 宿主主页

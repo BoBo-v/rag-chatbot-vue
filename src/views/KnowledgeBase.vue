@@ -2184,11 +2184,7 @@ onMounted(loadKnowledgeOverview)
   word-break: break-word;
 }
 
-.kb-arch-svg {
-  width: 100%;
-  max-width: 420px;
-  height: auto;
-}
+
 
 .kb-vision-markdown {
   flex: 1;

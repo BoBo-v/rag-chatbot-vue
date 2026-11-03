@@ -500,3 +500,97 @@ async function readErrorMessage(response: Response): Promise<string> {
     const text = await response.text().catch(() => '')
     return text || `请求失败: ${response.status}`
 }
+
+export interface FileCompatibilityResult {
+    isIncompatible: boolean
+    badgeText: string
+    badgeClass: string
+    dimText: string
+}
+
+export function computeTargetEmbeddingDim(status: VectorStoreStatus | null | undefined): number | null {
+    if (!status) return null
+    if (status.currentEmbeddingDim !== undefined && status.currentEmbeddingDim !== null) {
+        return status.currentEmbeddingDim
+    }
+    return null
+}
+
+export function evaluateFileCompatibility(
+    file: StoredKnowledgeFile,
+    status: VectorStoreStatus | null | undefined
+): FileCompatibilityResult {
+    const targetDim = computeTargetEmbeddingDim(status)
+    const currentModel = status?.currentEmbeddingModel
+    const isPending = status?.compatibilityState === 'pending' || targetDim === null
+
+    // 1. 缺少元信息：显示“未知”
+    const hasNoMeta = (!file.embeddingModel || file.embeddingModel === 'unknown') && (!file.embeddingDim || file.embeddingDimText === '未知')
+    if (hasNoMeta) {
+        return {
+            isIncompatible: true,
+            badgeText: '未知',
+            badgeClass: 'tag-unknown',
+            dimText: '未知',
+        }
+    }
+
+    // 2. 存在多种模型或维度：显示“混合”
+    const isMixed = file.embeddingModel === 'mixed' || file.embeddingDimText === '混合'
+    if (isMixed) {
+        return {
+            isIncompatible: true,
+            badgeText: '混合',
+            badgeClass: 'tag-mixed',
+            dimText: '混合',
+        }
+    }
+
+    // 3. 当前尚未实测目标维度：显示待确认
+    if (isPending) {
+        return {
+            isIncompatible: false,
+            badgeText: '待确认',
+            badgeClass: 'tag-pending',
+            dimText: file.embeddingDimText || (file.embeddingDim ? `${file.embeddingDim}维` : '待确认'),
+        }
+    }
+
+    // 4. 比对实测目标模型与维度
+    const modelMismatch = Boolean(currentModel && file.embeddingModel && file.embeddingModel !== currentModel)
+    const dimMismatch = Boolean(targetDim && file.embeddingDim && file.embeddingDim !== targetDim)
+    const isIncompatible = modelMismatch || dimMismatch
+
+    return {
+        isIncompatible,
+        badgeText: isIncompatible ? '不兼容' : '兼容',
+        badgeClass: isIncompatible ? 'tag-incompatible' : 'tag-compatible',
+        dimText: file.embeddingDimText || (file.embeddingDim ? `${file.embeddingDim}维` : '未知'),
+    }
+}
+
+export function formatReindexFeedback(res: ReindexVectorStoreResult): { type: 'success' | 'warning'; message: string } {
+    if (res.skipped) {
+        return { type: 'warning', message: '当前后端无需执行索引同步' }
+    }
+    return {
+        type: 'success',
+        message: `向量索引同步完成：已处理 ${res.filesIndexed} 个文件，${res.chunksIndexed} 个切片`,
+    }
+}
+
+export function isChunkTargetHighlighted(
+    chunk: { id?: string; chunkIndex: number },
+    target: { fileId?: string; chunkId?: string; chunkIndex?: number } | null | undefined
+): boolean {
+    if (!target) return false
+    if (target.chunkId && chunk.id) {
+        return target.chunkId === chunk.id
+    }
+    return target.chunkIndex === chunk.chunkIndex
+}
+
+export function formatChunkHitBadge(rank?: number): string {
+    if (!rank || rank <= 0) return ''
+    return `右侧调试命中 Top-${rank}`
+}

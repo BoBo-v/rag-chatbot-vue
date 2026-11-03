@@ -545,6 +545,10 @@ import {
   reindexVectorStore,
   searchKnowledge,
   uploadKnowledgeFile,
+  evaluateFileCompatibility,
+  formatReindexFeedback,
+  isChunkTargetHighlighted,
+  formatChunkHitBadge,
   type UploadProgress,
   type KnowledgeChunk,
   type KnowledgeFileDetail,
@@ -644,16 +648,12 @@ function isStoredImageFile(file: StoredKnowledgeFile | null | undefined): boolea
 }
 
 function isChunkHighlighted(chunk: KnowledgeChunk): boolean {
-  if (!highlightedTarget.value) return false
-  if (highlightedTarget.value.chunkId && chunk.id) {
-    return highlightedTarget.value.chunkId === chunk.id
-  }
-  return highlightedTarget.value.chunkIndex === chunk.chunkIndex
+  return isChunkTargetHighlighted(chunk, highlightedTarget.value)
 }
 
 function getChunkHitBadgeText(chunk: KnowledgeChunk): string {
   if (!isChunkHighlighted(chunk) || !highlightedTarget.value) return ''
-  return `右侧调试命中 Top-${highlightedTarget.value.rank}`
+  return formatChunkHitBadge(highlightedTarget.value.rank)
 }
 
 function isSearchResultSelected(result: KnowledgeSearchResult): boolean {
@@ -784,63 +784,7 @@ function isImageFilename(filename: string): boolean {
 }
 
 function getFileCompatibility(file: StoredKnowledgeFile) {
-  const status = vectorStatus.value
-  const targetDim = targetEmbeddingDimension.value
-  const currentModel = status?.currentEmbeddingModel
-
-  // 1. 缺少元信息：显示“未知”
-  const hasNoMeta = (!file.embeddingModel || file.embeddingModel === 'unknown') && (!file.embeddingDim || file.embeddingDimText === '未知')
-  if (hasNoMeta) {
-    return {
-      isIncompatible: true,
-      badgeText: '未知',
-      badgeClass: 'tag-unknown',
-      dimText: '未知',
-    }
-  }
-
-  // 2. 存在多种模型或维度：显示“混合”
-  const isMixed = file.embeddingModel === 'mixed' || file.embeddingDimText === '混合'
-  if (isMixed) {
-    return {
-      isIncompatible: true,
-      badgeText: '混合',
-      badgeClass: 'tag-incompatible',
-      dimText: '混合',
-    }
-  }
-
-  const dimText = file.embeddingDimText || (file.embeddingDim ? `${file.embeddingDim}维` : '未知')
-
-  // 3. 当前目标维度未经确认：显示“待确认”
-  if (!currentModel || targetDim === null) {
-    return {
-      isIncompatible: false,
-      badgeText: '待确认',
-      badgeClass: 'tag-pending',
-      dimText,
-    }
-  }
-
-  // 4. 目标模型与维度均已确认，对比真实值
-  const modelMatch = file.embeddingModel === currentModel
-  const dimMatch = file.embeddingDim !== null && file.embeddingDim === targetDim
-
-  if (!modelMatch || !dimMatch) {
-    return {
-      isIncompatible: true,
-      badgeText: !modelMatch ? '模型不兼容' : '维度不兼容',
-      badgeClass: 'tag-incompatible',
-      dimText,
-    }
-  }
-
-  return {
-    isIncompatible: false,
-    badgeText: '',
-    badgeClass: '',
-    dimText,
-  }
+  return evaluateFileCompatibility(file, vectorStatus.value)
 }
 
 async function loadFiles() {
@@ -940,11 +884,8 @@ async function handleReindex() {
   reindexing.value = true
   try {
     const res = await reindexVectorStore()
-    if (res.skipped) {
-      toast.show('当前后端无需执行索引同步', 'warning')
-    } else {
-      toast.show(`向量索引同步完成：已处理 ${res.filesIndexed} 个文件，${res.chunksIndexed} 个切片`, 'success')
-    }
+    const feedback = formatReindexFeedback(res)
+    toast.show(feedback.message, feedback.type)
     await loadKnowledgeOverview()
   } catch (err) {
     toast.show(err instanceof Error ? err.message : '同步向量索引失败', 'error')

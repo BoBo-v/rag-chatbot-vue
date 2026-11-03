@@ -239,6 +239,25 @@
             <div class="agent-message-content">
               <span class="agent-message-role">{{ message.role === 'assistant' ? 'Agent' : '你' }}</span>
               <div
+                v-if="message.role === 'assistant' && message.execution"
+                class="agent-msg-execution-bar"
+                :class="{ 'is-selected': selectedExecutionMessageId === message.id }"
+                role="button"
+                tabindex="0"
+                :title="selectedExecutionMessageId === message.id ? '当前正在查看此轮执行' : '点击在右侧查看此轮执行过程'"
+                @click="viewMessageExecution(message.id)"
+                @keydown.enter="viewMessageExecution(message.id)"
+              >
+                <div class="execution-bar-info">
+                  <Activity :size="13" class="execution-bar-icon" aria-hidden="true" />
+                  <span class="execution-bar-text">{{ formatExecutionSummary(message.execution) }}</span>
+                </div>
+                <span class="execution-bar-action">
+                  {{ selectedExecutionMessageId === message.id ? '查看中' : '回溯执行' }}
+                  <ChevronRight :size="12" aria-hidden="true" />
+                </span>
+              </div>
+              <div
                 v-if="message.role === 'assistant'"
                 class="markdown-body agent-markdown-bubble"
                 @click="handleCodeBlockAction($event, message.id)"
@@ -370,7 +389,12 @@
             <strong>执行过程</strong>
           </div>
           <div class="agent-activity-actions">
-            <span v-if="agent.currentStep.value > 0" class="agent-step">Step {{ agent.currentStep.value }}/3</span>
+            <span v-if="displayedExecution.isLive && displayedExecution.currentStep > 0" class="agent-step is-live">
+              实时 Step {{ displayedExecution.currentStep }}/3
+            </span>
+            <span v-else-if="!displayedExecution.isLive && displayedExecution.events.length > 0" class="agent-step" :class="`is-${displayedExecution.status}`">
+              {{ executionStatusBadge(displayedExecution.status) }}
+            </span>
             <button
               v-if="isNarrowScreen"
               type="button"
@@ -396,12 +420,12 @@
         </header>
 
         <div class="agent-activity-list">
-          <div v-if="activityEvents.length === 0" class="agent-activity-empty">
+          <div v-if="displayedExecution.events.length === 0" class="agent-activity-empty">
             <Activity :size="22" :stroke-width="1.5" aria-hidden="true" />
             <span>暂无执行事件</span>
           </div>
 
-          <article v-for="event in activityEvents" :key="event.sequence" class="agent-event" :class="[eventTone(event), `event-kind-${toolMetadata(event)?.kind || 'generic'}`]">
+          <article v-for="event in displayedExecution.events" :key="event.sequence" class="agent-event" :class="[eventTone(event), `event-kind-${toolMetadata(event)?.kind || 'generic'}`]">
             <span class="agent-event-dot" aria-hidden="true"></span>
             <div class="agent-event-body">
               <div class="agent-event-title">
@@ -444,22 +468,22 @@
           </article>
         </div>
 
-        <div v-if="agent.requestId.value" class="agent-run-meta">
+        <div v-if="displayedExecution.requestId" class="agent-run-meta">
           <div class="agent-meta-card">
             <span class="meta-label">Request ID</span>
-            <span class="meta-val" :title="agent.requestId.value">{{ compactId(agent.requestId.value) }}</span>
+            <span class="meta-val" :title="displayedExecution.requestId">{{ compactId(displayedExecution.requestId) }}</span>
           </div>
           <div class="agent-meta-card">
             <span class="meta-label">Run ID</span>
-            <span class="meta-val" :title="agent.agentRunId.value">{{ compactId(agent.agentRunId.value) }}</span>
+            <span class="meta-val" :title="displayedExecution.agentRunId">{{ compactId(displayedExecution.agentRunId) }}</span>
           </div>
-          <div v-if="agent.summary.value" class="agent-meta-card">
+          <div v-if="displayedExecution.summary" class="agent-meta-card">
             <span class="meta-label">调用统计</span>
-            <span class="meta-val">{{ agent.summary.value.modelTurns }} 轮次 / {{ agent.summary.value.toolCallCount }} 工具</span>
+            <span class="meta-val">{{ displayedExecution.summary.modelTurns }} 轮次 / {{ displayedExecution.summary.toolCallCount }} 工具</span>
           </div>
-          <div v-if="agent.summary.value?.usage" class="agent-meta-card">
+          <div v-if="displayedExecution.summary?.usage" class="agent-meta-card">
             <span class="meta-label">Token 消耗</span>
-            <span class="meta-val">{{ formatUsage(agent.summary.value.usage) }}</span>
+            <span class="meta-val">{{ formatUsage(displayedExecution.summary.usage) }}</span>
           </div>
         </div>
       </aside>
@@ -475,6 +499,7 @@ import {
   Calculator,
   Check,
   ChevronDown,
+  ChevronRight,
   CircleStop,
   CircleX,
   Clock,
@@ -509,6 +534,7 @@ import {
   loadAgentSession,
   type AgentSessionListItem,
   type AgentSessionRuntime,
+  type AgentStoredExecution,
   type AgentStoredMessage,
 } from '../services/agentPersistence'
 import {
@@ -539,6 +565,7 @@ interface WorkspaceMessage {
   content: string
   renderedContent?: string
   createdAt: number
+  execution?: AgentStoredExecution
 }
 
 const AGENT_CONTEXT_MAX_MESSAGES = 20
@@ -700,6 +727,97 @@ const canRetry = computed(() => Boolean(lastRequest.value && !agent.isRunning.va
 const activityEvents = computed(() => agent.events.value.filter(event => event.type !== 'heartbeat'))
 const displayErrorMessage = computed(() => describeAgentError(agent.errorCode.value, agent.errorMessage.value))
 
+const selectedExecutionMessageId = ref<string | null>(null)
+
+const selectedMessage = computed(() => {
+  if (!selectedExecutionMessageId.value) return null
+  return messages.value.find(m => m.id === selectedExecutionMessageId.value) ?? null
+})
+
+const latestExecutionMessage = computed(() => {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    const msg = messages.value[i]
+    if (msg.role === 'assistant' && msg.execution) {
+      return msg
+    }
+  }
+  return null
+})
+
+const activeExecutionSnapshot = computed<AgentStoredExecution | null>(() => {
+  if (selectedMessage.value?.execution) {
+    return selectedMessage.value.execution
+  }
+  return latestExecutionMessage.value?.execution ?? null
+})
+
+const displayedExecution = computed(() => {
+  if (agent.isRunning.value) {
+    return {
+      isLive: true,
+      status: agent.status.value,
+      events: activityEvents.value,
+      currentStep: agent.currentStep.value,
+      requestId: agent.requestId.value,
+      agentRunId: agent.agentRunId.value,
+      summary: agent.summary.value,
+    }
+  }
+  const snapshot = activeExecutionSnapshot.value
+  if (snapshot) {
+    return {
+      isLive: false,
+      status: snapshot.status,
+      events: snapshot.events.filter(e => e.type !== 'heartbeat'),
+      currentStep: snapshot.currentStep,
+      requestId: snapshot.requestId || '',
+      agentRunId: snapshot.agentRunId || '',
+      summary: snapshot.summary || null,
+    }
+  }
+  return {
+    isLive: false,
+    status: agent.status.value,
+    events: activityEvents.value,
+    currentStep: agent.currentStep.value,
+    requestId: agent.requestId.value,
+    agentRunId: agent.agentRunId.value,
+    summary: agent.summary.value,
+  }
+})
+
+function viewMessageExecution(messageId: string): void {
+  selectedExecutionMessageId.value = messageId
+  activityCollapsed.value = false
+  if (isNarrowScreen.value) {
+    historyCollapsed.value = true
+  }
+}
+
+function formatExecutionSummary(execution: AgentStoredExecution): string {
+  const toolEvents = execution.events.filter(e => e.type === 'tool_started')
+  const toolCount = execution.summary?.toolCallCount ?? toolEvents.length
+  const stepCount = execution.currentStep || (execution.events.some(e => e.step > 0) ? Math.max(...execution.events.map(e => e.step)) : 1)
+  const statusText = execution.status === 'completed'
+    ? '完成'
+    : execution.status === 'cancelled'
+      ? '已取消'
+      : '失败'
+  if (toolCount > 0) {
+    return `${stepCount} 步规划 · ${toolCount} 次工具调用 · ${statusText}`
+  }
+  return `${stepCount} 步规划 · 直接回答 · ${statusText}`
+}
+
+function executionStatusBadge(status: string): string {
+  switch (status) {
+    case 'completed': return '已完成'
+    case 'failed': return '执行失败'
+    case 'cancelled': return '已取消'
+    default: return status
+  }
+}
+
 const statusLabel = computed(() => ({
   idle: '就绪',
   connecting: '连接中',
@@ -841,6 +959,7 @@ async function retryLastTask(): Promise<void> {
 
 async function executeRequest(request: AgentRunRequest): Promise<void> {
   await agent.run(request, accessKey.value)
+  const executionSnapshot = agent.exportSnapshot()
 
   if (agent.status.value === 'completed' && agent.answer.value.trim()) {
     const assistantMessageId = crypto.randomUUID()
@@ -855,8 +974,31 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
         status: 'done',
       } as Message),
       createdAt: Date.now(),
+      execution: executionSnapshot,
     }
     messages.value.push(assistantMessage)
+    selectedExecutionMessageId.value = assistantMessageId
+    await persistAgentAssistantMessage(request, assistantMessage)
+  } else if (agent.status.value === 'failed' || agent.status.value === 'cancelled') {
+    const assistantMessageId = crypto.randomUUID()
+    const fallbackText = agent.answer.value.trim()
+      ? agent.answer.value
+      : (agent.status.value === 'cancelled' ? 'Agent 运行已取消。' : (displayErrorMessage.value || 'Agent 运行中断。'))
+    const assistantMessage: WorkspaceMessage = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: fallbackText,
+      renderedContent: renderContent({
+        id: assistantMessageId,
+        role: 'assistant',
+        content: fallbackText,
+        status: 'done',
+      } as Message),
+      createdAt: Date.now(),
+      execution: executionSnapshot,
+    }
+    messages.value.push(assistantMessage)
+    selectedExecutionMessageId.value = assistantMessageId
     await persistAgentAssistantMessage(request, assistantMessage)
   } else if (agent.errorCode.value === 'AGENT_UNAUTHORIZED') {
     showAccessKey.value = true
@@ -869,6 +1011,7 @@ function clearWorkspace(): void {
   if (agent.isRunning.value) return
   activeSessionId.value = null
   messages.value = []
+  selectedExecutionMessageId.value = null
   lastRequest.value = null
   prompt.value = ''
   selectedProfile.value = 'troubleshoot-v1'
@@ -917,6 +1060,7 @@ async function openAgentSession(sessionId: string): Promise<void> {
   activeSessionId.value = session.id
   messages.value = session.messages.map(message => ({
     ...message,
+    execution: message.execution,
     renderedContent: message.role === 'assistant'
       ? renderContent({
           id: message.id,
@@ -926,6 +1070,8 @@ async function openAgentSession(sessionId: string): Promise<void> {
         } as Message)
       : undefined,
   }))
+  const lastExecMsg = [...messages.value].reverse().find(m => m.role === 'assistant' && m.execution)
+  selectedExecutionMessageId.value = lastExecMsg?.id ?? null
   lastRequest.value = null
   prompt.value = ''
   agent.reset()
@@ -1026,6 +1172,7 @@ function toAgentStoredMessage(message: WorkspaceMessage): AgentStoredMessage {
     role: message.role,
     content: message.content,
     createdAt: message.createdAt,
+    ...(message.execution ? { execution: message.execution } : {}),
   }
 }
 
@@ -1888,6 +2035,84 @@ textarea:disabled {
 }
 
 /* 助手 Markdown 气泡 */
+/* ─── 消息中 Execution 回溯入口条 ──────────────── */
+.agent-msg-execution-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  background: var(--bg-hover, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.agent-msg-execution-bar:hover {
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.06));
+  border-color: var(--primary-light, #3b82f6);
+}
+
+.agent-msg-execution-bar.is-selected {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.execution-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.execution-bar-icon {
+  color: var(--primary, #3b82f6);
+  flex-shrink: 0;
+}
+
+.execution-bar-text {
+  font-weight: 500;
+}
+
+.execution-bar-action {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.agent-msg-execution-bar:hover .execution-bar-action {
+  color: var(--primary, #3b82f6);
+}
+
+.agent-step.is-live {
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.agent-step.is-completed {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.agent-step.is-failed {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.agent-step.is-cancelled {
+  border-color: rgba(156, 163, 175, 0.35);
+  color: #9ca3af;
+  background: rgba(156, 163, 175, 0.08);
+}
+
 .agent-markdown-bubble {
   margin: 0;
   padding: 18px 22px;

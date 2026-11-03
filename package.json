@@ -17,6 +17,7 @@
     "verify:browser:run": "tsx scripts/verifyWebPreviewBrowser.ts",
     "verify:kb": "npm run build && npm run verify:kb:run",
     "verify:kb:run": "tsx scripts/verifyKnowledgeBaseUi.ts",
+    "verify:agent:execution": "npm run build && tsx scripts/verifyAgentExecutionPersistence.ts",
     "verify:security": "tsx scripts/verifyCodeBlockSecurity.ts",
     "verify:sanitize": "tsx scripts/verifySanitizePersistence.ts",
     "verify:demo": "tsx scripts/verifyDemoSandbox.ts",

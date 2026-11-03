@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import type { GenerationRunStatus, MessageStatus, RagContextInfo } from '../types/chat'
 import type { ComparisonRunStatus, ModelRuntimeConfig } from '../types/model'
+import type { AgentEvent, AgentUsage } from '../services/agent'
 
 // 这个文件集中定义 IndexedDB 的表结构。
 // Dexie 是 IndexedDB 的封装库，可以把浏览器本地数据库当成类型化的表来操作。
@@ -137,12 +138,32 @@ export interface DBAgentSession {
     updatedAt: number
 }
 
+export interface DBAgentRunSummary {
+    finishReason: string
+    modelTurns: number
+    toolCallCount: number
+    usage: AgentUsage | null
+}
+
+export interface DBAgentStoredExecution {
+    agentRunId?: string
+    requestId?: string
+    status: 'completed' | 'failed' | 'cancelled'
+    currentStep: number
+    events: AgentEvent[]
+    summary?: DBAgentRunSummary | null
+    errorCode?: string
+    errorMessage?: string
+    createdAt: number
+}
+
 export interface DBAgentMessage {
     id: string
     sessionId: string
     role: 'user' | 'assistant'
     content: string
     createdAt: number
+    execution?: DBAgentStoredExecution
 }
 
 class ChatDB extends Dexie {
@@ -208,6 +229,20 @@ class ChatDB extends Dexie {
             agentMessages: 'id, sessionId, createdAt'
         })
         this.version(6).stores({
+            conversations: '++id, updatedAt',
+            messages: 'id, conversationId',
+            searchDocs: '++docId, &messageId, conversationId, updatedAt, createdAt, role',
+            searchTerms: '[term+docId], term, docId',
+            searchTermStats: 'term',
+            searchTags: '[tag+docId], tag, docId',
+            recentSearches: '++id, query, usedAt',
+            searchMeta: 'key',
+            comparisonSessions: 'id, conversationId, updatedAt, createdAt',
+            comparisonRuns: 'id, sessionId, status, startedAt, finishedAt',
+            agentSessions: 'id, updatedAt, createdAt',
+            agentMessages: 'id, sessionId, createdAt'
+        })
+        this.version(7).stores({
             conversations: '++id, updatedAt',
             messages: 'id, conversationId',
             searchDocs: '++docId, &messageId, conversationId, updatedAt, createdAt, role',

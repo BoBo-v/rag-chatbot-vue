@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue'
+import type { AgentStoredExecution } from '../services/agentPersistence'
 import {
     AgentClientError,
     streamAgentRun,
@@ -158,6 +159,39 @@ export function useAgentRun() {
         summary.value = null
     }
 
+    function exportSnapshot(): AgentStoredExecution {
+        const finalStatus: 'completed' | 'failed' | 'cancelled' =
+            status.value === 'completed'
+                ? 'completed'
+                : status.value === 'cancelled' || status.value === 'cancelling'
+                    ? 'cancelled'
+                    : 'failed'
+
+        return {
+            agentRunId: agentRunId.value || undefined,
+            requestId: requestId.value || undefined,
+            status: finalStatus,
+            currentStep: currentStep.value,
+            events: [...events.value],
+            summary: summary.value ? { ...summary.value } : null,
+            errorCode: errorCode.value || undefined,
+            errorMessage: errorMessage.value || undefined,
+            createdAt: Date.now(),
+        }
+    }
+
+    function loadSnapshot(snapshot: AgentStoredExecution): void {
+        reset()
+        status.value = snapshot.status
+        events.value = [...snapshot.events]
+        currentStep.value = snapshot.currentStep
+        requestId.value = snapshot.requestId || ''
+        agentRunId.value = snapshot.agentRunId || ''
+        summary.value = snapshot.summary ? { ...snapshot.summary } : null
+        errorCode.value = snapshot.errorCode || ''
+        errorMessage.value = snapshot.errorMessage || ''
+    }
+
     onBeforeUnmount(cancel)
 
     return {
@@ -175,6 +209,8 @@ export function useAgentRun() {
         run,
         cancel,
         reset,
+        exportSnapshot,
+        loadSnapshot,
     }
 }
 

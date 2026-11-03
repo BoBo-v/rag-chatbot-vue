@@ -1,5 +1,8 @@
-import { db, type DBAgentMessage, type DBAgentSession } from '../db'
+import { db, type DBAgentMessage, type DBAgentSession, type DBAgentStoredExecution, type DBAgentRunSummary } from '../db'
 import { isAgentProfileId, isAgentProviderId, type AgentProfileId, type AgentProviderId, type AgentRequestMessage } from './agent'
+
+export type AgentStoredExecution = DBAgentStoredExecution
+export type AgentRunSummary = DBAgentRunSummary
 
 export interface AgentSessionRuntime {
     agentProfile: AgentProfileId
@@ -10,6 +13,7 @@ export interface AgentSessionRuntime {
 export interface AgentStoredMessage extends AgentRequestMessage {
     id: string
     createdAt: number
+    execution?: AgentStoredExecution
 }
 
 export interface AgentSessionListItem extends AgentSessionRuntime {
@@ -105,6 +109,7 @@ function toMessageRow(sessionId: string, message: AgentStoredMessage): DBAgentMe
         role: message.role,
         content: message.content,
         createdAt: message.createdAt,
+        ...(message.execution ? { execution: message.execution } : {}),
     }
 }
 
@@ -114,6 +119,7 @@ function toStoredMessage(row: DBAgentMessage): AgentStoredMessage {
         role: row.role,
         content: row.content,
         createdAt: row.createdAt,
+        ...(row.execution ? { execution: row.execution } : {}),
     }
 }
 

@@ -422,8 +422,8 @@ export async function listKnowledgeFiles(): Promise<StoredKnowledgeFile[]> {
     return data.files ?? []
 }
 
-export async function getKnowledgeFile(id: string): Promise<KnowledgeFileDetail> {
-    const data = await fetchJson<{ file: KnowledgeFileDetail }>(`/api/files/${encodeURIComponent(id)}`)
+export async function getKnowledgeFile(id: string, signal?: AbortSignal): Promise<KnowledgeFileDetail> {
+    const data = await fetchJson<{ file: KnowledgeFileDetail }>(`/api/files/${encodeURIComponent(id)}`, { signal })
     return data.file
 }
 

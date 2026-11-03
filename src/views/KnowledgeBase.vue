@@ -590,6 +590,20 @@ const rawImageUrl = ref<string>('')
 const rawImageLoading = ref<boolean>(false)
 const rawImageError = ref<string>('')
 
+let currentSelectionSeq = 0
+let selectionAbortController: AbortController | null = null
+let isComponentUnmounted = false
+
+function abortCurrentSelection(revokeImage = true): void {
+  if (selectionAbortController) {
+    selectionAbortController.abort()
+    selectionAbortController = null
+  }
+  if (revokeImage) {
+    revokeRawImageUrl()
+  }
+}
+
 function revokeRawImageUrl(): void {
   if (rawImageUrl.value && rawImageUrl.value.startsWith('blob:')) {
     URL.revokeObjectURL(rawImageUrl.value)
@@ -597,22 +611,29 @@ function revokeRawImageUrl(): void {
   }
 }
 
-async function loadRawImage(fileId: string): Promise<void> {
-  revokeRawImageUrl()
+async function loadRawImage(fileId: string, seq: number, signal: AbortSignal): Promise<void> {
   rawImageLoading.value = true
   rawImageError.value = ''
   try {
-    const res = await apiFetch(`/api/files/${fileId}/raw`)
+    const res = await apiFetch(`/api/files/${fileId}/raw`, { signal })
+    if (isComponentUnmounted || signal.aborted || currentSelectionSeq !== seq) return
     if (!res.ok) {
       if (res.status === 404) throw new Error('源图片文件不存在或已损坏')
       throw new Error(`加载原图失败 (${res.status})`)
     }
     const blob = await res.blob()
+    if (isComponentUnmounted || signal.aborted || currentSelectionSeq !== seq) return
+    revokeRawImageUrl()
     rawImageUrl.value = URL.createObjectURL(blob)
   } catch (err) {
-    rawImageError.value = err instanceof Error ? err.message : '原图加载失败'
+    if (isComponentUnmounted || signal.aborted || currentSelectionSeq !== seq) return
+    if ((err as any)?.name !== 'AbortError') {
+      rawImageError.value = err instanceof Error ? err.message : '原图加载失败'
+    }
   } finally {
-    rawImageLoading.value = false
+    if (!isComponentUnmounted && !signal.aborted && currentSelectionSeq === seq) {
+      rawImageLoading.value = false
+    }
   }
 }
 
@@ -644,7 +665,8 @@ function isSearchResultSelected(result: KnowledgeSearchResult): boolean {
 }
 
 onUnmounted(() => {
-  revokeRawImageUrl()
+  isComponentUnmounted = true
+  abortCurrentSelection(true)
 })
 const searchDuration = ref<number>(18)
 
@@ -855,27 +877,56 @@ async function loadVectorStatus() {
 }
 
 async function selectFile(id: string) {
+  const seq = ++currentSelectionSeq
+  abortCurrentSelection(true)
+
   selectedFileId.value = id
-  revokeRawImageUrl()
+  fileDetail.value = null
+  rawImageUrl.value = ''
+  rawImageError.value = ''
+
   if (highlightedTarget.value && highlightedTarget.value.fileId !== id) {
     highlightedTarget.value = null
   }
-  loadingDetail.value = true
-  try {
-    fileDetail.value = await getKnowledgeFile(id)
-  } catch (error) {
-    fileDetail.value = null
-    toast.show(error instanceof Error ? error.message : '文件详情加载失败', 'error')
-  } finally {
-    loadingDetail.value = false
-  }
 
-  const file = files.value.find(f => f.id === id)
-  if (isStoredImageFile(file)) {
-    await loadRawImage(id)
-  } else {
-    kbView.value = 'doc'
-  }
+  const controller = new AbortController()
+  selectionAbortController = controller
+  const signal = controller.signal
+
+  loadingDetail.value = true
+
+  const targetFile = files.value.find(f => f.id === id)
+  const isImage = isStoredImageFile(targetFile)
+
+  const detailPromise = (async () => {
+    try {
+      const detail = await getKnowledgeFile(id, signal)
+      if (isComponentUnmounted || signal.aborted || currentSelectionSeq !== seq) return
+      fileDetail.value = detail
+    } catch (error) {
+      if (isComponentUnmounted || signal.aborted || currentSelectionSeq !== seq) return
+      if ((error as any)?.name !== 'AbortError') {
+        fileDetail.value = null
+        toast.show(error instanceof Error ? error.message : '文件详情加载失败', 'error')
+      }
+    } finally {
+      if (!isComponentUnmounted && !signal.aborted && currentSelectionSeq === seq) {
+        loadingDetail.value = false
+      }
+    }
+  })()
+
+  const imagePromise = (async () => {
+    if (!isImage) {
+      if (!isComponentUnmounted && !signal.aborted && currentSelectionSeq === seq) {
+        kbView.value = 'doc'
+      }
+      return
+    }
+    await loadRawImage(id, seq, signal)
+  })()
+
+  await Promise.allSettled([detailPromise, imagePromise])
 }
 
 async function handleReindex() {
@@ -1063,10 +1114,12 @@ async function deleteSelectedFile() {
 
   deleting.value = true
   try {
+    abortCurrentSelection(true)
     await deleteKnowledgeFile(selectedFile.value.id)
     toast.show(`已删除 ${deletingName}`, 'success')
     selectedFileId.value = ''
     fileDetail.value = null
+    revokeRawImageUrl()
     await loadKnowledgeOverview()
   } catch (error) {
     toast.show(error instanceof Error ? error.message : '删除失败', 'error')

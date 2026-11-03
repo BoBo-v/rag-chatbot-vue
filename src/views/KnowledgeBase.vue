@@ -18,6 +18,10 @@
           <RefreshCw :size="15" aria-hidden="true" />
           刷新
         </button>
+        <button type="button" class="kb-secondary kb-overwrite-btn" :disabled="uploading" @click="overwriteFileInputRef?.click()" title="覆盖已有文件并重新执行视觉识别与切片">
+          <Upload :size="15" aria-hidden="true" />
+          覆盖上传并重新识别
+        </button>
         <button type="button" class="kb-primary" :disabled="uploading" @click="fileInputRef?.click()">
           <Upload :size="15" aria-hidden="true" />
           {{ uploading ? '上传中...' : '上传资料' }}
@@ -28,7 +32,15 @@
           accept=".txt,.md,.pdf,.png,.jpg,.jpeg,.webp"
           multiple
           hidden
-          @change="handleUpload"
+          @change="(e) => handleUpload(e, false)"
+        />
+        <input
+          ref="overwriteFileInputRef"
+          type="file"
+          accept=".txt,.md,.pdf,.png,.jpg,.jpeg,.webp"
+          multiple
+          hidden
+          @change="(e) => handleUpload(e, true)"
         />
       </div>
     </header>
@@ -390,7 +402,18 @@
                   <span class="kb-vision-title text-indigo">
                     ✨ 视觉模型 ({{ fileDetail?.visionInfo?.model || '未知模型' }}) 识别结果
                   </span>
-                  <span class="kb-pill-tag tag-success font-mono">已切分为 {{ selectedFile.chunkCount }} Chunks</span>
+                  <div class="kb-vision-header-actions flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="kb-btn-link text-xs text-indigo underline"
+                      :disabled="uploading"
+                      @click="overwriteFileInputRef?.click()"
+                      title="覆盖上传并重新执行视觉识别"
+                    >
+                      重新识别 (覆盖上传)
+                    </button>
+                    <span class="kb-pill-tag tag-success font-mono">已切分为 {{ selectedFile.chunkCount }} Chunks</span>
+                  </div>
                 </div>
                 <div class="kb-vision-markdown font-mono">
                   <div v-if="fileDetail?.visionInfo?.markdown" class="kb-vision-markdown-body">
@@ -545,6 +568,7 @@ const deleting = ref(false)
 const reindexing = ref(false)
 const uploadPanelCollapsed = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const overwriteFileInputRef = ref<HTMLInputElement | null>(null)
 
 type KnowledgeTab = 'manage' | 'eval'
 const knowledgeTabs: { value: KnowledgeTab; label: string }[] = [
@@ -873,7 +897,7 @@ async function handleReindex() {
   }
 }
 
-async function handleUpload(e: Event) {
+async function handleUpload(e: Event, overwrite = false) {
   const input = e.target as HTMLInputElement
   const uploadFiles = input.files ? Array.from(input.files) : []
   input.value = ''
@@ -887,7 +911,7 @@ async function handleUpload(e: Event) {
         id: crypto.randomUUID(),
         name: file.name,
         percent: 0,
-        message: '准备上传',
+        message: overwrite ? '准备覆盖上传并重新识别' : '准备上传',
         status: 'uploading',
         isImage: isImageFile(file),
         size: file.size,
@@ -904,10 +928,13 @@ async function handleUpload(e: Event) {
       }
 
       if (item.isImage) {
-        item.message = '准备上传图片，后端视觉模型会识别为 Markdown 后入库'
+        item.message = overwrite
+          ? '准备覆盖上传图片并重新执行视觉模型识别'
+          : '准备上传图片，后端视觉模型会识别为 Markdown 后入库'
       }
 
       const result = await uploadKnowledgeFile(file, {
+        overwrite,
         onProgress: progress => updateUploadItem(item.id, progress),
       })
       if (result.ok) {
@@ -916,10 +943,10 @@ async function handleUpload(e: Event) {
         item.status = 'done'
         item.phase = 'completed'
         item.previewChunks = (result.chunks ?? []).slice(0, PREVIEW_CHUNK_LIMIT)
-        item.message = result.deduplicated
-          ? '已存在相同内容，复用已有记录'
-          : result.overwritten
-            ? '已覆盖并写入知识库'
+        item.message = result.overwritten
+          ? '已覆盖并重新写入知识库'
+          : result.deduplicated
+            ? '已存在相同内容，复用已有记录'
             : item.isImage
               ? '图片识别完成，已写入知识库'
               : '上传完成'

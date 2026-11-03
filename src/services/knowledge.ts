@@ -10,6 +10,8 @@ export interface StoredKnowledgeFile {
     embeddingModel?: string
     embeddingDim?: number | null
     embeddingDimText?: string
+    visionModel?: string | null
+    visionMarkdown?: string | null
 }
 
 export interface KnowledgeChunk {
@@ -26,7 +28,6 @@ export interface KnowledgeChunk {
 export interface VisionInfo {
     available: boolean
     model?: string
-    sourcePath?: string
     markdown?: string
     rawUrl?: string
     error?: string

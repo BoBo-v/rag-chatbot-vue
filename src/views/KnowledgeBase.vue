@@ -694,10 +694,7 @@ const targetEmbeddingDimension = computed<number | null>(() => {
   if (status.currentEmbeddingDim !== undefined && status.currentEmbeddingDim !== null) {
     return status.currentEmbeddingDim
   }
-  const current = status.embeddingDistributions?.find(item =>
-    item.embeddingModel === status.currentEmbeddingModel && item.embeddingDim !== null
-  )
-  return current?.embeddingDim ?? null
+  return null
 })
 
 const incompatibleChunkCount = computed(() => vectorStatus.value?.incompatibleChunkCount)
@@ -705,7 +702,15 @@ const incompatibleChunkCount = computed(() => vectorStatus.value?.incompatibleCh
 const vectorStatusTitle = computed(() => {
   if (vectorStatusError.value) return vectorStatusError.value
   if (loadingVectorStatus.value && !vectorStatus.value) return '正在检查向量库'
-  if (vectorStatus.value?.needsReindex) return '存在旧模型或旧维度切片，需要使用当前 embedding 模型重新入库'
+  const status = vectorStatus.value
+  if (!status) return '向量库状态'
+  if ((status.chunkCount ?? 0) === 0) return '库内无切片'
+  if (status.compatibilityState === 'pending') {
+    return '目标维度待确认 (等待首次调用模型实测)'
+  }
+  if (status.needsReindex) {
+    return '存在旧模型或旧维度切片，需要使用当前 embedding 模型重新入库'
+  }
   return '索引兼容'
 })
 

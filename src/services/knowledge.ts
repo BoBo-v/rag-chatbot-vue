@@ -100,9 +100,10 @@ export interface VectorStoreStatus {
     backend?: string
     fileCount?: number
     chunkCount?: number
-    compatibleChunkCount?: number
-    incompatibleChunkCount?: number
-    needsReindex?: boolean
+    compatibleChunkCount?: number | null
+    incompatibleChunkCount?: number | null
+    needsReindex?: boolean | null
+    compatibilityState?: 'pending' | 'confirmed'
     embeddingDistributions?: Array<{
         embeddingModel: string
         embeddingDim: number | null

@@ -959,7 +959,12 @@ async function retryLastTask(): Promise<void> {
 
 async function executeRequest(request: AgentRunRequest): Promise<void> {
   await agent.run(request, accessKey.value)
-  const executionSnapshot = agent.exportSnapshot()
+  let executionSnapshot: AgentStoredExecution | undefined = undefined
+  try {
+    executionSnapshot = JSON.parse(JSON.stringify(agent.exportSnapshot()))
+  } catch {
+    executionSnapshot = agent.exportSnapshot()
+  }
 
   if (agent.status.value === 'completed' && agent.answer.value.trim()) {
     const assistantMessageId = crypto.randomUUID()
@@ -1100,8 +1105,8 @@ async function removeAgentSession(session: AgentSessionListItem): Promise<void> 
       if (nextSession) await openAgentSession(nextSession.id)
     }
   } catch (error) {
-    historyError.value = '删除本地会话失败'
     console.warn('[agent] 删除会话失败', error)
+    showToast('删除本地会话失败', 'error', 2500)
   }
 }
 
@@ -1119,8 +1124,9 @@ async function persistAgentUserMessage(
     }
     await refreshAgentSessionList()
   } catch (error) {
-    historyError.value = '本地会话保存失败'
     console.warn('[agent] 保存用户消息失败', error)
+    showToast('保存提问记录失败', 'error', 2500)
+    await refreshAgentSessionList().catch(() => {})
   }
 }
 
@@ -1137,8 +1143,9 @@ async function persistAgentAssistantMessage(
     )
     await refreshAgentSessionList()
   } catch (error) {
-    historyError.value = 'Agent 回答保存失败'
     console.warn('[agent] 保存回答失败', error)
+    showToast('保存回答记录失败', 'error', 2500)
+    await refreshAgentSessionList().catch(() => {})
   }
 }
 

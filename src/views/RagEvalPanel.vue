@@ -15,6 +15,19 @@
         </div>
       </div>
 
+      <!-- 知识库出题源文件选择 -->
+      <div class="rag-eval-source-row">
+        <label class="source-label font-mono">
+          <span>出题源文件:</span>
+          <select v-model="selectedSourceFileId" class="rag-eval-source-select" title="指定自动出题所依据的知识库文档，默认全库随机采样">
+            <option value="">📚 全部文档 (全库多样性采样)</option>
+            <option v-for="file in knowledgeFiles" :key="file.id" :value="file.id">
+              📄 {{ file.filename }} ({{ file.chunkCount }}切片)
+            </option>
+          </select>
+        </label>
+      </div>
+
       <div class="rag-eval-import-row">
         <!-- AI 自动化出题与线上难例拉取 -->
         <button
@@ -459,7 +472,7 @@ import {
   Zap,
 } from 'lucide-vue-next'
 import { useToast } from '../composables/useToast'
-import { searchKnowledge } from '../services/knowledge'
+import { listKnowledgeFiles, searchKnowledge, type StoredKnowledgeFile } from '../services/knowledge'
 import {
   buildRagEvalReport,
   createErrorRunResult,
@@ -489,6 +502,10 @@ const cases = ref<RagEvalCase[]>([])
 const selectedCaseId = ref('')
 const resultMap = ref<Record<string, RagEvalRunResult | undefined>>({})
 const importInputRef = ref<HTMLInputElement | null>(null)
+
+// 知识库候选文件与出题指定源
+const knowledgeFiles = ref<StoredKnowledgeFile[]>([])
+const selectedSourceFileId = ref('')
 
 // 运行与加载状态
 const isRunning = ref(false)
@@ -538,7 +555,16 @@ onMounted(() => {
   cases.value = loadStoredCases()
   if (cases.value.length === 0) cases.value = [createRagEvalCase()]
   selectedCaseId.value = cases.value[0]?.id ?? ''
+  loadKnowledgeFiles()
 })
+
+async function loadKnowledgeFiles() {
+  try {
+    knowledgeFiles.value = await listKnowledgeFiles()
+  } catch {
+    // 忽略加载知识库文件异常
+  }
+}
 
 watch(cases, saveCases, { deep: true })
 
@@ -559,19 +585,26 @@ function removeSelectedCase() {
   selectedCaseId.value = cases.value[Math.max(0, index - 1)]?.id ?? cases.value[0]?.id ?? ''
 }
 
-// 自动合成用例
+// 自动合成用例 (支持指定文件与随机多样性)
 async function generateCases() {
   if (isGenerating.value) return
   isGenerating.value = true
   try {
-    const generated = await fetchSyntheticCases({ limitPerCategory: 2 })
+    const fileId = selectedSourceFileId.value || undefined
+    const targetFile = knowledgeFiles.value.find(f => f.id === fileId)
+    const generated = await fetchSyntheticCases({
+      fileId,
+      limitPerCategory: 2,
+      randomSeed: Date.now(),
+    })
     if (generated.length === 0) {
-      toast.show('未能从当前知识库中提取切片合成用例，请先上传并构建知识库', 'warning')
+      toast.show('未能从选定知识库文件中提取切片合成用例，请检查切片是否有效', 'warning')
       return
     }
     cases.value = [...cases.value, ...generated]
     selectedCaseId.value = generated[0].id
-    toast.show(`已成功自动合成 ${generated.length} 条测试用例`, 'success')
+    const scopeDesc = targetFile ? `《${targetFile.filename}》` : '全库切片'
+    toast.show(`已成功基于 ${scopeDesc} 自动合成 ${generated.length} 条全新评测用例`, 'success')
   } catch (error) {
     toast.show(error instanceof Error ? error.message : '自动出题失败', 'error')
   } finally {
@@ -954,6 +987,39 @@ function formatOptionalScore(value: number | undefined): string {
 .rag-eval-danger:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.rag-eval-source-row {
+  padding: 8px 12px;
+  background: var(--bg-surface-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.source-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.rag-eval-source-select {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  outline: none;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.rag-eval-source-select:focus {
+  border-color: var(--accent);
 }
 
 .rag-eval-import-row {

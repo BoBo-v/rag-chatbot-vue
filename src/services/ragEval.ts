@@ -316,14 +316,22 @@ export interface BackendEvalRunResponse {
     markdownReport?: string
 }
 
-export async function fetchSyntheticCases(options: { limitPerCategory?: number } = {}): Promise<RagEvalCase[]> {
+export async function fetchSyntheticCases(options: {
+    fileId?: string
+    limitPerCategory?: number
+    randomSeed?: number
+} = {}): Promise<RagEvalCase[]> {
     const res = await apiFetch('/api/eval/rag/generate', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
         },
-        body: JSON.stringify({ limitPerCategory: options.limitPerCategory ?? 2 }),
+        body: JSON.stringify({
+            fileId: options.fileId || undefined,
+            limitPerCategory: options.limitPerCategory ?? 2,
+            randomSeed: options.randomSeed ?? Date.now(),
+        }),
     })
     if (!res.ok) {
         const error = await res.json().catch(() => ({}))

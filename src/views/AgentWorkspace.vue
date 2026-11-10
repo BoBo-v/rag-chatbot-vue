@@ -12,30 +12,27 @@
       </div>
 
       <div class="agent-controls">
-        <label class="agent-model-field">
+        <div class="agent-model-field">
           <span class="field-label">模型</span>
-          <div class="agent-select-wrapper">
-            <select v-model="selectedModelKey" :disabled="providersLoading || agent.isRunning.value || modelOptions.length === 0">
-              <option v-if="modelOptions.length === 0" value="">暂无可用模型</option>
-              <option v-for="option in modelOptions" :key="option.key" :value="option.key">
-                {{ option.providerName }} / {{ option.model }}
-              </option>
-            </select>
-            <ChevronDown class="select-chevron" :size="13" aria-hidden="true" />
-          </div>
-        </label>
+          <UiSelect
+            v-model="selectedModelKey"
+            :options="agentModelUiOptions"
+            :disabled="providersLoading || agent.isRunning.value || modelOptions.length === 0"
+            header-text="选择运行模型"
+            root-class="agent-topbar-ui-select"
+          />
+        </div>
 
-        <label class="agent-model-field">
+        <div class="agent-model-field">
           <span class="field-label">Profile</span>
-          <div class="agent-select-wrapper">
-            <select v-model="selectedProfile" :disabled="agent.isRunning.value">
-              <option v-for="profile in profileOptions" :key="profile.id" :value="profile.id">
-                {{ profile.label }}
-              </option>
-            </select>
-            <ChevronDown class="select-chevron" :size="13" aria-hidden="true" />
-          </div>
-        </label>
+          <UiSelect
+            v-model="selectedProfile"
+            :options="agentProfileUiOptions"
+            :disabled="agent.isRunning.value"
+            header-text="选择 Agent 预设"
+            root-class="agent-topbar-ui-select"
+          />
+        </div>
 
         <label class="agent-key-field">
           <span class="field-label">密钥</span>
@@ -551,6 +548,7 @@ import {
 } from '../services/agent'
 import type { Message } from '../types/chat'
 import { useMessageRenderer } from '../composables/useMessageRenderer'
+import UiSelect, { type UiSelectOption } from '../components/UiSelect.vue'
 
 interface AgentModelOption {
   key: string
@@ -715,6 +713,23 @@ const modelOptions = computed<AgentModelOption[]>(() => providers.value.flatMap(
     model,
   })),
 ))
+
+const agentModelUiOptions = computed<UiSelectOption[]>(() => {
+  if (modelOptions.value.length === 0) {
+    return [{ value: '', label: '暂无可用模型', disabled: true }]
+  }
+  return modelOptions.value.map(opt => ({
+    value: opt.key,
+    label: `${opt.providerName} / ${opt.model}`,
+  }))
+})
+
+const agentProfileUiOptions = computed<UiSelectOption[]>(() =>
+  profileOptions.map(p => ({
+    value: p.id,
+    label: p.label,
+  }))
+)
 
 const selectedModel = computed(() => modelOptions.value.find(option => option.key === selectedModelKey.value) ?? null)
 const canSubmit = computed(() => Boolean(
@@ -1468,6 +1483,15 @@ function describeAgentError(code: string, fallback: string): string {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.agent-topbar-ui-select {
+  max-width: 220px;
+}
+
+.agent-topbar-ui-select :deep(.ui-select-trigger) {
+  height: 28px;
+  max-width: 220px;
 }
 
 .field-label {

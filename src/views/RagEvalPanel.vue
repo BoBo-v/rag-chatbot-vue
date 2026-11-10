@@ -17,15 +17,15 @@
 
       <!-- 知识库出题源文件选择 -->
       <div class="rag-eval-source-row">
-        <label class="source-label font-mono">
-          <span>出题源文件:</span>
-          <select v-model="selectedSourceFileId" class="rag-eval-source-select" title="指定自动出题所依据的知识库文档，默认全库随机采样">
-            <option value="">📚 全部文档 (全库多样性采样)</option>
-            <option v-for="file in knowledgeFiles" :key="file.id" :value="file.id">
-              📄 {{ file.filename }} ({{ file.chunkCount }}切片)
-            </option>
-          </select>
-        </label>
+        <div class="source-label font-mono">
+          <span>出题源:</span>
+          <UiSelect
+            v-model="selectedSourceFileId"
+            :options="sourceFileOptions"
+            header-text="指定自动出题依据文档"
+            root-class="rag-eval-source-ui-select"
+          />
+        </div>
       </div>
 
       <div class="rag-eval-import-row">
@@ -226,13 +226,12 @@
             </label>
             <label>
               <span>用例分类</span>
-              <select v-model="selectedCase.category">
-                <option value="SINGLE_HOP">SINGLE_HOP (单跳精准事实)</option>
-                <option value="MULTI_HOP">MULTI_HOP (多切片综合推理)</option>
-                <option value="COLLOQUIAL">COLLOQUIAL (口语/错别字/倒装)</option>
-                <option value="NEGATIVE">NEGATIVE (越界/未收录负样本)</option>
-                <option value="ADVERSARIAL">ADVERSARIAL (提示词越狱/诱导断言)</option>
-              </select>
+              <UiSelect
+                v-model="selectedCase.category"
+                :options="categoryOptions"
+                header-text="选择用例分类"
+                root-class="rag-eval-form-ui-select"
+              />
             </label>
           </div>
 
@@ -255,20 +254,21 @@
           <div class="rag-eval-controls">
             <label>
               <span>场景规范</span>
-              <select v-model="selectedCase.scenario">
-                <option value="ticket">ticket (技术支持工单契约)</option>
-                <option value="general">general (通用知识库问答)</option>
-              </select>
+              <UiSelect
+                v-model="selectedCase.scenario"
+                :options="scenarioOptions"
+                header-text="业务场景"
+                root-class="rag-eval-form-ui-select"
+              />
             </label>
             <label>
               <span>匹配模式</span>
-              <select v-model="selectedCase.matchMode">
-                <option value="auto">auto</option>
-                <option value="any">any</option>
-                <option value="all">all</option>
-                <option value="file">file</option>
-                <option value="keyword">keyword</option>
-              </select>
+              <UiSelect
+                v-model="selectedCase.matchMode"
+                :options="matchModeOptions"
+                header-text="检索匹配模式"
+                root-class="rag-eval-form-ui-select"
+              />
             </label>
             <label>
               <span>Top K</span>
@@ -496,6 +496,7 @@ import {
   type RagEvalRunResult,
 } from '../services/ragEval'
 import { renderMarkdown } from '../utils/markdown'
+import UiSelect, { type UiSelectOption } from '../components/UiSelect.vue'
 
 const toast = useToast()
 const cases = ref<RagEvalCase[]>([])
@@ -506,6 +507,36 @@ const importInputRef = ref<HTMLInputElement | null>(null)
 // 知识库候选文件与出题指定源
 const knowledgeFiles = ref<StoredKnowledgeFile[]>([])
 const selectedSourceFileId = ref('')
+
+const sourceFileOptions = computed<UiSelectOption[]>(() => [
+  { value: '', label: '📚 全部文档 (全库多样性采样)' },
+  ...knowledgeFiles.value.map(file => ({
+    value: file.id,
+    label: `📄 ${file.filename}`,
+    subtext: `${file.chunkCount}切片`,
+  })),
+])
+
+const categoryOptions: UiSelectOption[] = [
+  { value: 'SINGLE_HOP', label: '单跳精准事实 (SINGLE_HOP)' },
+  { value: 'MULTI_HOP', label: '多切片综合推理 (MULTI_HOP)' },
+  { value: 'COLLOQUIAL', label: '口语/错别字/倒装 (COLLOQUIAL)' },
+  { value: 'NEGATIVE', label: '越界/未收录负样本 (NEGATIVE)' },
+  { value: 'ADVERSARIAL', label: '提示词越狱/诱导断言 (ADVERSARIAL)' },
+]
+
+const scenarioOptions: UiSelectOption[] = [
+  { value: 'ticket', label: 'ticket (技术支持工单契约)' },
+  { value: 'general', label: 'general (通用知识库问答)' },
+]
+
+const matchModeOptions: UiSelectOption[] = [
+  { value: 'auto', label: 'auto (自动判定)' },
+  { value: 'any', label: 'any (命中任一)' },
+  { value: 'all', label: 'all (文件与关键词均命中)' },
+  { value: 'file', label: 'file (仅匹配文件)' },
+  { value: 'keyword', label: 'keyword (仅匹配关键词)' },
+]
 
 // 运行与加载状态
 const isRunning = ref(false)
@@ -1001,6 +1032,32 @@ function formatOptionalScore(value: number | undefined): string {
   gap: 8px;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.rag-eval-source-ui-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.rag-eval-source-ui-select :deep(.ui-select-trigger) {
+  height: 28px;
+  font-size: 11.5px;
+}
+
+.rag-eval-form-ui-select {
+  width: 100%;
+}
+
+.rag-eval-form-ui-select :deep(.ui-select-trigger) {
+  height: 34px;
+  font-size: 12.5px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="light"] .rag-eval-form-ui-select :deep(.ui-select-trigger) {
+  background: #f3f4f6;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #374151;
 }
 
 .rag-eval-source-select {

@@ -690,7 +690,7 @@ const uploadPreviewDialog = ref<{
   index: number
 } | null>(null)
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 const PREVIEW_CHUNK_LIMIT = 3
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
 const PHASES_ORDER = ['receiving', 'parsing', 'chunking', 'embedding', 'storing', 'completed']

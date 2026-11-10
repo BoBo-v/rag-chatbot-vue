@@ -177,7 +177,7 @@ onBeforeUnmount(() => {
   transform: rotate(180deg);
 }
 
-/* 核心：与首页模型切换下拉浮层完全一致的样式规范 */
+/* 核心：轻量柔和灰色阴影浮层 */
 .ui-select-dropdown {
   position: absolute;
   top: calc(100% + 5px);
@@ -188,8 +188,8 @@ onBeforeUnmount(() => {
   width: max-content;
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 4px 18px rgba(71, 85, 105, 0.20), 0 1px 4px rgba(71, 85, 105, 0.10);
   padding: 5px;
   animation: ui-select-in var(--motion-fast, 0.15s) var(--ease-standard);
   box-sizing: border-box;
@@ -281,8 +281,8 @@ onBeforeUnmount(() => {
 
 :global([data-theme="light"]) .ui-select-dropdown {
   background: #ffffff;
-  border-color: rgba(0, 0, 0, 0.12);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-color: rgba(203, 213, 225, 0.85);
+  box-shadow: 0 4px 16px rgba(100, 116, 139, 0.12), 0 1px 3px rgba(100, 116, 139, 0.06);
 }
 
 :global([data-theme="light"]) .ui-select-item:hover:not(:disabled) {

@@ -1007,19 +1007,45 @@ function formatOptionalScore(value: number | undefined): string {
   flex: 1;
   min-width: 0;
   height: 28px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 2px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 0 26px 0 12px;
   font-size: 11.5px;
-  color: var(--text-primary);
-  background: var(--bg-input);
-  outline: none;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
   cursor: pointer;
+  outline: none;
   text-overflow: ellipsis;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='rgba(156,163,175,0.7)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: all var(--motion-fast, 0.15s) ease;
+}
+
+.rag-eval-source-select:hover {
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+  background-color: var(--accent-bg);
 }
 
 .rag-eval-source-select:focus {
   border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+[data-theme="light"] .rag-eval-source-select {
+  background-color: #f3f4f6;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #4b5563;
+}
+
+[data-theme="light"] .rag-eval-source-select:hover {
+  background-color: #e5e7eb;
+  border-color: var(--accent-border);
+  color: var(--accent-text);
 }
 
 .rag-eval-import-row {
@@ -1198,8 +1224,7 @@ function formatOptionalScore(value: number | undefined): string {
 }
 
 .rag-eval-editor input,
-.rag-eval-editor textarea,
-.rag-eval-editor select {
+.rag-eval-editor textarea {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--border);
@@ -1210,6 +1235,48 @@ function formatOptionalScore(value: number | undefined): string {
   background: var(--bg-input);
   font: inherit;
   font-size: 12.5px;
+}
+
+.rag-eval-editor select {
+  width: 100%;
+  height: 34px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 0 30px 0 14px;
+  outline: none;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='rgba(156,163,175,0.7)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: all var(--motion-fast, 0.15s) ease;
+}
+
+.rag-eval-editor select:hover {
+  border-color: var(--accent-border);
+  background-color: var(--accent-bg);
+  color: var(--accent-text);
+}
+
+.rag-eval-editor select:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+[data-theme="light"] .rag-eval-editor select {
+  background-color: #f3f4f6;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #374151;
+}
+
+[data-theme="light"] .rag-eval-editor select:hover {
+  background-color: #e5e7eb;
 }
 
 .rag-eval-editor textarea {

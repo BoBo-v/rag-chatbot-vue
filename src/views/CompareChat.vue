@@ -1436,13 +1436,20 @@ async function summarize(): Promise<void> {
 select.field-input {
   appearance: none;
   cursor: pointer;
+  border-radius: var(--radius-pill);
   background-color: var(--compare-input);
   background-image: linear-gradient(45deg, transparent 50%, var(--compare-muted) 50%),
     linear-gradient(135deg, var(--compare-muted) 50%, transparent 50%);
   background-position: calc(100% - 17px) 14px, calc(100% - 11px) 14px;
   background-size: 6px 6px, 6px 6px;
   background-repeat: no-repeat;
+  padding-left: 14px;
   padding-right: 34px;
+  transition: all var(--motion-fast) ease;
+}
+
+select.field-input:hover:not(:disabled) {
+  border-color: var(--accent-border);
 }
 
 select.field-input option {

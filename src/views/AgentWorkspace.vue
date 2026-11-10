@@ -1487,29 +1487,41 @@ function describeAgentError(code: string, fallback: string): string {
 .agent-select-wrapper select {
   appearance: none;
   -webkit-appearance: none;
-  height: 32px;
-  padding: 0 26px 0 10px;
+  height: 28px;
+  padding: 0 28px 0 12px;
   font-size: 11.5px;
   font-family: var(--font-mono);
   color: var(--text-secondary);
-  background: var(--bg-surface-2);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-pill);
   cursor: pointer;
   outline: none;
-  max-width: 200px;
+  max-width: 220px;
   transition: all var(--motion-fast) ease;
 }
 
 .agent-select-wrapper select:hover:not(:disabled) {
   border-color: var(--accent-border);
-  color: var(--text-primary);
-  background: var(--bg-surface-3);
+  color: var(--accent-text);
+  background: var(--accent-bg);
 }
 
 .agent-select-wrapper select:focus {
-  border-color: var(--accent-border);
+  border-color: var(--accent);
   box-shadow: var(--focus-ring);
+}
+
+:global([data-theme="light"]) .agent-select-wrapper select {
+  background: #f3f4f6;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #4b5563;
+}
+
+:global([data-theme="light"]) .agent-select-wrapper select:hover:not(:disabled) {
+  background: #e5e7eb;
+  border-color: var(--accent-border);
+  color: var(--accent-text);
 }
 
 .select-chevron {

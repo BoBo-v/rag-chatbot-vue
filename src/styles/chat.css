@@ -1992,6 +1992,8 @@ select.settings-input,
 .settings-select {
     color-scheme: inherit;
     background-color: var(--settings-input-bg);
+    border-radius: var(--radius-pill);
+    padding-left: 14px;
 }
 
 .settings-select {

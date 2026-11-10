@@ -103,11 +103,20 @@ function handleSwitchMode(targetMode: string) {
     isDemoActive.value = false
   }
 }
-const modes: { value: AppMode; label: string; mobileLabel?: string; icon: Component }[] = [
-  { value: 'chat', label: '工单决策', mobileLabel: '工单', icon: MessageSquare },
-  { value: 'agent', label: '排障 Agent', mobileLabel: 'Agent', icon: Bot },
-  { value: 'compare', label: '模型对比', mobileLabel: '对比', icon: Columns2 },
-  { value: 'knowledge', label: '知识库 & 评测', mobileLabel: '知识库', icon: Database },
+interface ModeItem {
+  value: AppMode
+  label: string
+  subLabel?: string
+  mobileLabel?: string
+  tooltip?: string
+  icon: Component
+}
+
+const modes: ModeItem[] = [
+  { value: 'chat', label: '工单决策', mobileLabel: '工单', tooltip: '工单辅助决策', icon: MessageSquare },
+  { value: 'agent', label: '排障 Agent', mobileLabel: 'Agent', tooltip: '排障 Agent', icon: Bot },
+  { value: 'compare', label: '模型对比', mobileLabel: '对比', tooltip: '多模型对比', icon: Columns2 },
+  { value: 'knowledge', label: '知识库', subLabel: '& 评测', mobileLabel: '知识库', tooltip: '技术知识库与评测', icon: Database },
 ]
 
 let mediaQuery: MediaQueryList | null = null
@@ -165,10 +174,14 @@ watch(() => settings.theme, applyTheme)
           class="rail-button"
           :class="{ active: !isDemoActive && mode === item.value }"
           :aria-current="!isDemoActive && mode === item.value ? 'page' : undefined"
+          :title="item.tooltip || (item.subLabel ? `${item.label} ${item.subLabel}` : item.label)"
           @click="mode = item.value; isDemoActive = false"
         >
-          <component :is="item.icon" :size="21" :stroke-width="1.7" aria-hidden="true" />
-          <span>{{ item.label }}</span>
+          <component :is="item.icon" :size="20" :stroke-width="1.7" aria-hidden="true" />
+          <div class="rail-label-box">
+            <span class="rail-label-main">{{ item.label }}</span>
+            <span v-if="item.subLabel" class="rail-label-sub">{{ item.subLabel }}</span>
+          </div>
         </button>
       </nav>
 
@@ -187,8 +200,10 @@ watch(() => settings.theme, applyTheme)
           aria-label="退出登录"
           @click="handleLogout"
         >
-          <LogOut :size="21" :stroke-width="1.7" aria-hidden="true" />
-          <span>登出</span>
+          <LogOut :size="20" :stroke-width="1.7" aria-hidden="true" />
+          <div class="rail-label-box">
+            <span class="rail-label-main">登出</span>
+          </div>
         </button>
         <button
           v-else
@@ -198,17 +213,22 @@ watch(() => settings.theme, applyTheme)
           aria-label="管理员登录"
           @click="authStore.openLoginModal()"
         >
-          <User :size="21" :stroke-width="1.7" aria-hidden="true" />
-          <span>登录</span>
+          <User :size="20" :stroke-width="1.7" aria-hidden="true" />
+          <div class="rail-label-box">
+            <span class="rail-label-main">登录</span>
+          </div>
         </button>
         <button
           type="button"
           class="rail-button"
           aria-label="打开设置"
+          title="全局设置"
           @click="settingsOpen = true"
         >
-          <Settings2 :size="21" :stroke-width="1.7" aria-hidden="true" />
-          <span>设置</span>
+          <Settings2 :size="20" :stroke-width="1.7" aria-hidden="true" />
+          <div class="rail-label-box">
+            <span class="rail-label-main">设置</span>
+          </div>
         </button>
       </div>
     </aside>
@@ -300,7 +320,7 @@ watch(() => settings.theme, applyTheme)
   height: 100dvh;
   min-height: 0;
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 80px minmax(0, 1fr);
   overflow: hidden;
   color: var(--text-primary);
   background: var(--bg-canvas);
@@ -342,7 +362,7 @@ watch(() => settings.theme, applyTheme)
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 0 7px;
+  padding: 0 6px;
 }
 
 .rail-footer {
@@ -353,28 +373,59 @@ watch(() => settings.theme, applyTheme)
 .rail-button {
   position: relative;
   width: 100%;
-  min-height: 58px;
+  min-height: 60px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
+  justify-content: flex-start;
+  padding: 8px 4px 6px;
+  gap: 4px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  padding: 6px 2px;
   color: var(--text-muted);
   background: transparent;
   cursor: pointer;
   transition:
     color var(--motion-fast) ease,
     border-color var(--motion-fast) ease,
-    background var(--motion-fast) ease;
+    background var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
 }
 
-.rail-button span {
-  font-size: 10px;
-  line-height: 1.2;
+.rail-label-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5px;
+  width: 100%;
+  min-width: 0;
+}
+
+.rail-label-main {
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.25;
   white-space: nowrap;
+  letter-spacing: 0.2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail-label-sub {
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.1;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  padding: 0.5px 4px;
+  border-radius: 4px;
+  background: var(--accent-bg);
+  color: var(--text-muted);
+  transition:
+    color var(--motion-fast) ease,
+    background var(--motion-fast) ease;
 }
 
 .rail-button:hover {
@@ -382,11 +433,27 @@ watch(() => settings.theme, applyTheme)
   background: var(--bg-surface-2);
 }
 
+.rail-button:hover .rail-label-sub {
+  color: var(--text-primary);
+  background: var(--accent-soft);
+}
+
 .rail-button.active {
   border-color: var(--accent-border);
   color: var(--accent-text);
   background: var(--accent-bg);
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.10), inset 2px 0 0 var(--accent);
+}
+
+.rail-button.active .rail-label-main {
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.rail-button.active .rail-label-sub {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
 }
 
 .rail-button:focus-visible {

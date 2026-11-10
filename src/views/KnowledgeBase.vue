@@ -64,10 +64,6 @@
           <RefreshCw :size="13" :class="{ spinning: reindexing }" aria-hidden="true" />
           {{ reindexing ? '同步中...' : '🔄 同步已有向量索引' }}
         </button>
-        <button type="button" class="kb-primary" :disabled="uploading" @click="fileInputRef?.click()">
-          <Upload :size="13" aria-hidden="true" />
-          + 上传资料
-        </button>
       </div>
     </section>
 

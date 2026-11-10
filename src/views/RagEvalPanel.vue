@@ -1,148 +1,252 @@
 <template>
   <section class="rag-eval-shell">
+    <!-- 左侧测试集与难例管理面板 -->
     <div class="rag-eval-sidebar">
       <div class="rag-eval-toolbar">
         <div>
-          <span class="rag-eval-eyebrow">Test Set</span>
-          <strong>测试集</strong>
+          <span class="rag-eval-eyebrow">Benchmark Suite</span>
+          <strong>评测用例集</strong>
         </div>
-        <button type="button" class="rag-eval-primary" :disabled="isRunning" @click="addCase">
-          <Plus :size="15" aria-hidden="true" />
-          添加
-        </button>
+        <div class="rag-eval-suite-actions">
+          <button type="button" class="rag-eval-primary" :disabled="isRunning || isGenerating" @click="addCase" title="添加空白测试用例">
+            <Plus :size="14" aria-hidden="true" />
+            添加
+          </button>
+        </div>
       </div>
 
       <div class="rag-eval-import-row">
+        <!-- AI 自动化出题与线上难例拉取 -->
+        <button
+          type="button"
+          class="rag-eval-secondary rag-eval-highlight-btn"
+          :disabled="isRunning || isGenerating"
+          @click="generateCases"
+          title="从知识库切片逆向合成单跳、口语化与未收录越界测试用例"
+        >
+          <Sparkles :size="14" class="text-cyan-400" aria-hidden="true" />
+          {{ isGenerating ? 'AI 出题中...' : '自动出题' }}
+        </button>
+        <button
+          type="button"
+          class="rag-eval-secondary"
+          :disabled="isRunning || isSampling"
+          @click="sampleLogs"
+          title="从生产观测数据库中抽取低分或高延迟线上难例"
+        >
+          <History :size="14" aria-hidden="true" />
+          {{ isSampling ? '采样中...' : '线上难例' }}
+        </button>
         <button type="button" class="rag-eval-secondary" :disabled="isRunning" @click="importInputRef?.click()">
-          <Upload :size="15" aria-hidden="true" />
-          导入 JSON
+          <Upload :size="14" aria-hidden="true" />
+          导入
         </button>
         <button type="button" class="rag-eval-secondary" :disabled="cases.length === 0" @click="exportCases">
-          <Download :size="15" aria-hidden="true" />
-          导出测试集
+          <Download :size="14" aria-hidden="true" />
+          导出
         </button>
         <button type="button" class="rag-eval-secondary" :disabled="!hasCompletedResults" @click="exportReport">
-          <FileDown :size="15" aria-hidden="true" />
-          导出报告
+          <FileDown :size="14" aria-hidden="true" />
+          导出结果
         </button>
         <input ref="importInputRef" type="file" accept="application/json,.json" hidden @change="importCases" />
       </div>
 
+      <!-- 用例列表 -->
       <div class="rag-eval-case-list">
         <button
           v-for="(item, index) in cases"
           :key="item.id"
           type="button"
           class="rag-eval-case-item"
-          :class="{ active: item.id === selectedCaseId, passed: resultMap[item.id]?.passed, failed: resultMap[item.id]?.status === 'failed' || resultMap[item.id]?.status === 'error' }"
+          :class="{
+            active: item.id === selectedCaseId,
+            passed: resultMap[item.id]?.passed,
+            failed: resultMap[item.id]?.status === 'failed' || resultMap[item.id]?.status === 'error'
+          }"
           @click="selectedCaseId = item.id"
         >
           <span class="rag-eval-case-index">#{{ index + 1 }}</span>
           <span class="rag-eval-case-main">
-            <strong>{{ item.question || '未命名问题' }}</strong>
-            <span>{{ describeExpectations(item) }}</span>
+            <div class="rag-eval-case-title-row">
+              <span v-if="item.category" class="rag-eval-cat-pill" :class="getCategoryClass(item.category)">
+                {{ getCategoryLabel(item.category) }}
+              </span>
+              <strong>{{ item.name || item.question || '未命名用例' }}</strong>
+            </div>
+            <span class="rag-eval-case-subtext">{{ item.question }}</span>
           </span>
-          <span class="rag-eval-case-state">{{ getCaseStateLabel(item.id) }}</span>
+          <span class="rag-eval-case-state" :class="getCaseStateClass(item.id)">
+            {{ getCaseStateLabel(item.id) }}
+          </span>
         </button>
 
         <div v-if="cases.length === 0" class="rag-eval-empty">
-          还没有测试用例
+          暂无评测用例，可点击顶部【自动出题】或【添加】快速构建
         </div>
       </div>
     </div>
 
+    <!-- 右侧主体工作区 -->
     <div class="rag-eval-main">
+      <!-- 顶部控制与全量执行栏 -->
       <div class="rag-eval-runbar">
         <div>
-          <span class="rag-eval-eyebrow">Retrieval Eval</span>
-          <strong>{{ isRunning ? `运行中 ${runProgress.done}/${runProgress.total}` : 'RAG 检索评测' }}</strong>
+          <span class="rag-eval-eyebrow">Reliability & Hallucination Benchmark</span>
+          <strong>{{ isRunning ? `评测运行中 (${runProgress.done}/${runProgress.total})` : 'RAG 可靠性评测与幻觉检测' }}</strong>
         </div>
         <div class="rag-eval-run-actions">
-          <button type="button" class="rag-eval-secondary" :disabled="isRunning || !selectedCase" @click="runSelected">
-            <Play :size="14" aria-hidden="true" />
-            运行当前
+          <button
+            type="button"
+            class="rag-eval-secondary"
+            :disabled="isRunning || !selectedCase"
+            @click="runSelectedLocal"
+            title="仅在当前前端对选中用例进行基础向量检索比对"
+          >
+            <Play :size="13" aria-hidden="true" />
+            检索当前
           </button>
-          <button type="button" class="rag-eval-primary" :disabled="isRunning || runnableCases.length === 0" @click="runAll">
-            <Play :size="14" aria-hidden="true" />
-            {{ isRunning ? '运行中...' : '运行全部' }}
+          <button
+            type="button"
+            class="rag-eval-secondary"
+            :disabled="isRunning || runnableCases.length === 0"
+            @click="runAllLocal"
+            title="仅运行基础向量检索命中测试"
+          >
+            <Play :size="13" aria-hidden="true" />
+            检索全部
+          </button>
+          <!-- 深度端到端评测主按钮 -->
+          <button
+            type="button"
+            class="rag-eval-primary rag-eval-e2e-btn"
+            :disabled="isRunning || runnableCases.length === 0"
+            @click="runAllE2E"
+            title="执行全链路端到端评测：检索召回 + 模型回答生成 + 事实蕴含幻觉检测 + 契约合规检查"
+          >
+            <Zap :size="14" aria-hidden="true" />
+            {{ isRunning ? '端到端评测中...' : '🚀 执行端到端评测' }}
+          </button>
+          <button
+            type="button"
+            class="rag-eval-secondary"
+            :disabled="isRunning"
+            @click="openReportModal"
+            title="查看全盘 Markdown 可靠性评测诊断报告"
+          >
+            <FileText :size="13" aria-hidden="true" />
+            诊断报告
           </button>
         </div>
       </div>
 
+      <!-- 核心可靠性度量大盘 (Summary Dashboard) -->
       <div class="rag-eval-summary">
         <div class="summary-card">
-          <span>总用例数</span>
+          <span>用例总数</span>
           <strong>{{ summary.total }}</strong>
         </div>
         <div class="summary-card">
-          <span>评测通过率</span>
+          <span>综合通过率</span>
           <strong :class="{ 'rate-high': summary.passRate >= 0.8, 'rate-mid': summary.passRate >= 0.5 && summary.passRate < 0.8, 'rate-low': summary.passRate < 0.5 }">
             {{ formatPercent(summary.passRate) }}
           </strong>
         </div>
         <div class="summary-card">
-          <span>相关问题 Top1</span>
-          <strong>{{ formatPercent(summary.top1HitRate) }}</strong>
+          <span>检索命中率 (Hit@K)</span>
+          <strong :class="{ 'rate-high': summary.topKHitRate >= 0.9, 'rate-mid': summary.topKHitRate >= 0.7, 'rate-low': summary.topKHitRate < 0.7 }">
+            {{ formatPercent(summary.topKHitRate) }}
+          </strong>
         </div>
         <div class="summary-card">
-          <span>相关问题 TopK</span>
-          <strong>{{ formatPercent(summary.topKHitRate) }}</strong>
+          <span>倒数排位 (MRR)</span>
+          <strong>{{ summary.averageMrr ? summary.averageMrr.toFixed(3) : (summary.averageExpectedRank ? (1 / summary.averageExpectedRank).toFixed(3) : '-') }}</strong>
+        </div>
+        <div class="summary-card highlight-metric">
+          <span>真实忠实度 (无幻觉)</span>
+          <strong
+            v-if="summary.averageFaithfulness !== undefined"
+            :class="{ 'rate-high': summary.averageFaithfulness >= 0.85, 'rate-mid': summary.averageFaithfulness >= 0.70, 'rate-low': summary.averageFaithfulness < 0.70 }"
+          >
+            {{ formatPercent(summary.averageFaithfulness) }}
+          </strong>
+          <span v-else class="text-xs text-muted-foreground">需端到端评测</span>
+        </div>
+        <div class="summary-card highlight-metric">
+          <span>契约与转二线合规</span>
+          <strong
+            v-if="summary.policyComplianceRate !== undefined"
+            :class="{ 'rate-high': summary.policyComplianceRate >= 0.95, 'rate-mid': summary.policyComplianceRate >= 0.80, 'rate-low': summary.policyComplianceRate < 0.80 }"
+          >
+            {{ formatPercent(summary.policyComplianceRate) }}
+          </strong>
+          <span v-else class="text-xs text-muted-foreground">需端到端评测</span>
         </div>
         <div class="summary-card">
-          <span>无关问题拒绝率</span>
+          <span>越界拒答率</span>
           <strong>{{ formatPercent(summary.negativeRejectionRate) }}</strong>
         </div>
         <div class="summary-card">
-          <span>误召回率</span>
-          <strong>{{ formatPercent(summary.falseRecallRate) }}</strong>
-        </div>
-        <div class="summary-card">
-          <span>平均最高分</span>
-          <strong>{{ formatOptionalScore(summary.averageBestScore) }}</strong>
-        </div>
-        <div class="summary-card">
-          <span>平均期望排名</span>
-          <strong>{{ formatOptionalScore(summary.averageExpectedRank) }}</strong>
-        </div>
-        <div class="summary-card">
-          <span>无结果</span>
-          <strong>{{ summary.noResultCount }}</strong>
-        </div>
-        <div class="summary-card">
-          <span>低分召回</span>
-          <strong>{{ summary.lowScoreCount }}</strong>
+          <span>平均检索延迟</span>
+          <strong>{{ averageLatencyText }}</strong>
         </div>
       </div>
 
+      <!-- 下半部分：用例编辑表单 vs 结果呈现面板 -->
       <div class="rag-eval-workspace">
+        <!-- 用例编辑表单 -->
         <form v-if="selectedCase" class="rag-eval-editor" @submit.prevent>
           <div class="rag-eval-editor-header">
             <div>
-              <span class="rag-eval-eyebrow">Case</span>
-              <strong>用例编辑</strong>
+              <span class="rag-eval-eyebrow">Case Editor</span>
+              <strong>用例详情与期望标准</strong>
             </div>
             <button type="button" class="rag-eval-danger" :disabled="isRunning" @click="removeSelectedCase">
-              删除
+              删除用例
             </button>
           </div>
 
+          <div class="rag-eval-two-cols">
+            <label>
+              <span>用例名称</span>
+              <input v-model="selectedCase.name" type="text" placeholder="如：Vite 代理重写测试" />
+            </label>
+            <label>
+              <span>用例分类</span>
+              <select v-model="selectedCase.category">
+                <option value="SINGLE_HOP">SINGLE_HOP (单跳精准事实)</option>
+                <option value="MULTI_HOP">MULTI_HOP (多切片综合推理)</option>
+                <option value="COLLOQUIAL">COLLOQUIAL (口语/错别字/倒装)</option>
+                <option value="NEGATIVE">NEGATIVE (越界/未收录负样本)</option>
+                <option value="ADVERSARIAL">ADVERSARIAL (提示词越狱/诱导断言)</option>
+              </select>
+            </label>
+          </div>
+
           <label>
-            <span>问题</span>
-            <textarea v-model="selectedCase.question" rows="3" placeholder="输入要检索的问题"></textarea>
+            <span>评测提问 (Query)</span>
+            <textarea v-model="selectedCase.question" rows="3" placeholder="输入用户的实际提问或工单内容"></textarea>
           </label>
 
           <div class="rag-eval-two-cols">
             <label>
-              <span>期望文件</span>
-              <textarea v-model="expectedFilesText" rows="3" placeholder="每行一个文件名，支持包含匹配"></textarea>
+              <span>期望支撑文件 (Target Files)</span>
+              <textarea v-model="expectedFilesText" rows="3" placeholder="每行一个目标支撑文档文件名，支持模糊包含"></textarea>
             </label>
             <label>
-              <span>期望关键词</span>
-              <textarea v-model="expectedKeywordsText" rows="3" placeholder="每行一个关键词"></textarea>
+              <span>期望关键词 (Keywords)</span>
+              <textarea v-model="expectedKeywordsText" rows="3" placeholder="每行一个关键术语或参数名"></textarea>
             </label>
           </div>
 
           <div class="rag-eval-controls">
+            <label>
+              <span>场景规范</span>
+              <select v-model="selectedCase.scenario">
+                <option value="ticket">ticket (技术支持工单契约)</option>
+                <option value="general">general (通用知识库问答)</option>
+              </select>
+            </label>
             <label>
               <span>匹配模式</span>
               <select v-model="selectedCase.matchMode">
@@ -163,42 +267,104 @@
             </label>
           </div>
 
-          <label class="rag-eval-checkbox">
-            <input v-model="selectedCase.expectedNoResults" type="checkbox" />
-            <span>期望无检索结果</span>
-          </label>
+          <div class="rag-eval-checkbox-row">
+            <label class="rag-eval-checkbox">
+              <input v-model="selectedCase.expectedNoResults" type="checkbox" />
+              <span>期望无检索结果 (NO_EVIDENCE)</span>
+            </label>
+            <label class="rag-eval-checkbox">
+              <input v-model="selectedCase.expectedHandoff" type="checkbox" />
+              <span>期望建议转二线人工</span>
+            </label>
+          </div>
 
           <label>
-            <span>备注</span>
-            <input v-model="selectedCase.notes" type="text" placeholder="可选，用来说明这个用例验证什么" />
+            <span>基准标准答案 / 备注 (Ground Truth & Notes)</span>
+            <input v-model="selectedCase.notes" type="text" placeholder="可选，说明该用例的测试意图与验收依据" />
           </label>
         </form>
 
         <div v-else class="rag-eval-editor rag-eval-empty-state">
-          选择或添加一个测试用例
+          请在左侧选择或添加一个测试用例
         </div>
 
+        <!-- 结果呈现与幻觉诊断面板 -->
         <section class="rag-eval-results">
           <div class="rag-eval-results-header">
             <div>
-              <span class="rag-eval-eyebrow">Result</span>
-              <strong>运行结果</strong>
+              <span class="rag-eval-eyebrow">Diagnostic Results</span>
+              <strong>评测与质检结果</strong>
             </div>
             <span v-if="selectedResult" class="rag-eval-result-badge" :class="selectedResult.status">
-              {{ selectedResult.passed ? '通过' : selectedResult.status === 'error' ? '错误' : '未通过' }}
+              {{ selectedResult.passed ? '✓ 通过' : selectedResult.status === 'error' ? '⚠ 异常' : '✗ 未通过' }}
             </span>
           </div>
 
           <template v-if="selectedResult">
+            <!-- 失败原因横幅 -->
             <div v-if="selectedResult.failureReason" class="rag-eval-failure">
-              {{ selectedResult.failureReason }}
+              <strong>失分原因：</strong> {{ selectedResult.failureReason }}
             </div>
 
-            <div class="rag-eval-result-stats">
-              <span>Top1 {{ selectedResult.top1Hit ? '命中' : '未命中' }}</span>
-              <span>TopK {{ selectedResult.topKHit ? '命中' : '未命中' }}</span>
-              <span>最高分 {{ formatOptionalScore(selectedResult.bestScore) }}</span>
-              <span>期望排名 {{ selectedResult.expectedRank ?? '-' }}</span>
+            <!-- 核心统计指标小条 -->
+            <div class="rag-eval-result-stats font-mono">
+              <span>Top1: <strong>{{ selectedResult.top1Hit ? '命中' : '未命中' }}</strong></span>
+              <span>TopK: <strong>{{ selectedResult.topKHit ? '命中' : '未命中' }}</strong></span>
+              <span>MRR: <strong>{{ selectedResult.mrr ? selectedResult.mrr.toFixed(3) : (selectedResult.expectedRank ? (1 / selectedResult.expectedRank).toFixed(2) : '-') }}</strong></span>
+              <span>最高分: <strong>{{ formatOptionalScore(selectedResult.bestScore) }}</strong></span>
+              <span v-if="selectedResult.faithfulnessScore !== undefined">
+                忠实度: <strong :class="selectedResult.faithfulnessScore >= 0.85 ? 'text-emerald-400' : 'text-amber-400'">{{ (selectedResult.faithfulnessScore * 100).toFixed(1) }}%</strong>
+              </span>
+              <span v-if="selectedResult.durationMs">耗时: <strong>{{ selectedResult.durationMs }}ms</strong></span>
+            </div>
+
+            <!-- ⚠️ 幻觉排查告警栏 (未获知识库支撑的陈述) -->
+            <div
+              v-if="selectedResult.unsupportedStatements && selectedResult.unsupportedStatements.length > 0"
+              class="rag-eval-hallucination-alert"
+            >
+              <div class="alert-title">
+                <AlertTriangle :size="16" class="text-rose-400" aria-hidden="true" />
+                <strong>检测到 {{ selectedResult.unsupportedStatements.length }} 处无依据编造陈述（幻觉嫌疑）：</strong>
+              </div>
+              <ul class="alert-list">
+                <li v-for="(stmt, sIdx) in selectedResult.unsupportedStatements" :key="sIdx">
+                  {{ stmt }}
+                </li>
+              </ul>
+            </div>
+
+            <!-- 🚨 业务合规与契约告警栏 -->
+            <div
+              v-if="selectedResult.policyCompliance && !selectedResult.policyCompliance.passed"
+              class="rag-eval-policy-alert"
+            >
+              <div class="alert-title">
+                <ShieldAlert :size="16" class="text-amber-400" aria-hidden="true" />
+                <strong>违反技术支持契约规则：</strong>
+              </div>
+              <ul class="alert-list">
+                <li v-for="(v, vIdx) in selectedResult.policyCompliance.violations" :key="vIdx">
+                  {{ v }}
+                </li>
+              </ul>
+            </div>
+
+            <!-- 💡 大模型端到端回答全文展示 (双段式工单呈现) -->
+            <div v-if="selectedResult.generatedAnswer" class="rag-eval-generated-box">
+              <div class="box-header">
+                <Bot :size="15" aria-hidden="true" />
+                <span>大模型生成回答全文</span>
+                <button type="button" class="copy-text-btn" @click="copyText(selectedResult.generatedAnswer)">
+                  复制回答
+                </button>
+              </div>
+              <pre class="box-content">{{ selectedResult.generatedAnswer }}</pre>
+            </div>
+
+            <!-- 知识库召回切片明细 -->
+            <div class="rag-eval-section-title">
+              <span>检索召回切片 ({{ selectedResult.results.length }} chunks)</span>
             </div>
 
             <div class="rag-eval-hit-list">
@@ -216,7 +382,7 @@
                   <span class="rag-eval-hit-score-badge">{{ formatScore(hit.result.score) }}</span>
                 </header>
 
-                <!-- 3D 分数芯片行 (Score, Vec, FTS5) -->
+                <!-- 3D 分数芯片行 -->
                 <div class="rag-eval-3d-scores font-mono">
                   <div class="rag-eval-score-chip score-total">Score: <strong>{{ formatScore(hit.result.score) }}</strong></div>
                   <div class="rag-eval-score-chip score-vec">Vec: <strong>{{ formatScore(hit.result.vectorScore) }}</strong></div>
@@ -238,15 +404,37 @@
               </article>
 
               <div v-if="selectedResult.results.length === 0" class="rag-eval-empty">
-                没有检索结果
+                没有召回到任何切片 (NO_EVIDENCE)
               </div>
             </div>
           </template>
 
           <div v-else class="rag-eval-empty-state">
-            运行评测后查看命中 chunk、分数和失败原因
+            运行端到端评测或单项检索后，此处将展示命中切片、模型回答全文及幻觉诊断
           </div>
         </section>
+      </div>
+    </div>
+
+    <!-- 诊断报告模态弹窗 (Markdown Report Dialog) -->
+    <div v-if="showReportModal" class="rag-eval-modal-mask" @click.self="showReportModal = false">
+      <div class="rag-eval-modal-container">
+        <div class="rag-eval-modal-header">
+          <div class="modal-title-group">
+            <FileText :size="18" class="text-cyan-400" aria-hidden="true" />
+            <strong>RAG 系统可靠性评测诊断报告</strong>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="rag-eval-secondary" @click="copyReportMarkdown">
+              <Copy :size="14" aria-hidden="true" />
+              复制 Markdown
+            </button>
+            <button type="button" class="modal-close-btn" @click="showReportModal = false">
+              <X :size="18" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        <div class="rag-eval-modal-body markdown-body" v-html="renderedReportHtml"></div>
       </div>
     </div>
   </section>
@@ -254,7 +442,22 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Download, FileDown, Play, Plus, Upload } from 'lucide-vue-next'
+import {
+  AlertTriangle,
+  Bot,
+  Copy,
+  Download,
+  FileDown,
+  FileText,
+  History,
+  Play,
+  Plus,
+  ShieldAlert,
+  Sparkles,
+  Upload,
+  X,
+  Zap,
+} from 'lucide-vue-next'
 import { useToast } from '../composables/useToast'
 import { searchKnowledge } from '../services/knowledge'
 import {
@@ -264,38 +467,66 @@ import {
   DEFAULT_RAG_EVAL_MIN_SCORE,
   DEFAULT_RAG_EVAL_TOP_K,
   evaluateRagSearchResults,
+  fetchLatestEvalReport,
+  fetchSampledLogs,
+  fetchSyntheticCases,
+  mergeBackendResultIntoRunResult,
   normalizeMinScore,
   normalizeRagEvalCases,
   normalizeTopK,
   RAG_EVAL_STORAGE_KEY,
+  runBackendRagEval,
   serializeRagEvalCases,
   splitList,
   summarizeRagEvalResults,
   type RagEvalCase,
   type RagEvalRunResult,
 } from '../services/ragEval'
+import { renderMarkdown } from '../utils/markdown'
 
 const toast = useToast()
 const cases = ref<RagEvalCase[]>([])
 const selectedCaseId = ref('')
 const resultMap = ref<Record<string, RagEvalRunResult | undefined>>({})
 const importInputRef = ref<HTMLInputElement | null>(null)
+
+// 运行与加载状态
 const isRunning = ref(false)
+const isGenerating = ref(false)
+const isSampling = ref(false)
 const runProgress = ref({ done: 0, total: 0 })
+
+// 诊断报告弹窗状态
+const showReportModal = ref(false)
+const reportMarkdownText = ref('')
 
 const selectedCase = computed(() => cases.value.find(item => item.id === selectedCaseId.value))
 const selectedResult = computed(() => selectedCase.value ? resultMap.value[selectedCase.value.id] : undefined)
-const runnableCases = computed(() => cases.value.filter(item => item.question.trim()))
+const runnableCases = computed(() => cases.value.filter(item => item.question && item.question.trim()))
 const hasCompletedResults = computed(() =>
   Object.values(resultMap.value).some(result => result && result.status !== 'idle' && result.status !== 'running')
 )
 const summary = computed(() => summarizeRagEvalResults(cases.value, resultMap.value))
+
+const averageLatencyText = computed(() => {
+  const completed = Object.values(resultMap.value).filter((r): r is RagEvalRunResult => Boolean(r && r.durationMs !== undefined))
+  if (completed.length === 0) return '-'
+  const avg = completed.reduce((sum, r) => sum + (r.durationMs || 0), 0) / completed.length
+  return `${avg.toFixed(0)}ms`
+})
+
+const renderedReportHtml = computed(() => {
+  if (!reportMarkdownText.value) return '<p class="text-muted">暂无报告内容</p>'
+  return renderMarkdown(reportMarkdownText.value)
+})
+
 const expectedFilesText = computed({
   get: () => selectedCase.value?.expectedFiles.join('\n') ?? '',
   set: value => {
     if (selectedCase.value) selectedCase.value.expectedFiles = splitList(value)
   },
 })
+
 const expectedKeywordsText = computed({
   get: () => selectedCase.value?.expectedKeywords.join('\n') ?? '',
   set: value => {
@@ -328,17 +559,59 @@ function removeSelectedCase() {
   selectedCaseId.value = cases.value[Math.max(0, index - 1)]?.id ?? cases.value[0]?.id ?? ''
 }
 
-async function runSelected() {
+// 自动合成用例
+async function generateCases() {
+  if (isGenerating.value) return
+  isGenerating.value = true
+  try {
+    const generated = await fetchSyntheticCases({ limitPerCategory: 2 })
+    if (generated.length === 0) {
+      toast.show('未能从当前知识库中提取切片合成用例，请先上传并构建知识库', 'warning')
+      return
+    }
+    cases.value = [...cases.value, ...generated]
+    selectedCaseId.value = generated[0].id
+    toast.show(`已成功自动合成 ${generated.length} 条测试用例`, 'success')
+  } catch (error) {
+    toast.show(error instanceof Error ? error.message : '自动出题失败', 'error')
+  } finally {
+    isGenerating.value = false
+  }
+}
+
+// 线上日志难例采样
+async function sampleLogs() {
+  if (isSampling.value) return
+  isSampling.value = true
+  try {
+    const sampled = await fetchSampledLogs({ limit: 6 })
+    if (sampled.length === 0) {
+      toast.show('生产日志中暂无低分或慢查询难例', 'warning')
+      return
+    }
+    cases.value = [...cases.value, ...sampled]
+    selectedCaseId.value = sampled[0].id
+    toast.show(`已成功采样导入 ${sampled.length} 条线上难例`, 'success')
+  } catch (error) {
+    toast.show(error instanceof Error ? error.message : '难例采样失败', 'error')
+  } finally {
+    isSampling.value = false
+  }
+}
+
+// 单项检索
+async function runSelectedLocal() {
   const current = selectedCase.value
   if (!current) return
-  await runCases([current])
+  await runCasesLocal([current])
 }
 
-async function runAll() {
-  await runCases(runnableCases.value)
+// 全量检索
+async function runAllLocal() {
+  await runCasesLocal(runnableCases.value)
 }
 
-async function runCases(targetCases: RagEvalCase[]) {
+async function runCasesLocal(targetCases: RagEvalCase[]) {
   if (targetCases.length === 0 || isRunning.value) return
   isRunning.value = true
   runProgress.value = { done: 0, total: targetCases.length }
@@ -378,6 +651,74 @@ async function runCases(targetCases: RagEvalCase[]) {
   }
 }
 
+// 核心端到端评测 (AI + 幻觉检测 + 契约合规)
+async function runAllE2E() {
+  const targets = runnableCases.value
+  if (targets.length === 0 || isRunning.value) return
+  isRunning.value = true
+  runProgress.value = { done: 0, total: targets.length }
+
+  for (const tc of targets) {
+    resultMap.value[tc.id] = {
+      caseId: tc.id,
+      status: 'running',
+      passed: false,
+      top1Hit: false,
+      topKHit: false,
+      failureReason: '',
+      results: [],
+    }
+  }
+
+  try {
+    const res = await runBackendRagEval(targets)
+    if (res.ok && Array.isArray(res.results)) {
+      reportMarkdownText.value = res.markdownReport || ''
+      for (const item of res.results) {
+        const matchedCase = targets.find(t => t.id === item.testCaseId)
+        if (matchedCase) {
+          resultMap.value[matchedCase.id] = mergeBackendResultIntoRunResult(matchedCase, item)
+        }
+      }
+      runProgress.value = { done: targets.length, total: targets.length }
+      toast.show(`端到端评测完成！综合通过率: ${(res.report.overallPassRate * 100).toFixed(1)}%`, 'success')
+    }
+  } catch (error) {
+    toast.show(error instanceof Error ? error.message : '端到端评测运行失败', 'error')
+    // 将状态置为 error
+    for (const tc of targets) {
+      if (resultMap.value[tc.id]?.status === 'running') {
+        resultMap.value[tc.id] = createErrorRunResult(tc, error)
+      }
+    }
+  } finally {
+    isRunning.value = false
+  }
+}
+
+// 查看诊断报告模态弹窗
+async function openReportModal() {
+  try {
+    const { reportMarkdown } = await fetchLatestEvalReport()
+    reportMarkdownText.value = reportMarkdown
+    showReportModal.value = true
+  } catch (error) {
+    toast.show(error instanceof Error ? error.message : '获取报告失败', 'error')
+  }
+}
+
+function copyReportMarkdown() {
+  copyText(reportMarkdownText.value)
+  toast.show('已复制诊断报告 Markdown 到剪贴板', 'success')
+}
+
+function copyText(text: string) {
+  if (!text) return
+  navigator.clipboard.writeText(text).catch(() => {
+    toast.show('复制失败，请手动选取复制', 'warning')
+  })
+}
+
 async function importCases(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -404,20 +745,42 @@ function exportReport() {
   downloadTextFile(`rag-eval-report-${formatDateForFilename()}.json`, buildRagEvalReport(cases.value, resultMap.value), 'application/json;charset=utf-8')
 }
 
-function describeExpectations(testCase: RagEvalCase): string {
-  if (testCase.expectedNoResults) return `期望无结果 · ${testCase.matchMode}`
-  const files = testCase.expectedFiles.length
-  const keywords = testCase.expectedKeywords.length
-  if (files === 0 && keywords === 0) return '未设置期望'
-  return `${files} 文件 · ${keywords} 关键词 · ${testCase.matchMode}`
+function getCategoryClass(category?: string): string {
+  switch (category) {
+    case 'SINGLE_HOP': return 'cat-single'
+    case 'MULTI_HOP': return 'cat-multi'
+    case 'COLLOQUIAL': return 'cat-colloquial'
+    case 'NEGATIVE': return 'cat-negative'
+    case 'ADVERSARIAL': return 'cat-adversarial'
+    default: return 'cat-default'
+  }
+}
+
+function getCategoryLabel(category?: string): string {
+  switch (category) {
+    case 'SINGLE_HOP': return '单跳事实'
+    case 'MULTI_HOP': return '多跳推理'
+    case 'COLLOQUIAL': return '口语倒装'
+    case 'NEGATIVE': return '未收录'
+    case 'ADVERSARIAL': return '安全对抗'
+    default: return category || '用例'
+  }
 }
 
 function getCaseStateLabel(caseId: string): string {
   const result = resultMap.value[caseId]
   if (!result) return '未运行'
   if (result.status === 'running') return '运行中'
-  if (result.status === 'error') return '错误'
-  return result.passed ? '通过' : '失败'
+  if (result.status === 'error') return '异常'
+  return result.passed ? '通过' : '未通过'
+}
+
+function getCaseStateClass(caseId: string): string {
+  const result = resultMap.value[caseId]
+  if (!result) return ''
+  if (result.status === 'running') return 'text-amber-400'
+  if (result.status === 'error') return 'text-rose-400'
+  return result.passed ? 'text-emerald-400 font-bold' : 'text-rose-400'
 }
 
 function loadStoredCases(): RagEvalCase[] {
@@ -434,7 +797,7 @@ function saveCases() {
   try {
     localStorage.setItem(RAG_EVAL_STORAGE_KEY, serializeRagEvalCases(cases.value))
   } catch {
-    // Ignore localStorage failures; editing should continue to work.
+    // 忽略异常
   }
 }
 
@@ -474,9 +837,11 @@ function formatOptionalScore(value: number | undefined): string {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-columns: 340px minmax(0, 1fr);
   gap: 1px;
   background: var(--border-subtle);
+  overflow: hidden;
+  font-family: var(--font-sans);
 }
 
 .rag-eval-sidebar,
@@ -484,17 +849,10 @@ function formatOptionalScore(value: number | undefined): string {
 .rag-eval-editor,
 .rag-eval-results {
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(7, 7, 15, 0.42);
-  backdrop-filter: blur(18px);
-}
-
-[data-theme="light"] .rag-eval-sidebar,
-[data-theme="light"] .rag-eval-main,
-[data-theme="light"] .rag-eval-editor,
-[data-theme="light"] .rag-eval-results {
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--bg-elevated);
 }
 
 .rag-eval-toolbar,
@@ -505,13 +863,13 @@ function formatOptionalScore(value: number | undefined): string {
 .rag-eval-run-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .rag-eval-toolbar,
 .rag-eval-runbar {
-  min-height: 62px;
-  padding: 0 18px;
+  min-height: 58px;
+  padding: 0 16px;
   justify-content: space-between;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -522,8 +880,9 @@ function formatOptionalScore(value: number | undefined): string {
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  font-family: var(--font-mono);
 }
 
 .rag-eval-toolbar strong,
@@ -537,26 +896,57 @@ function formatOptionalScore(value: number | undefined): string {
 .rag-eval-primary,
 .rag-eval-secondary,
 .rag-eval-danger {
-  height: 34px;
-  border-radius: 8px;
-  padding: 0 14px;
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  background: var(--bg-surface-2);
+  min-height: 32px;
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
+  transition: all 0.15s ease;
 }
 
 .rag-eval-primary {
-  border: none;
+  border: 1px solid var(--accent-border);
   color: #fff;
-  background: linear-gradient(135deg, #0891b2, #059669);
+  background: var(--accent-deep);
+  box-shadow: 0 0 14px var(--accent-glow);
+}
+
+.rag-eval-primary:hover:not(:disabled) {
+  background: var(--accent-deeper);
+}
+
+.rag-eval-e2e-btn {
+  background: linear-gradient(135deg, #0284c7, #0d9488);
+  font-weight: 600;
+  box-shadow: 0 0 16px rgba(13, 148, 136, 0.35);
+}
+
+.rag-eval-secondary {
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+}
+
+.rag-eval-secondary:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+  background: var(--accent-bg);
+}
+
+.rag-eval-highlight-btn {
+  border-color: rgba(6, 182, 212, 0.4);
+  background: rgba(6, 182, 212, 0.08);
 }
 
 .rag-eval-danger {
-  color: #f87171;
-  border-color: rgba(248, 113, 113, 0.3);
-  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+  background: var(--danger-bg);
 }
 
 .rag-eval-primary:disabled,
@@ -568,14 +958,16 @@ function formatOptionalScore(value: number | undefined): string {
 
 .rag-eval-import-row {
   flex-wrap: wrap;
-  padding: 12px 14px;
+  gap: 6px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .rag-eval-case-list {
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 14px;
+  padding: 10px;
 }
 
 .rag-eval-case-item {
@@ -585,14 +977,15 @@ function formatOptionalScore(value: number | undefined): string {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
-  padding: 11px 10px;
+  margin-bottom: 6px;
+  padding: 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: inherit;
   background: transparent;
   cursor: pointer;
   text-align: left;
+  transition: all 0.15s ease;
 }
 
 .rag-eval-case-item:hover {
@@ -600,50 +993,73 @@ function formatOptionalScore(value: number | undefined): string {
 }
 
 .rag-eval-case-item.active {
-  border-color: rgba(20, 184, 166, 0.32);
-  background: rgba(20, 184, 166, 0.12);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
 }
 
 .rag-eval-case-item.passed {
-  border-color: rgba(34, 197, 94, 0.24);
+  border-left: 3px solid #10b981;
 }
 
 .rag-eval-case-item.failed {
-  border-color: rgba(248, 113, 113, 0.28);
+  border-left: 3px solid #f43f5e;
 }
 
-.rag-eval-case-index,
-.rag-eval-case-state {
+.rag-eval-case-index {
   color: var(--text-muted);
   font-size: 11px;
+  font-family: var(--font-mono);
 }
 
 .rag-eval-case-main {
   min-width: 0;
 }
 
-.rag-eval-case-main strong,
-.rag-eval-case-main span {
-  display: block;
+.rag-eval-case-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rag-eval-case-title-row strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12.5px;
 }
 
-.rag-eval-case-main strong {
-  font-size: 13px;
+.rag-eval-cat-pill {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  white-space: nowrap;
 }
 
-.rag-eval-case-main span {
-  margin-top: 4px;
+.cat-single { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+.cat-multi { background: rgba(14, 165, 233, 0.15); color: #38bdf8; }
+.cat-colloquial { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+.cat-negative { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+.cat-adversarial { background: rgba(244, 63, 94, 0.15); color: #fb7185; }
+.cat-default { background: var(--bg-surface-3); color: var(--text-muted); }
+
+.rag-eval-case-subtext {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-muted);
   font-size: 11px;
 }
 
-.rag-eval-main {
-  overflow: hidden;
+.rag-eval-case-state {
+  font-size: 11px;
+  font-family: var(--font-mono);
 }
 
+/* 顶部大盘度量栏 */
 .rag-eval-summary {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -652,10 +1068,14 @@ function formatOptionalScore(value: number | undefined): string {
   background: var(--border-subtle);
 }
 
-.rag-eval-summary div {
+.rag-eval-summary .summary-card {
   min-width: 0;
-  padding: 12px 14px;
-  background: var(--bg-surface-3);
+  padding: 10px 12px;
+  background: var(--bg-surface-2);
+}
+
+.rag-eval-summary .summary-card.highlight-metric {
+  background: rgba(14, 165, 233, 0.05);
 }
 
 .rag-eval-summary span {
@@ -667,9 +1087,16 @@ function formatOptionalScore(value: number | undefined): string {
 .rag-eval-summary strong {
   display: block;
   margin-top: 4px;
-  font-size: 15px;
+  font-size: 14.5px;
+  font-family: var(--font-mono);
+  color: var(--data-accent);
 }
 
+.rag-eval-summary strong.rate-high { color: #10b981; }
+.rag-eval-summary strong.rate-mid { color: #f59e0b; }
+.rag-eval-summary strong.rate-low { color: #f43f5e; }
+
+/* 工作区与左右分栏 */
 .rag-eval-workspace {
   flex: 1;
   min-height: 0;
@@ -693,13 +1120,13 @@ function formatOptionalScore(value: number | undefined): string {
 
 .rag-eval-editor label {
   display: block;
-  margin-bottom: 13px;
+  margin-bottom: 12px;
 }
 
 .rag-eval-editor label > span,
 .rag-eval-controls label > span {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
   color: var(--text-muted);
   font-size: 11px;
 }
@@ -709,104 +1136,192 @@ function formatOptionalScore(value: number | undefined): string {
 .rag-eval-editor select {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
   outline: none;
   color: var(--text-primary);
-  background: var(--bg-surface-2);
+  background: var(--bg-input);
   font: inherit;
-  font-size: 13px;
-}
-
-.rag-eval-editor .rag-eval-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.rag-eval-editor .rag-eval-checkbox input {
-  width: auto;
-}
-
-.rag-eval-editor .rag-eval-checkbox > span {
-  margin: 0;
+  font-size: 12.5px;
 }
 
 .rag-eval-editor textarea {
   resize: vertical;
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
-.rag-eval-two-cols,
-.rag-eval-controls {
+.rag-eval-two-cols {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .rag-eval-controls {
-  grid-template-columns: 1.2fr 0.8fr 0.8fr;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 0.8fr 0.8fr;
+  gap: 8px;
+}
+
+.rag-eval-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+.rag-eval-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 0 !important;
+  cursor: pointer;
+}
+
+.rag-eval-checkbox input {
+  width: auto;
+  margin: 0;
 }
 
 .rag-eval-result-badge {
-  border-radius: 999px;
-  padding: 3px 9px;
-  color: var(--text-muted);
-  background: var(--bg-surface-2);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
   font-size: 11px;
   font-weight: 700;
+  font-family: var(--font-mono);
 }
 
 .rag-eval-result-badge.passed {
   color: #86efac;
-  background: rgba(34, 197, 94, 0.12);
+  background: rgba(34, 197, 94, 0.15);
 }
 
 .rag-eval-result-badge.failed,
 .rag-eval-result-badge.error {
   color: #fca5a5;
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.15);
 }
 
 .rag-eval-failure {
   margin-bottom: 12px;
-  border: 1px solid rgba(248, 113, 113, 0.25);
-  border-radius: 8px;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   color: #fca5a5;
   background: rgba(239, 68, 68, 0.08);
   font-size: 12px;
 }
 
-.rag-eval-result-stats,
-.rag-eval-score-row {
+.rag-eval-result-stats {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
   color: var(--text-muted);
   font-size: 11px;
 }
 
-.rag-eval-result-stats {
-  margin-bottom: 12px;
+.rag-eval-result-stats strong {
+  color: var(--text-primary);
 }
 
-.rag-eval-hit-list {
-  min-height: 0;
+/* 幻觉排查与合规警告栏 */
+.rag-eval-hallucination-alert {
+  margin-bottom: 12px;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  background: rgba(244, 63, 94, 0.09);
+}
+
+.rag-eval-policy-alert {
+  margin-bottom: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  background: rgba(245, 158, 11, 0.09);
+}
+
+.alert-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.alert-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* 模型生成回答全文框 */
+.rag-eval-generated-box {
+  margin-bottom: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+  overflow: hidden;
+}
+
+.box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-surface-3);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.copy-text-btn {
+  background: none;
+  border: 0;
+  color: var(--data-accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.box-content {
+  margin: 0;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--text-primary);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.rag-eval-section-title {
+  margin: 12px 0 8px 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
 }
 
 .rag-eval-hit {
   margin-bottom: 10px;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-surface-2);
 }
 
 .rag-eval-hit.matched {
-  border-color: rgba(34, 197, 94, 0.28);
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .rag-eval-hit header {
@@ -814,31 +1329,6 @@ function formatOptionalScore(value: number | undefined): string {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-}
-
-.rag-eval-hit header strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-
-.rag-eval-hit header span {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.rag-eval-summary strong.rate-high {
-  color: #10b981;
-}
-
-.rag-eval-summary strong.rate-mid {
-  color: #f59e0b;
-}
-
-.rag-eval-summary strong.rate-low {
-  color: #f43f5e;
 }
 
 .rag-eval-hit-title {
@@ -851,6 +1341,7 @@ function formatOptionalScore(value: number | undefined): string {
 .rag-eval-hit-rank {
   color: #818cf8;
   font-weight: 700;
+  font-size: 11px;
 }
 
 .rag-eval-hit-score-badge {
@@ -905,317 +1396,133 @@ function formatOptionalScore(value: number | undefined): string {
   color: #10b981;
 }
 
-.rag-eval-score-row {
-  margin-top: 7px;
-}
-
 .rag-eval-hit p {
-  margin-top: 9px;
+  margin-top: 8px;
   color: var(--text-secondary);
-  font-size: 12.5px;
-  line-height: 1.65;
-  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.6;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .rag-eval-empty,
 .rag-eval-empty-state {
-  padding: 24px 12px;
+  padding: 30px 16px;
   color: var(--text-muted);
   text-align: center;
   font-size: 12px;
 }
 
-.rag-eval-empty-state {
-  justify-content: center;
-}
-
-@media (max-width: 1180px) {
-  .rag-eval-shell,
-  .rag-eval-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .rag-eval-sidebar {
-    min-height: 300px;
-  }
-
-  .rag-eval-summary {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 760px) {
-  .rag-eval-toolbar,
-  .rag-eval-runbar {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 12px 14px;
-  }
-
-  .rag-eval-run-actions,
-  .rag-eval-import-row {
-    width: 100%;
-  }
-
-  .rag-eval-primary,
-  .rag-eval-secondary {
-    flex: 1;
-  }
-
-  .rag-eval-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .rag-eval-two-cols,
-  .rag-eval-controls {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Violet console visual layer */
-.rag-eval-shell {
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 1px;
-  overflow: hidden;
-  background: var(--border-subtle);
-  font-family: var(--font-sans);
-}
-
-.rag-eval-sidebar,
-.rag-eval-main,
-.rag-eval-editor,
-.rag-eval-results,
-:global([data-theme="light"]) .rag-eval-sidebar,
-:global([data-theme="light"]) .rag-eval-main,
-:global([data-theme="light"]) .rag-eval-editor,
-:global([data-theme="light"]) .rag-eval-results {
-  min-width: 0;
-  background: var(--bg-elevated);
-}
-
-.rag-eval-toolbar,
-.rag-eval-runbar,
-.rag-eval-results-header,
-.rag-eval-editor-header {
-  min-height: 56px;
-  border-color: var(--border-subtle);
-}
-
-.rag-eval-eyebrow,
-.rag-eval-case-index,
-.rag-eval-case-state,
-.rag-eval-score-row,
-.rag-eval-result-stats {
-  font-family: var(--font-mono);
-  letter-spacing: 0;
-}
-
-.rag-eval-primary,
-.rag-eval-secondary,
-.rag-eval-danger {
-  min-height: 36px;
-  display: inline-flex;
+/* 诊断报告模态弹窗 */
+.rag-eval-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  border-radius: var(--radius-sm);
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
 }
 
-.rag-eval-primary {
-  border: 1px solid var(--accent-border);
-  color: #ffffff;
-  background: var(--accent-deep);
-  box-shadow: 0 0 16px var(--accent-glow);
+.rag-eval-modal-container {
+  width: 100%;
+  max-width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
 }
 
-.rag-eval-primary:hover:not(:disabled) { background: var(--accent-deeper); }
-
-.rag-eval-secondary {
-  border-color: var(--border-subtle);
-  color: var(--text-secondary);
+.rag-eval-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-surface-2);
 }
 
-.rag-eval-secondary:hover:not(:disabled) {
-  border-color: var(--accent-border);
-  color: var(--accent-text);
-  background: var(--accent-bg);
+.modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
 }
 
-.rag-eval-danger {
-  border-color: var(--danger-border);
-  color: var(--danger);
-  background: var(--danger-bg);
+.modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.rag-eval-import-row {
-  gap: 6px;
-  padding: 10px 12px;
-  border-bottom-color: var(--border-subtle);
-}
-
-.rag-eval-case-list { padding: 10px; }
-
-.rag-eval-case-item {
-  min-height: 58px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-}
-
-.rag-eval-case-item:hover { background: var(--bg-surface-2); }
-
-.rag-eval-case-item.active {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
-}
-
-.rag-eval-case-item.passed {
-  border-color: var(--success-border);
-}
-
-.rag-eval-case-item.failed {
-  border-color: var(--danger-border);
-}
-
-.rag-eval-summary {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 1px;
-  padding: 1px;
-  border-color: var(--border-subtle);
-  background: var(--border-subtle);
-}
-
-.rag-eval-summary > div {
-  min-width: 0;
+.modal-close-btn {
+  background: none;
   border: 0;
-  border-radius: 0;
-  background: var(--bg-surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
 }
 
-.rag-eval-summary strong {
-  color: var(--data-accent);
-  font-family: var(--font-mono);
-}
-
-.rag-eval-workspace {
-  gap: 1px;
-  background: var(--border-subtle);
-}
-
-.rag-eval-editor,
-.rag-eval-results {
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.rag-eval-editor textarea,
-.rag-eval-editor input,
-.rag-eval-editor select {
-  border-color: var(--border);
-  border-radius: var(--radius-sm);
+.modal-close-btn:hover {
   color: var(--text-primary);
-  background: var(--bg-input);
+  background: var(--bg-surface-3);
 }
 
-.rag-eval-editor textarea:focus,
-.rag-eval-editor input:focus,
-.rag-eval-editor select:focus {
-  border-color: var(--accent);
-  box-shadow: var(--focus-ring);
+.rag-eval-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  line-height: 1.7;
 }
 
-.rag-eval-result-badge {
-  border-radius: var(--radius-pill);
-  font-family: var(--font-mono);
+.markdown-body :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
 }
 
-.rag-eval-hit {
-  border-color: var(--border-subtle);
-  border-radius: var(--radius-sm);
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  font-size: 12.5px;
+}
+
+.markdown-body :deep(th) {
   background: var(--bg-surface-2);
 }
 
-.rag-eval-hit.matched {
-  border-color: var(--data-accent-border);
-  background: var(--data-accent-bg);
+.markdown-body :deep(blockquote) {
+  margin: 12px 0;
+  padding: 8px 16px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
 }
-
-.rag-eval-score-row { color: var(--data-accent); }
 
 @media (max-width: 1180px) {
   .rag-eval-shell {
     grid-template-columns: minmax(0, 1fr);
     overflow-y: auto;
   }
-
-  .rag-eval-sidebar { min-height: 300px; }
-
-  .rag-eval-summary {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+  .rag-eval-sidebar { min-height: 280px; }
+  .rag-eval-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .rag-eval-workspace { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
-  .rag-eval-shell {
-    min-height: 0;
-    grid-template-columns: minmax(0, 1fr);
-    overflow-y: auto;
-  }
-
-  .rag-eval-sidebar,
-  .rag-eval-main {
-    width: 100%;
-    max-width: 100%;
-    overflow: visible;
-  }
-
-  .rag-eval-toolbar,
-  .rag-eval-runbar {
-    flex: 0 0 auto;
-    gap: 10px;
-    padding: 10px 12px;
-  }
-
-  .rag-eval-runbar {
-    align-items: stretch;
-  }
-
-  .rag-eval-run-actions,
-  .rag-eval-import-row {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow: visible;
-  }
-
-  .rag-eval-import-row .rag-eval-secondary:last-of-type {
-    grid-column: 1 / -1;
-  }
-
-  .rag-eval-primary,
-  .rag-eval-secondary,
-  .rag-eval-danger {
-    min-height: 44px;
-    min-width: 0;
-  }
-
-  .rag-eval-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .rag-eval-workspace,
+  .rag-eval-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rag-eval-two-cols,
-  .rag-eval-controls {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .rag-eval-editor,
-  .rag-eval-results {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-  }
+  .rag-eval-controls { grid-template-columns: 1fr; }
 }
 </style>

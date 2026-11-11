@@ -340,6 +340,11 @@
           </article>
         </div>
 
+        <div v-if="!isSelectedProfileAvailable" class="agent-profile-warning-banner" role="alert">
+          <TriangleAlert :size="14" aria-hidden="true" />
+          <span>当前选中的 Profile ({{ selectedProfile }}) 未在后端提供或暂不可用，请切换至可用预设后再提交任务。</span>
+        </div>
+
         <form class="agent-composer" @submit.prevent="submitTask">
           <div class="agent-composer-input">
             <textarea
@@ -701,21 +706,33 @@ function applySuggestion(text: string) {
 let providerController: AbortController | null = null
 
 const dynamicProfiles = ref<AgentProfileInfo[]>([])
-const defaultProfileOptions: Array<{ id: AgentProfileId; label: string }> = [
+const defaultProfileOptions: Array<{ id: AgentProfileId; label: string; disabled?: boolean }> = [
   { id: 'troubleshoot-v1', label: 'troubleshoot-v1 · 知识库排障' },
   { id: 'calculator-v0', label: 'calculator-v0 · calculator' },
   { id: 'tools-v0', label: 'tools-v0 · calculator + datetime' },
   { id: 'agent-v1', label: 'agent-v1 · calculator + web_search + readonly_mcp' },
 ]
 
-const profileOptions = computed<Array<{ id: AgentProfileId; label: string }>>(() => {
-  if (dynamicProfiles.value.length > 0) {
-    return dynamicProfiles.value.map(p => ({
-      id: p.id,
-      label: `${p.id} · ${p.name || p.toolNames.join(' + ')}`,
-    }))
+const profileOptions = computed<Array<{ id: AgentProfileId; label: string; disabled?: boolean }>>(() => {
+  const base = dynamicProfiles.value.length > 0
+    ? dynamicProfiles.value.map(p => ({
+        id: p.id,
+        label: `${p.id} · ${p.name || p.toolNames.join(' + ')}`,
+      }))
+    : defaultProfileOptions
+
+  if (selectedProfile.value && !base.some(p => p.id === selectedProfile.value)) {
+    return [
+      { id: selectedProfile.value, label: `${selectedProfile.value} (当前后端未提供此预设)`, disabled: true },
+      ...base,
+    ]
   }
-  return defaultProfileOptions
+  return base
+})
+
+const isSelectedProfileAvailable = computed(() => {
+  const current = profileOptions.value.find(p => p.id === selectedProfile.value)
+  return Boolean(current && !current.disabled)
 })
 
 const modelOptions = computed<AgentModelOption[]>(() => providers.value.flatMap(provider =>
@@ -741,6 +758,7 @@ const agentProfileUiOptions = computed<UiSelectOption[]>(() =>
   profileOptions.value.map(p => ({
     value: p.id,
     label: p.label,
+    disabled: p.disabled,
   }))
 )
 
@@ -748,6 +766,7 @@ const selectedModel = computed(() => modelOptions.value.find(option => option.ke
 const canSubmit = computed(() => Boolean(
   prompt.value.trim()
   && selectedModel.value
+  && isSelectedProfileAvailable.value
   && !providersLoading.value
   && !historyLoading.value
 ))
@@ -906,7 +925,8 @@ async function loadProfiles(): Promise<void> {
     const list = await fetchAgentProfiles(loadAgentAccessKey())
     if (list && list.length > 0) {
       dynamicProfiles.value = list
-      if (!list.some(p => p.id === selectedProfile.value)) {
+      // 保持当前选中的 Profile，绝不静默覆盖；若尚未选择，才赋予首个默认项
+      if (!selectedProfile.value) {
         selectedProfile.value = list[0].id
       }
     }
@@ -3036,5 +3056,19 @@ textarea:disabled {
   .agent-msg-action-btn[data-tooltip]::before {
     display: none !important;
   }
+}
+
+.agent-profile-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  color: #eab308;
+  font-size: 12.5px;
+  line-height: 1.4;
 }
 </style>

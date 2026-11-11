@@ -6,14 +6,14 @@ export const AGENT_PROVIDER_IDS = ['ollama', 'openai', 'anthropic'] as const
 export type AgentProviderId = typeof AGENT_PROVIDER_IDS[number]
 
 export const AGENT_PROFILE_IDS = ['troubleshoot-v1', 'calculator-v0', 'tools-v0', 'agent-v1'] as const
-export type AgentProfileId = typeof AGENT_PROFILE_IDS[number]
+export type AgentProfileId = typeof AGENT_PROFILE_IDS[number] | string
 
 export function isAgentProviderId(value: unknown): value is AgentProviderId {
     return typeof value === 'string' && (AGENT_PROVIDER_IDS as readonly string[]).includes(value)
 }
 
 export function isAgentProfileId(value: unknown): value is AgentProfileId {
-    return typeof value === 'string' && (AGENT_PROFILE_IDS as readonly string[]).includes(value)
+    return typeof value === 'string' && value.length > 0
 }
 export type AgentRequestRole = 'user' | 'assistant'
 export type AgentTerminalEventType = 'agent_completed' | 'agent_failed' | 'agent_cancelled'
@@ -121,6 +121,29 @@ export async function fetchAgentProviders(signal?: AbortSignal): Promise<AgentPr
     return payload.providers
         .filter(isAgentProviderInfo)
         .filter(provider => provider.configured && provider.capabilities.agentTools && provider.agentModels.length > 0)
+}
+
+export interface AgentProfileInfo {
+    id: string
+    name: string
+    description: string
+    toolNames: string[]
+    isAvailable: boolean
+}
+
+export async function fetchAgentProfiles(accessKey?: string, signal?: AbortSignal): Promise<AgentProfileInfo[]> {
+    const response = await apiFetch('/api/agent/profiles', {
+        headers: buildAgentHeaders(accessKey),
+        signal,
+    })
+    if (!response.ok) throw await toApiError(response)
+
+    const payload = await readJson<{ profiles?: unknown }>(response)
+    if (!payload || !Array.isArray(payload.profiles)) {
+        throw new AgentClientError('AGENT_PROFILE_RESPONSE_INVALID', 'Agent Profile 接口返回格式不正确。')
+    }
+
+    return payload.profiles as AgentProfileInfo[]
 }
 
 export async function streamAgentRun(

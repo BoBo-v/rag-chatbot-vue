@@ -537,6 +537,8 @@ import {
 import {
   AgentClientError,
   fetchAgentProviders,
+  fetchAgentProfiles,
+  type AgentProfileInfo,
   loadAgentAccessKey,
   saveAgentAccessKey,
   type AgentEvent,
@@ -698,12 +700,23 @@ function applySuggestion(text: string) {
 
 let providerController: AbortController | null = null
 
-const profileOptions: Array<{ id: AgentProfileId; label: string }> = [
+const dynamicProfiles = ref<AgentProfileInfo[]>([])
+const defaultProfileOptions: Array<{ id: AgentProfileId; label: string }> = [
   { id: 'troubleshoot-v1', label: 'troubleshoot-v1 · 知识库排障' },
   { id: 'calculator-v0', label: 'calculator-v0 · calculator' },
   { id: 'tools-v0', label: 'tools-v0 · calculator + datetime' },
   { id: 'agent-v1', label: 'agent-v1 · calculator + web_search + readonly_mcp' },
 ]
+
+const profileOptions = computed<Array<{ id: AgentProfileId; label: string }>>(() => {
+  if (dynamicProfiles.value.length > 0) {
+    return dynamicProfiles.value.map(p => ({
+      id: p.id,
+      label: `${p.id} · ${p.name || p.toolNames.join(' + ')}`,
+    }))
+  }
+  return defaultProfileOptions
+})
 
 const modelOptions = computed<AgentModelOption[]>(() => providers.value.flatMap(provider =>
   provider.agentModels.map(model => ({
@@ -725,7 +738,7 @@ const agentModelUiOptions = computed<UiSelectOption[]>(() => {
 })
 
 const agentProfileUiOptions = computed<UiSelectOption[]>(() =>
-  profileOptions.map(p => ({
+  profileOptions.value.map(p => ({
     value: p.id,
     label: p.label,
   }))
@@ -876,6 +889,7 @@ onMounted(() => {
   activityCollapsed.value = window.matchMedia('(max-width: 1024px)').matches
   historyCollapsed.value = window.matchMedia('(max-width: 1180px)').matches
   void loadProviders()
+  void loadProfiles()
   void restoreAgentHistory()
 })
 
@@ -886,6 +900,20 @@ onBeforeUnmount(() => {
     window.removeEventListener('keydown', handleKeydown)
   }
 })
+
+async function loadProfiles(): Promise<void> {
+  try {
+    const list = await fetchAgentProfiles(loadAgentAccessKey())
+    if (list && list.length > 0) {
+      dynamicProfiles.value = list
+      if (!list.some(p => p.id === selectedProfile.value)) {
+        selectedProfile.value = list[0].id
+      }
+    }
+  } catch {
+    // 接口请求异常时保持内置 profileOptions 回退
+  }
+}
 
 async function loadProviders(): Promise<void> {
   providerController?.abort()

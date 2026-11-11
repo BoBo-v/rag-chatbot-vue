@@ -129,6 +129,7 @@ export interface AgentProfileInfo {
     description: string
     toolNames: string[]
     isAvailable: boolean
+    maxModelTurns?: number
 }
 
 export async function fetchAgentProfiles(accessKey?: string, signal?: AbortSignal): Promise<AgentProfileInfo[]> {

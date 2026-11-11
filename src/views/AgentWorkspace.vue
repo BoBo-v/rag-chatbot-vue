@@ -392,7 +392,7 @@
           </div>
           <div class="agent-activity-actions">
             <span v-if="displayedExecution.isLive && displayedExecution.currentStep > 0" class="agent-step is-live">
-              实时 Step {{ displayedExecution.currentStep }}/3
+              实时 Step {{ displayedExecution.currentStep }}/{{ displayedExecution.maxModelTurns }}
             </span>
             <span v-else-if="!displayedExecution.isLive && displayedExecution.events.length > 0" class="agent-step" :class="`is-${displayedExecution.status}`">
               {{ executionStatusBadge(displayedExecution.status) }}
@@ -799,12 +799,16 @@ const activeExecutionSnapshot = computed<AgentStoredExecution | null>(() => {
 })
 
 const displayedExecution = computed(() => {
+  const currentProfile = dynamicProfiles.value.find(p => p.id === selectedProfile.value)
+  const defaultMaxTurns = currentProfile?.maxModelTurns ?? 8
+
   if (agent.isRunning.value) {
     return {
       isLive: true,
       status: agent.status.value,
       events: activityEvents.value,
       currentStep: agent.currentStep.value,
+      maxModelTurns: agent.maxModelTurns.value || defaultMaxTurns,
       requestId: agent.requestId.value,
       agentRunId: agent.agentRunId.value,
       summary: agent.summary.value,
@@ -812,11 +816,14 @@ const displayedExecution = computed(() => {
   }
   const snapshot = activeExecutionSnapshot.value
   if (snapshot) {
+    const startedEvent = snapshot.events.find(e => e.type === 'agent_started')
+    const recordedMaxTurns = Number(startedEvent?.data?.maxModelTurns) || defaultMaxTurns
     return {
       isLive: false,
       status: snapshot.status,
       events: snapshot.events.filter(e => e.type !== 'heartbeat'),
       currentStep: snapshot.currentStep,
+      maxModelTurns: recordedMaxTurns,
       requestId: snapshot.requestId || '',
       agentRunId: snapshot.agentRunId || '',
       summary: snapshot.summary || null,
@@ -827,6 +834,7 @@ const displayedExecution = computed(() => {
     status: agent.status.value,
     events: activityEvents.value,
     currentStep: agent.currentStep.value,
+    maxModelTurns: agent.maxModelTurns.value || defaultMaxTurns,
     requestId: agent.requestId.value,
     agentRunId: agent.agentRunId.value,
     summary: agent.summary.value,

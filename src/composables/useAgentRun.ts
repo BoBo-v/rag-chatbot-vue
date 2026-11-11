@@ -35,6 +35,7 @@ export function useAgentRun() {
     const requestId = ref('')
     const agentRunId = ref('')
     const currentStep = ref(0)
+    const maxModelTurns = ref(8)
     const lastHeartbeatAt = ref('')
     const summary = ref<AgentRunSummary | null>(null)
     const controller = shallowRef<AbortController | null>(null)
@@ -101,6 +102,11 @@ export function useAgentRun() {
 
         switch (event.type) {
             case 'agent_started':
+                if (typeof event.data?.maxModelTurns === 'number') {
+                    maxModelTurns.value = event.data.maxModelTurns
+                }
+                status.value = 'running'
+                break
             case 'model_started':
             case 'model_completed':
                 status.value = 'running'
@@ -155,6 +161,7 @@ export function useAgentRun() {
         requestId.value = ''
         agentRunId.value = ''
         currentStep.value = 0
+        maxModelTurns.value = 8
         lastHeartbeatAt.value = ''
         summary.value = null
     }
@@ -203,6 +210,7 @@ export function useAgentRun() {
         requestId,
         agentRunId,
         currentStep,
+        maxModelTurns,
         lastHeartbeatAt,
         summary,
         isRunning,

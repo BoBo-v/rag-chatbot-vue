@@ -64,7 +64,7 @@ export async function createAgentSession(
 
     return {
         ...row,
-        agentProfile: isAgentProfileId(row.agentProfile) ? row.agentProfile : 'troubleshoot-v1',
+        agentProfile: isAgentProfileId(row.agentProfile) ? row.agentProfile : 'agent-v1',
         provider: isAgentProviderId(row.provider) ? row.provider : 'ollama',
         messageCount: 1,
         messages: [{ ...firstMessage }],
@@ -207,7 +207,7 @@ function toSessionListItem(row: DBAgentSession, messageCount: number): AgentSess
     return {
         id: row.id,
         title: row.title,
-        agentProfile: isAgentProfileId(row.agentProfile) ? row.agentProfile : 'troubleshoot-v1',
+        agentProfile: isAgentProfileId(row.agentProfile) ? row.agentProfile : 'agent-v1',
         provider: isAgentProviderId(row.provider) ? row.provider : 'ollama',
         model: row.model,
         messageCount,

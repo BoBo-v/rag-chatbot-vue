@@ -583,7 +583,7 @@ const providers = ref<AgentProviderInfo[]>([])
 const providersLoading = ref(false)
 const providerError = ref('')
 const selectedModelKey = ref('')
-const selectedProfile = ref<AgentProfileId>('troubleshoot-v1')
+const selectedProfile = ref<AgentProfileId>('agent-v1')
 const accessKey = ref(loadAgentAccessKey())
 const accessKeyInput = ref<HTMLInputElement | null>(null)
 const showAccessKey = ref(false)
@@ -707,10 +707,10 @@ let providerController: AbortController | null = null
 
 const dynamicProfiles = ref<AgentProfileInfo[]>([])
 const defaultProfileOptions: Array<{ id: AgentProfileId; label: string; disabled?: boolean }> = [
-  { id: 'troubleshoot-v1', label: 'troubleshoot-v1 · 知识库排障' },
-  { id: 'calculator-v0', label: 'calculator-v0 · calculator' },
-  { id: 'tools-v0', label: 'tools-v0 · calculator + datetime' },
-  { id: 'agent-v1', label: 'agent-v1 · calculator + web_search + readonly_mcp' },
+  { id: 'agent-v1', label: 'agent-v1 · Agent-v1 综合助手' },
+  { id: 'troubleshoot-v1', label: 'troubleshoot-v1 · 安全排障助手' },
+  { id: 'calculator-v0', label: 'calculator-v0 · 受控计算助手' },
+  { id: 'tools-v0', label: 'tools-v0 · 计算与时区助手' },
 ]
 
 const profileOptions = computed<Array<{ id: AgentProfileId; label: string; disabled?: boolean }>>(() => {
@@ -928,14 +928,20 @@ onBeforeUnmount(() => {
   }
 })
 
+watch(selectedProfile, (newVal) => {
+  if (!newVal) {
+    selectedProfile.value = 'agent-v1'
+  }
+})
+
 async function loadProfiles(): Promise<void> {
   try {
     const list = await fetchAgentProfiles(loadAgentAccessKey())
     if (list && list.length > 0) {
       dynamicProfiles.value = list
-      // 保持当前选中的 Profile，绝不静默覆盖；若尚未选择，才赋予首个默认项
+      // 保持当前选中的 Profile，绝不静默覆盖；若尚未选择，优先默认选中 agent-v1
       if (!selectedProfile.value) {
-        selectedProfile.value = list[0].id
+        selectedProfile.value = list.some(p => p.id === 'agent-v1') ? 'agent-v1' : list[0].id
       }
     }
   } catch {
@@ -1090,7 +1096,7 @@ function clearWorkspace(): void {
   selectedExecutionMessageId.value = null
   lastRequest.value = null
   prompt.value = ''
-  selectedProfile.value = 'troubleshoot-v1'
+  selectedProfile.value = 'agent-v1'
   agent.reset()
   clearSnapshots()
   if (isNarrowScreen.value) historyCollapsed.value = true
@@ -1226,7 +1232,7 @@ async function refreshAgentSessionList(): Promise<void> {
 }
 
 function applyAgentSessionRuntime(session: AgentSessionListItem): void {
-  selectedProfile.value = session.agentProfile
+  selectedProfile.value = session.agentProfile || 'agent-v1'
   const modelKey = `${session.provider}:${session.model}`
   if (modelOptions.value.some(option => option.key === modelKey)) {
     selectedModelKey.value = modelKey

@@ -5,7 +5,15 @@ import { apiFetch } from './api'
 export const AGENT_PROVIDER_IDS = ['ollama', 'openai', 'anthropic'] as const
 export type AgentProviderId = typeof AGENT_PROVIDER_IDS[number]
 
-export const AGENT_PROFILE_IDS = ['agent-v1', 'troubleshoot-v1', 'calculator-v0', 'tools-v0', 'excel-viewer-v0', 'excel-editor-v0'] as const
+export const AGENT_PROFILE_IDS = [
+  'agent-v1',
+  'excel-agent-v1',
+  'troubleshoot-v1',
+  'calculator-v0',
+  'tools-v0',
+  'excel-viewer-v0',
+  'excel-editor-v0',
+] as const
 export type AgentProfileId = typeof AGENT_PROFILE_IDS[number] | string
 
 export function isAgentProviderId(value: unknown): value is AgentProviderId {

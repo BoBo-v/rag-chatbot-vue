@@ -428,120 +428,123 @@
           </article>
         </div>
 
-        <div v-if="!isSelectedProfileAvailable" class="agent-profile-warning-banner" role="alert">
-          <TriangleAlert :size="14" aria-hidden="true" />
-          <span>当前选中的 Profile ({{ selectedProfile }}) 未在后端提供或暂不可用，请切换至可用预设后再提交任务。</span>
-        </div>
-
-        <!-- Excel 工作簿绑定面板 (当选中 Excel 相关 Profile 或已有绑定时展示) -->
-        <div
-          v-if="isExcelProfile || attachedWorkbook"
-          class="agent-workbook-dock"
-          :class="{ 'is-drag-over': isWorkbookDragOver, 'has-workbook': !!attachedWorkbook }"
-          @dragenter.prevent="onWorkbookDragEnter"
-          @dragover.prevent="onWorkbookDragOver"
-          @dragleave.prevent="onWorkbookDragLeave"
-          @drop.prevent="onWorkbookDrop"
-        >
-          <input
-            ref="workbookFileInputRef"
-            type="file"
-            accept=".xlsx"
-            class="workbook-hidden-file-input"
-            @change="onWorkbookFileSelected"
-          />
-
-          <!-- 已绑定工作簿胶囊 -->
-          <div
-            v-if="attachedWorkbook"
-            class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors"
-            :class="isExcelProfile
-              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300'
-              : 'bg-slate-500/10 border border-slate-500/20 text-slate-500 dark:text-slate-400'"
-          >
-            <FileSpreadsheet
-              :size="16"
-              :class="isExcelProfile ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'"
-              class="shrink-0"
-            />
-            <span
-              class="min-w-0 flex-1 truncate font-medium text-slate-700 dark:text-slate-200"
-              :title="attachedWorkbook.fileName"
-            >
-              {{ attachedWorkbook.fileName }}
-            </span>
-            <span
-              v-if="isExcelProfile"
-              class="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0"
-            >
-              v{{ attachedWorkbook.revision }}
-            </span>
-            <template v-else>
-              <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-500/20 text-slate-600 dark:text-slate-400 shrink-0">
-                当前预设未启用表格
-              </span>
-              <button
-                type="button"
-                class="text-sky-600 dark:text-sky-400 hover:underline font-medium text-[11px] shrink-0"
-                @click="selectedProfile = 'excel-editor-v0'"
-              >
-                切回表格模式
-              </button>
-            </template>
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-500/20 transition-colors shrink-0 disabled:opacity-50"
-              title="下载当前绑定的工作簿快照"
-              :disabled="agent.isRunning.value"
-              @click="downloadCurrentWorkbook"
-            >
-              <Download :size="13" aria-hidden="true" />
-              <span>下载</span>
-            </button>
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-500/20 transition-colors shrink-0 disabled:opacity-50"
-              title="更换工作簿文件"
-              :disabled="agent.isRunning.value || workbookUploading"
-              @click="triggerWorkbookUpload"
-            >
-              <FileUp :size="13" aria-hidden="true" />
-              <span>更换</span>
-            </button>
-            <button
-              type="button"
-              class="p-0.5 rounded hover:bg-rose-500/20 hover:text-rose-600 dark:hover:text-rose-400 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
-              title="移除已绑定的工作簿"
-              :disabled="agent.isRunning.value"
-              @click="detachWorkbook"
-            >
-              <X :size="14" aria-hidden="true" />
-            </button>
-          </div>
-
-          <!-- 未绑定时拖拽与上传区 -->
-          <div
-            v-else
-            class="workbook-upload-dropzone pointer-events-auto"
-            role="button"
-            tabindex="0"
-            :class="{ 'is-uploading': workbookUploading }"
-            @click="triggerWorkbookUpload"
-            @keydown.enter="triggerWorkbookUpload"
-          >
-            <LoaderCircle v-if="workbookUploading" :size="18" class="spinning pointer-events-none" aria-hidden="true" />
-            <UploadCloud v-else :size="18" class="upload-icon pointer-events-none" aria-hidden="true" />
-            <div class="upload-text-group pointer-events-none">
-              <span class="upload-primary-text">
-                {{ workbookUploading ? '正在上传并初始化只读工作簿快照...' : '点击或将 Excel 文件 (.xlsx) 拖拽至此处绑定' }}
-              </span>
-              <span class="upload-subtext">单文件上限 20MB · 仅支持纯数据表格 (系统自动进行不可变隔离保护)</span>
-            </div>
-          </div>
-        </div>
-
         <form class="agent-composer" @submit.prevent="submitTask">
           <div class="agent-composer-input">
+            <div v-if="!isSelectedProfileAvailable" class="agent-profile-warning-banner" role="alert">
+              <TriangleAlert :size="14" aria-hidden="true" />
+              <span>当前选中的 Profile ({{ selectedProfile }}) 未在后端提供或暂不可用，请切换至可用预设后再提交任务。</span>
+            </div>
+
+            <!-- Excel 工作簿绑定面板 (当选中 Excel 相关 Profile 或已有绑定时展示) -->
+            <div
+              v-if="isExcelProfile || attachedWorkbook"
+              class="agent-workbook-dock"
+              :class="{ 'is-drag-over': isWorkbookDragOver, 'has-workbook': !!attachedWorkbook }"
+              @dragenter.prevent="onWorkbookDragEnter"
+              @dragover.prevent="onWorkbookDragOver"
+              @dragleave.prevent="onWorkbookDragLeave"
+              @drop.prevent="onWorkbookDrop"
+            >
+              <input
+                ref="workbookFileInputRef"
+                type="file"
+                accept=".xlsx"
+                class="workbook-hidden-file-input"
+                @change="onWorkbookFileSelected"
+              />
+
+              <!-- 已绑定工作簿胶囊 -->
+              <div
+                v-if="attachedWorkbook"
+                class="agent-workbook-capsule"
+                :class="isExcelProfile ? 'is-active' : 'is-inactive'"
+              >
+                <div class="flex items-center gap-2 min-w-0 flex-1">
+                  <FileSpreadsheet
+                    :size="15"
+                    :class="isExcelProfile ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-400'"
+                    class="shrink-0"
+                  />
+                  <span
+                    class="truncate font-medium text-xs text-slate-800 dark:text-slate-200"
+                    :title="attachedWorkbook.fileName"
+                  >
+                    {{ attachedWorkbook.fileName }}
+                  </span>
+                  <span
+                    v-if="isExcelProfile"
+                    class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0"
+                  >
+                    v{{ attachedWorkbook.revision }}
+                  </span>
+                  <template v-else>
+                    <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-500/20 text-slate-600 dark:text-slate-400 shrink-0">
+                      当前预设未启用表格
+                    </span>
+                    <button
+                      type="button"
+                      class="text-sky-600 dark:text-sky-400 hover:underline font-medium text-[11px] shrink-0"
+                      @click="selectedProfile = 'excel-agent-v1'"
+                    >
+                      切回表格模式
+                    </button>
+                  </template>
+                </div>
+
+                <div class="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    class="capsule-btn"
+                    title="下载当前绑定的工作簿快照"
+                    :disabled="agent.isRunning.value"
+                    @click="downloadCurrentWorkbook"
+                  >
+                    <Download :size="12" aria-hidden="true" />
+                    <span>下载</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="capsule-btn"
+                    title="更换工作簿文件"
+                    :disabled="agent.isRunning.value || workbookUploading"
+                    @click="triggerWorkbookUpload"
+                  >
+                    <FileUp :size="12" aria-hidden="true" />
+                    <span>更换</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="capsule-remove-btn"
+                    title="移除已绑定的工作簿"
+                    :disabled="agent.isRunning.value"
+                    @click="detachWorkbook"
+                  >
+                    <X :size="13" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- 未绑定时拖拽与上传区 -->
+              <div
+                v-else
+                class="workbook-upload-dropzone pointer-events-auto"
+                role="button"
+                tabindex="0"
+                :class="{ 'is-uploading': workbookUploading }"
+                @click="triggerWorkbookUpload"
+                @keydown.enter="triggerWorkbookUpload"
+              >
+                <LoaderCircle v-if="workbookUploading" :size="16" class="spinning pointer-events-none" aria-hidden="true" />
+                <UploadCloud v-else :size="16" class="upload-icon pointer-events-none" aria-hidden="true" />
+                <div class="upload-text-group pointer-events-none">
+                  <span class="upload-primary-text">
+                    {{ workbookUploading ? '正在上传并初始化工作簿快照...' : '点击或将 Excel 文件 (.xlsx) 拖拽至此处绑定' }}
+                  </span>
+                  <span class="upload-subtext">单文件上限 20MB · 仅支持纯数据表格 (自动不可变隔离保护)</span>
+                </div>
+              </div>
+            </div>
+
             <textarea
               ref="promptTextareaRef"
               v-model="prompt"
@@ -808,7 +811,7 @@ let dragEnterCounter = 0
 const workbookFileInputRef = ref<HTMLInputElement | null>(null)
 
 const isExcelProfile = computed(() =>
-  selectedProfile.value === 'excel-editor-v0' || selectedProfile.value === 'excel-viewer-v0'
+  selectedProfile.value.startsWith('excel-')
 )
 const accessKeyInput = ref<HTMLInputElement | null>(null)
 const showAccessKey = ref(false)
@@ -933,8 +936,7 @@ let providerController: AbortController | null = null
 const dynamicProfiles = ref<AgentProfileInfo[]>([])
 const defaultProfileOptions: Array<{ id: AgentProfileId; label: string; disabled?: boolean }> = [
   { id: 'agent-v1', label: 'agent-v1 · Agent-v1 综合助手' },
-  { id: 'excel-editor-v0', label: 'excel-editor-v0 · Excel 受控数据编辑' },
-  { id: 'excel-viewer-v0', label: 'excel-viewer-v0 · Excel 只读浏览审查' },
+  { id: 'excel-agent-v1', label: 'excel-agent-v1 · Excel 智能数据助手' },
   { id: 'troubleshoot-v1', label: 'troubleshoot-v1 · 安全排障助手' },
   { id: 'calculator-v0', label: 'calculator-v0 · 受控计算助手' },
   { id: 'tools-v0', label: 'tools-v0 · 计算与时区助手' },
@@ -1004,11 +1006,8 @@ const composerPlaceholder = computed(() => {
   if (isExcelProfile.value && !attachedWorkbook.value) {
     return '请先点击或拖拽上传上方所需的 Excel 工作簿 (.xlsx)，再输入任务指令'
   }
-  if (selectedProfile.value === 'excel-editor-v0') {
-    return '输入受控数据修改指令 (例如: 将文具类商品单价乘以 1.2，或将 A101 库存增加 50)'
-  }
-  if (selectedProfile.value === 'excel-viewer-v0') {
-    return '输入只读分析或条件过滤指令 (例如: 查询价格大于 100 的商品并展示前 10 行)'
+  if (isExcelProfile.value) {
+    return '输入数据分析或修改指令 (例如: “统计各品类销售额” 或 “文具类商品价格打 9 折”)...'
   }
   return '输入需要 Agent 执行的任务'
 })
@@ -1283,10 +1282,10 @@ async function handleWorkbookUpload(file: File): Promise<void> {
   try {
     const res = await uploadExcelWorkbook(file, accessKey.value)
 
-    if (selectedProfile.value !== 'excel-editor-v0') {
+    if (!isExcelProfile.value) {
       previousProfileBeforeBind.value = selectedProfile.value
     }
-    selectedProfile.value = 'excel-editor-v0'
+    selectedProfile.value = 'excel-agent-v1'
 
     attachedWorkbook.value = {
       workbookId: res.workbookId,
@@ -1325,6 +1324,7 @@ async function handleWorkbookUpload(file: File): Promise<void> {
 
 async function detachWorkbook(): Promise<void> {
   if (agent.isRunning.value) return
+  const fallbackProfile = previousProfileBeforeBind.value || 'agent-v1'
   attachedWorkbook.value = null
   workbookUploadError.value = ''
   previousProfileBeforeBind.value = null
@@ -1337,8 +1337,7 @@ async function detachWorkbook(): Promise<void> {
     })
     await refreshAgentSessionList()
   }
-  selectedProfile.value = previousProfileBeforeBind.value || 'agent-v1'
-  previousProfileBeforeBind.value = null
+  selectedProfile.value = fallbackProfile
   showToast('已解绑当前工作簿', 'success', 1500)
 }
 
@@ -3567,24 +3566,96 @@ textarea:disabled {
 
 /* ─── Excel 工作簿绑定面板 ───────────────────────────── */
 .agent-workbook-dock {
-  margin-bottom: 10px;
-  border-radius: 10px;
-  border: 1px dashed var(--border-color, rgba(255, 255, 255, 0.12));
-  background: var(--bg-secondary, rgba(255, 255, 255, 0.03));
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-color, rgba(255, 255, 255, 0.15));
+  background: var(--bg-surface-2, rgba(255, 255, 255, 0.03));
   transition: all 0.2s ease;
   overflow: hidden;
 }
 
 .agent-workbook-dock.is-drag-over {
-  border-color: var(--accent, #10b981);
-  background: rgba(16, 185, 129, 0.08);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+  border-color: var(--accent, #10b981) !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
 }
 
 .agent-workbook-dock.has-workbook {
-  border-style: solid;
-  border-color: rgba(16, 124, 65, 0.35);
-  background: rgba(16, 124, 65, 0.06);
+  border: none;
+  background: transparent;
+  margin-bottom: 8px;
+  overflow: visible;
+}
+
+.agent-workbook-capsule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.agent-workbook-capsule.is-active {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--text-primary);
+}
+
+.agent-workbook-capsule.is-inactive {
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: var(--text-muted);
+}
+
+.capsule-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  font-size: 11px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #cbd5e1);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.capsule-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.capsule-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.capsule-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.capsule-remove-btn:hover:not(:disabled) {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+
+.capsule-remove-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .workbook-hidden-file-input {
@@ -3594,15 +3665,15 @@ textarea:disabled {
 .workbook-upload-dropzone {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 8px 12px;
   cursor: pointer;
   user-select: none;
   transition: all 0.15s ease;
 }
 
 .workbook-upload-dropzone:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .upload-icon {
@@ -3617,18 +3688,18 @@ textarea:disabled {
 .upload-text-group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .upload-primary-text {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .upload-subtext {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-muted);
 }
 </style>

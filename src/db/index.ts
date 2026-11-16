@@ -134,6 +134,9 @@ export interface DBAgentSession {
     provider: string
     model: string
     agentProfile: string
+    workbookId?: string
+    workbookName?: string
+    workbookRevision?: number
     createdAt: number
     updatedAt: number
 }
@@ -143,6 +146,9 @@ export interface DBAgentRunSummary {
     modelTurns: number
     toolCallCount: number
     usage: AgentUsage | null
+    workbookStatus?: string
+    newRevision?: number
+    artifactFileId?: string
 }
 
 export interface DBAgentStoredExecution {

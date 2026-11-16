@@ -24,6 +24,9 @@ export interface AgentRunSummary {
     modelTurns: number
     toolCallCount: number
     usage: AgentUsage | null
+    workbookStatus?: string
+    newRevision?: number
+    artifactFileId?: string
 }
 
 export function useAgentRun() {
@@ -132,6 +135,9 @@ export function useAgentRun() {
                     modelTurns: readNumber(event.data.modelTurns),
                     toolCallCount: readNumber(event.data.toolCallCount),
                     usage: readUsage(event.data.usage),
+                    workbookStatus: typeof event.data.workbookStatus === 'string' ? event.data.workbookStatus : undefined,
+                    newRevision: typeof event.data.newRevision === 'number' ? event.data.newRevision : undefined,
+                    artifactFileId: typeof event.data.artifactFileId === 'string' ? event.data.artifactFileId : undefined,
                 }
                 status.value = 'completed'
                 terminalReceived = true

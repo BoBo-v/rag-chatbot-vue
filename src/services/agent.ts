@@ -5,7 +5,7 @@ import { apiFetch } from './api'
 export const AGENT_PROVIDER_IDS = ['ollama', 'openai', 'anthropic'] as const
 export type AgentProviderId = typeof AGENT_PROVIDER_IDS[number]
 
-export const AGENT_PROFILE_IDS = ['agent-v1', 'troubleshoot-v1', 'calculator-v0', 'tools-v0'] as const
+export const AGENT_PROFILE_IDS = ['agent-v1', 'troubleshoot-v1', 'calculator-v0', 'tools-v0', 'excel-viewer-v0', 'excel-editor-v0'] as const
 export type AgentProfileId = typeof AGENT_PROFILE_IDS[number] | string
 
 export function isAgentProviderId(value: unknown): value is AgentProviderId {
@@ -41,6 +41,35 @@ export interface AgentRunRequest {
     agentSessionId?: string
     agentTurnId?: string
     messages: AgentRequestMessage[]
+    dryRun?: boolean
+    workbookId?: string
+    baseRevision?: number
+    idempotencyKey?: string
+}
+
+export type WorkbookStatus =
+    | 'no_change'
+    | 'error'
+    | 'dry_run_discarded'
+    | 'committed'
+    | 'cancelled'
+    | 'exported_unmodified'
+
+export interface ExcelWorkbookUploadResult {
+    workbookId: string
+    revision: number
+    activeFileId: string
+    fileName: string
+}
+
+export interface ExcelWorkbookMeta {
+    workbookId: string
+    principalId: string
+    currentRevision: number
+    activeFileId: string
+    fileName: string
+    createdAt: number
+    updatedAt: number
 }
 
 export interface AgentUsage {
@@ -329,6 +358,90 @@ function isAgentProviderInfo(value: unknown): value is AgentProviderInfo {
         && typeof value.capabilities.agentTools === 'boolean'
         && Array.isArray(value.agentModels)
         && value.agentModels.every(model => typeof model === 'string')
+}
+
+export async function uploadExcelWorkbook(
+    file: File,
+    accessKey?: string,
+    signal?: AbortSignal
+): Promise<ExcelWorkbookUploadResult> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const headers: Record<string, string> = {}
+    const normalizedKey = accessKey?.trim()
+    if (normalizedKey) headers['x-agent-api-key'] = normalizedKey
+
+    const response = await apiFetch('/api/excel/upload', {
+        method: 'POST',
+        headers,
+        body: formData,
+        signal,
+    })
+
+    if (!response.ok) {
+        throw await toApiError(response)
+    }
+
+    const data = await response.json()
+    return data as ExcelWorkbookUploadResult
+}
+
+export function getExcelWorkbookDownloadUrl(workbookId: string, revision?: number, accessKey?: string): string {
+    const params = new URLSearchParams()
+    if (revision !== undefined) params.set('revision', String(revision))
+    if (accessKey?.trim()) params.set('accessKey', accessKey.trim())
+    const query = params.toString()
+    return `/api/excel/${encodeURIComponent(workbookId)}/download${query ? `?${query}` : ''}`
+}
+
+export async function fetchExcelWorkbookMeta(
+    workbookId: string,
+    accessKey?: string,
+    signal?: AbortSignal
+): Promise<ExcelWorkbookMeta> {
+    const headers: Record<string, string> = {}
+    const normalizedKey = accessKey?.trim()
+    if (normalizedKey) headers['x-agent-api-key'] = normalizedKey
+
+    const response = await apiFetch(`/api/excel/${encodeURIComponent(workbookId)}/meta`, {
+        method: 'GET',
+        headers,
+        signal,
+    })
+
+    if (!response.ok) {
+        throw await toApiError(response)
+    }
+
+    return await response.json() as ExcelWorkbookMeta
+}
+
+export async function downloadExcelWorkbookFile(
+    workbookId: string,
+    fileName: string,
+    revision?: number,
+    accessKey?: string
+): Promise<void> {
+    const headers: Record<string, string> = {}
+    const normalizedKey = accessKey?.trim()
+    if (normalizedKey) headers['x-agent-api-key'] = normalizedKey
+
+    const url = getExcelWorkbookDownloadUrl(workbookId, revision)
+    const response = await apiFetch(url, { headers })
+    if (!response.ok) {
+        throw await toApiError(response)
+    }
+
+    const blob = await response.blob()
+    const downloadUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = downloadUrl
+    a.download = fileName || `workbook_${workbookId}_v${revision ?? 1}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(downloadUrl)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

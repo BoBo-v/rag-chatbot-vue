@@ -8,6 +8,9 @@ export interface AgentSessionRuntime {
     agentProfile: AgentProfileId
     provider: AgentProviderId
     model: string
+    workbookId?: string
+    workbookName?: string
+    workbookRevision?: number
 }
 
 export interface AgentStoredMessage extends AgentRequestMessage {
@@ -66,6 +69,9 @@ export async function createAgentSession(
         ...row,
         agentProfile: isAgentProfileId(row.agentProfile) ? row.agentProfile : 'agent-v1',
         provider: isAgentProviderId(row.provider) ? row.provider : 'ollama',
+        workbookId: row.workbookId,
+        workbookName: row.workbookName,
+        workbookRevision: row.workbookRevision,
         messageCount: 1,
         messages: [{ ...firstMessage }],
     }
@@ -210,6 +216,9 @@ function toSessionListItem(row: DBAgentSession, messageCount: number): AgentSess
         agentProfile: isAgentProfileId(row.agentProfile) ? row.agentProfile : 'agent-v1',
         provider: isAgentProviderId(row.provider) ? row.provider : 'ollama',
         model: row.model,
+        workbookId: row.workbookId,
+        workbookName: row.workbookName,
+        workbookRevision: row.workbookRevision,
         messageCount,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,

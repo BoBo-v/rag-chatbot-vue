@@ -254,46 +254,100 @@
                   <ChevronRight :size="12" aria-hidden="true" />
                 </span>
               </div>
-              <div
-                v-if="message.role === 'assistant'"
-                class="markdown-body agent-markdown-bubble"
-                @click="handleCodeBlockAction($event, message.id)"
-                v-html="message.renderedContent"
-              ></div>
+              <template v-if="message.role === 'assistant'">
+                <div
+                  class="markdown-body agent-markdown-bubble"
+                  @click="handleCodeBlockAction($event, message.id)"
+                  v-html="message.renderedContent"
+                ></div>
 
-              <!-- Excel 成果与操作卡片 -->
-              <div
-                v-if="message.role === 'assistant' && message.execution?.summary?.workbookStatus"
-                class="agent-workbook-artifact-card"
-                :class="`is-${message.execution.summary.workbookStatus}`"
-              >
-                <div class="artifact-card-header">
-                  <span class="artifact-icon-wrap" aria-hidden="true">
-                    <FileSpreadsheet :size="18" />
-                  </span>
-                  <div class="artifact-info">
-                    <strong class="artifact-title">
-                      {{ getWorkbookStatusTitle(message.execution.summary) }}
-                    </strong>
-                    <span class="artifact-subtext">
-                      {{ getWorkbookStatusSubtext(message.execution.summary) }}
+                <!-- Excel 成果与操作卡片 (随历史消息持久化) -->
+                <div
+                  v-if="message.workbookArtifact"
+                  class="mt-3 p-3.5 rounded-xl border text-xs"
+                  :class="{
+                    'bg-emerald-500/5 border-emerald-500/30 text-emerald-950 dark:text-emerald-100 dark:bg-emerald-950/20':
+                      message.workbookArtifact.workbookStatus === 'committed' || message.workbookArtifact.workbookStatus === 'exported_unmodified',
+                    'bg-amber-500/5 border-amber-500/30 text-amber-950 dark:text-amber-100 dark:bg-amber-950/20':
+                      message.workbookArtifact.workbookStatus === 'dry_run_discarded',
+                    'bg-rose-500/5 border-rose-500/30 text-rose-950 dark:text-rose-100 dark:bg-rose-950/20':
+                      message.workbookArtifact.workbookStatus === 'error'
+                  }"
+                >
+                  <div class="flex items-center justify-between gap-2 mb-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <FileSpreadsheet
+                        :size="16"
+                        :class="{
+                          'text-emerald-600 dark:text-emerald-400': message.workbookArtifact.workbookStatus === 'committed' || message.workbookArtifact.workbookStatus === 'exported_unmodified',
+                          'text-amber-600 dark:text-amber-400': message.workbookArtifact.workbookStatus === 'dry_run_discarded',
+                          'text-rose-600 dark:text-rose-400': message.workbookArtifact.workbookStatus === 'error'
+                        }"
+                        class="shrink-0"
+                      />
+                      <span class="font-medium truncate text-slate-800 dark:text-slate-200" :title="message.workbookArtifact.filename">
+                        {{ message.workbookArtifact.filename }}
+                      </span>
+                    </div>
+
+                    <!-- 状态徽标 -->
+                    <span
+                      v-if="message.workbookArtifact.workbookStatus === 'committed'"
+                      class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0"
+                    >
+                      已更新至 v{{ message.workbookArtifact.revision }}
+                    </span>
+                    <span
+                      v-else-if="message.workbookArtifact.workbookStatus === 'exported_unmodified'"
+                      class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0"
+                    >
+                      已导出工作簿 (v{{ message.workbookArtifact.revision }})
+                    </span>
+                    <span
+                      v-else-if="message.workbookArtifact.workbookStatus === 'dry_run_discarded'"
+                      class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0"
+                    >
+                      演习完成 (未修改文件)
+                    </span>
+                    <span
+                      v-else-if="message.workbookArtifact.workbookStatus === 'error'"
+                      class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/20 text-rose-700 dark:text-rose-300 shrink-0"
+                    >
+                      处理失败
                     </span>
                   </div>
-                </div>
-                <div v-if="canDownloadWorkbook(message.execution.summary)" class="artifact-actions">
-                  <button
-                    type="button"
-                    class="artifact-download-btn"
-                    @click="downloadArtifactWorkbook(message.execution.summary)"
+
+                  <p class="text-slate-600 dark:text-slate-400 text-[11px] mb-3">
+                    <template v-if="message.workbookArtifact.workbookStatus === 'committed'">
+                      已安全保存修改 · 当前最新版本为 v{{ message.workbookArtifact.revision }}
+                    </template>
+                    <template v-else-if="message.workbookArtifact.workbookStatus === 'exported_unmodified'">
+                      数据未产生改动 · 原始工作簿已按要求导出
+                    </template>
+                    <template v-else-if="message.workbookArtifact.workbookStatus === 'dry_run_discarded'">
+                      演习模式已验证：系统已预估变动，工作簿文件未做实际改动
+                    </template>
+                    <template v-else-if="message.workbookArtifact.workbookStatus === 'error'">
+                      工作簿在处理过程中发生异常，未能保存修改，请调整指令后重试
+                    </template>
+                  </p>
+
+                  <!-- 仅在 committed 或 exported_unmodified 渲染大号下载按钮 -->
+                  <div
+                    v-if="message.workbookArtifact.workbookStatus === 'committed' || message.workbookArtifact.workbookStatus === 'exported_unmodified'"
+                    class="flex items-center gap-2"
                   >
-                    <Download :size="14" aria-hidden="true" />
-                    下载工作簿
-                    <span v-if="message.execution.summary.newRevision" class="revision-badge">
-                      v{{ message.execution.summary.newRevision }}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 font-medium transition-colors shadow-sm disabled:opacity-50"
+                      @click="downloadArtifactWorkbook(message.workbookArtifact)"
+                    >
+                      <Download :size="14" aria-hidden="true" />
+                      <span>下载工作簿 (v{{ message.workbookArtifact.revision }})</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </template>
               <p v-else class="agent-user-bubble">{{ message.content }}</p>
               <!-- 消息快捷操作栏（支持复制提问、编辑提问、复制Agent全文） -->
               <div class="agent-msg-actions" :class="{ 'is-user': message.role === 'user' }">
@@ -384,6 +438,7 @@
           v-if="isExcelProfile || attachedWorkbook"
           class="agent-workbook-dock"
           :class="{ 'is-drag-over': isWorkbookDragOver, 'has-workbook': !!attachedWorkbook }"
+          @dragenter.prevent="onWorkbookDragEnter"
           @dragover.prevent="onWorkbookDragOver"
           @dragleave.prevent="onWorkbookDragLeave"
           @drop.prevent="onWorkbookDrop"
@@ -397,63 +452,86 @@
           />
 
           <!-- 已绑定工作簿胶囊 -->
-          <div v-if="attachedWorkbook" class="workbook-bound-row">
-            <div class="workbook-bound-meta">
-              <span class="workbook-icon-wrapper" aria-hidden="true">
-                <FileSpreadsheet :size="16" />
+          <div
+            v-if="attachedWorkbook"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors"
+            :class="isExcelProfile
+              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300'
+              : 'bg-slate-500/10 border border-slate-500/20 text-slate-500 dark:text-slate-400'"
+          >
+            <FileSpreadsheet
+              :size="16"
+              :class="isExcelProfile ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'"
+              class="shrink-0"
+            />
+            <span
+              class="min-w-0 flex-1 truncate font-medium text-slate-700 dark:text-slate-200"
+              :title="attachedWorkbook.fileName"
+            >
+              {{ attachedWorkbook.fileName }}
+            </span>
+            <span
+              v-if="isExcelProfile"
+              class="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0"
+            >
+              v{{ attachedWorkbook.revision }}
+            </span>
+            <template v-else>
+              <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-500/20 text-slate-600 dark:text-slate-400 shrink-0">
+                当前预设未启用表格
               </span>
-              <span class="workbook-filename" :title="attachedWorkbook.fileName">
-                {{ attachedWorkbook.fileName }}
-              </span>
-              <span class="workbook-rev-badge">v{{ attachedWorkbook.revision }}</span>
-            </div>
-            <div class="workbook-bound-actions">
               <button
                 type="button"
-                class="workbook-action-btn"
-                title="下载当前绑定的工作簿快照"
-                :disabled="agent.isRunning.value"
-                @click="downloadCurrentWorkbook"
+                class="text-sky-600 dark:text-sky-400 hover:underline font-medium text-[11px] shrink-0"
+                @click="selectedProfile = 'excel-editor-v0'"
               >
-                <Download :size="13" aria-hidden="true" />
-                下载快照
+                切回表格模式
               </button>
-              <button
-                type="button"
-                class="workbook-action-btn"
-                title="更换工作簿文件"
-                :disabled="agent.isRunning.value || workbookUploading"
-                @click="triggerWorkbookUpload"
-              >
-                <FileUp :size="13" aria-hidden="true" />
-                更换
-              </button>
-              <button
-                type="button"
-                class="workbook-action-btn is-danger"
-                title="移除已绑定的工作簿"
-                :disabled="agent.isRunning.value"
-                @click="detachWorkbook"
-              >
-                <X :size="13" aria-hidden="true" />
-                移除
-              </button>
-            </div>
+            </template>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-500/20 transition-colors shrink-0 disabled:opacity-50"
+              title="下载当前绑定的工作簿快照"
+              :disabled="agent.isRunning.value"
+              @click="downloadCurrentWorkbook"
+            >
+              <Download :size="13" aria-hidden="true" />
+              <span>下载</span>
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-500/20 transition-colors shrink-0 disabled:opacity-50"
+              title="更换工作簿文件"
+              :disabled="agent.isRunning.value || workbookUploading"
+              @click="triggerWorkbookUpload"
+            >
+              <FileUp :size="13" aria-hidden="true" />
+              <span>更换</span>
+            </button>
+            <button
+              type="button"
+              class="p-0.5 rounded hover:bg-rose-500/20 hover:text-rose-600 dark:hover:text-rose-400 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+              title="移除已绑定的工作簿"
+              :disabled="agent.isRunning.value"
+              @click="detachWorkbook"
+            >
+              <X :size="14" aria-hidden="true" />
+            </button>
           </div>
 
           <!-- 未绑定时拖拽与上传区 -->
           <div
             v-else
-            class="workbook-upload-dropzone"
+            class="workbook-upload-dropzone pointer-events-auto"
             role="button"
             tabindex="0"
             :class="{ 'is-uploading': workbookUploading }"
             @click="triggerWorkbookUpload"
             @keydown.enter="triggerWorkbookUpload"
           >
-            <LoaderCircle v-if="workbookUploading" :size="18" class="spinning" aria-hidden="true" />
-            <UploadCloud v-else :size="18" class="upload-icon" aria-hidden="true" />
-            <div class="upload-text-group">
+            <LoaderCircle v-if="workbookUploading" :size="18" class="spinning pointer-events-none" aria-hidden="true" />
+            <UploadCloud v-else :size="18" class="upload-icon pointer-events-none" aria-hidden="true" />
+            <div class="upload-text-group pointer-events-none">
               <span class="upload-primary-text">
                 {{ workbookUploading ? '正在上传并初始化只读工作簿快照...' : '点击或将 Excel 文件 (.xlsx) 拖拽至此处绑定' }}
               </span>
@@ -646,12 +724,14 @@ import {
   X,
   Download,
 } from 'lucide-vue-next'
-import { useAgentRun, type AgentRunSummary } from '../composables/useAgentRun'
+import { useAgentRun } from '../composables/useAgentRun'
 import { useConfirm } from '../composables/useConfirm'
 import { useToast } from '../composables/useToast'
+import { db } from '../db'
 import {
   appendAgentMessage,
   createAgentSession,
+  createAgentSessionWithWorkbook,
   deleteAgentSession,
   listAgentSessions,
   loadAgentSession,
@@ -673,8 +753,11 @@ import {
   type AgentProviderInfo,
   type AgentRunRequest,
   type AgentUsage,
+  type AgentWorkbookArtifact,
+  type WorkbookStatus,
   uploadExcelWorkbook,
   downloadExcelWorkbookFile,
+  isValidExcelFile,
 } from '../services/agent'
 import type { Message } from '../types/chat'
 import { useMessageRenderer } from '../composables/useMessageRenderer'
@@ -694,6 +777,7 @@ interface WorkspaceMessage {
   renderedContent?: string
   createdAt: number
   execution?: AgentStoredExecution
+  workbookArtifact?: AgentWorkbookArtifact
 }
 
 const AGENT_CONTEXT_MAX_MESSAGES = 20
@@ -716,9 +800,11 @@ interface AttachedWorkbookState {
 }
 
 const attachedWorkbook = ref<AttachedWorkbookState | null>(null)
+const previousProfileBeforeBind = ref<AgentProfileId | null>(null)
 const workbookUploading = ref(false)
 const workbookUploadError = ref('')
 const isWorkbookDragOver = ref(false)
+let dragEnterCounter = 0
 const workbookFileInputRef = ref<HTMLInputElement | null>(null)
 
 const isExcelProfile = computed(() =>
@@ -1132,20 +1218,37 @@ async function onWorkbookFileSelected(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
-  await handleWorkbookUpload(file)
-  input.value = ''
+  try {
+    await handleWorkbookUpload(file)
+  } finally {
+    input.value = ''
+  }
 }
 
-function onWorkbookDragOver(): void {
+function onWorkbookDragEnter(event: DragEvent): void {
+  if (!event.dataTransfer?.types.includes('Files')) return
+  if (agent.isRunning.value || workbookUploading.value) return
+  dragEnterCounter++
+  if (dragEnterCounter === 1) {
+    isWorkbookDragOver.value = true
+  }
+}
+
+function onWorkbookDragOver(event: DragEvent): void {
+  if (!event.dataTransfer?.types.includes('Files')) return
   if (agent.isRunning.value || workbookUploading.value) return
   isWorkbookDragOver.value = true
 }
 
 function onWorkbookDragLeave(): void {
-  isWorkbookDragOver.value = false
+  dragEnterCounter = Math.max(0, dragEnterCounter - 1)
+  if (dragEnterCounter === 0) {
+    isWorkbookDragOver.value = false
+  }
 }
 
 async function onWorkbookDrop(event: DragEvent): Promise<void> {
+  dragEnterCounter = 0
   isWorkbookDragOver.value = false
   if (agent.isRunning.value || workbookUploading.value) return
   const file = event.dataTransfer?.files?.[0]
@@ -1153,8 +1256,20 @@ async function onWorkbookDrop(event: DragEvent): Promise<void> {
   await handleWorkbookUpload(file)
 }
 
+function getCurrentSessionRuntime(): AgentSessionRuntime {
+  const model = selectedModel.value
+  return {
+    agentProfile: selectedProfile.value,
+    provider: model?.provider || 'ollama',
+    model: model?.model || 'default',
+    workbookId: attachedWorkbook.value?.workbookId,
+    workbookName: attachedWorkbook.value?.fileName,
+    workbookRevision: attachedWorkbook.value?.revision,
+  }
+}
+
 async function handleWorkbookUpload(file: File): Promise<void> {
-  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+  if (!isValidExcelFile(file)) {
     showToast('仅支持上传 .xlsx 格式的 Excel 工作簿', 'error', 3000)
     return
   }
@@ -1167,11 +1282,38 @@ async function handleWorkbookUpload(file: File): Promise<void> {
   workbookUploadError.value = ''
   try {
     const res = await uploadExcelWorkbook(file, accessKey.value)
+
+    if (selectedProfile.value !== 'excel-editor-v0') {
+      previousProfileBeforeBind.value = selectedProfile.value
+    }
+    selectedProfile.value = 'excel-editor-v0'
+
     attachedWorkbook.value = {
       workbookId: res.workbookId,
       fileName: res.fileName,
       revision: res.revision,
     }
+
+    const currentRuntime = getCurrentSessionRuntime()
+    if (!activeSessionId.value) {
+      const newSession = await createAgentSessionWithWorkbook(
+        currentRuntime,
+        attachedWorkbook.value,
+        `表格: ${res.fileName}`
+      )
+      activeSessionId.value = newSession.id
+      await refreshAgentSessionList()
+    } else {
+      await db.agentSessions.update(activeSessionId.value, {
+        ...currentRuntime,
+        workbookId: res.workbookId,
+        workbookName: res.fileName,
+        workbookRevision: res.revision,
+        updatedAt: Date.now(),
+      })
+      await refreshAgentSessionList()
+    }
+
     showToast(`已成功绑定工作簿：${res.fileName} (v${res.revision})`, 'success', 2500)
   } catch (err: any) {
     workbookUploadError.value = err.message || '上传工作簿失败'
@@ -1181,75 +1323,64 @@ async function handleWorkbookUpload(file: File): Promise<void> {
   }
 }
 
-function detachWorkbook(): void {
+async function detachWorkbook(): Promise<void> {
   if (agent.isRunning.value) return
   attachedWorkbook.value = null
   workbookUploadError.value = ''
+  previousProfileBeforeBind.value = null
+  if (activeSessionId.value) {
+    await db.agentSessions.update(activeSessionId.value, {
+      workbookId: undefined,
+      workbookName: undefined,
+      workbookRevision: undefined,
+      updatedAt: Date.now(),
+    })
+    await refreshAgentSessionList()
+  }
+  selectedProfile.value = previousProfileBeforeBind.value || 'agent-v1'
+  previousProfileBeforeBind.value = null
   showToast('已解绑当前工作簿', 'success', 1500)
+}
+
+function handleDownloadError(err: unknown, targetWorkbookId: string): void {
+  if (err instanceof AgentClientError && err.status === 404) {
+    if (attachedWorkbook.value?.workbookId === targetWorkbookId) {
+      showToast('当前绑定的表格缓存已过期，已自动解除绑定，请重新上传', 'warning', 4000)
+      void detachWorkbook()
+    } else {
+      showToast('该历史版本表格缓存已过期，无法下载', 'warning', 3000)
+    }
+    return
+  }
+  showToast(err instanceof Error ? err.message : '下载工作簿失败', 'error', 3000)
 }
 
 async function downloadCurrentWorkbook(): Promise<void> {
   if (!attachedWorkbook.value) return
   const { workbookId, fileName, revision } = attachedWorkbook.value
+  const targetName = fileName.replace(/\.xlsx$/i, `_v${revision}.xlsx`)
   try {
-    await downloadExcelWorkbookFile(workbookId, fileName, revision, accessKey.value)
+    await downloadExcelWorkbookFile(workbookId, targetName, revision, accessKey.value)
     showToast('正在下载当前绑定的工作簿快照', 'success', 2000)
-  } catch (err: any) {
-    showToast(err.message || '下载工作簿失败', 'error', 3000)
+  } catch (err: unknown) {
+    handleDownloadError(err, workbookId)
   }
 }
 
-function getWorkbookStatusTitle(summary?: AgentRunSummary | null): string {
-  if (!summary?.workbookStatus) return ''
-  switch (summary.workbookStatus) {
-    case 'committed':
-      return `新版本工作簿已发布 (v${summary.newRevision ?? '最新'})`
-    case 'exported_unmodified':
-      return '工作簿数据已导出就绪'
-    case 'dry_run_discarded':
-      return '演习模式模拟完成（未落盘实际修改）'
-    case 'no_change':
-      return '处理完成：数据无变动'
-    default:
-      return '工作簿处理完成'
-  }
-}
-
-function getWorkbookStatusSubtext(summary?: AgentRunSummary | null): string {
-  if (!summary?.workbookStatus) return ''
-  switch (summary.workbookStatus) {
-    case 'committed':
-      return '已完成受控批量修改，并原子切换至新版本不可变快照。'
-    case 'exported_unmodified':
-      return '已依据最新工作副本签发导出文件。'
-    case 'dry_run_discarded':
-      return '演习模式仅评估影响行数与变更参数，原工作簿完好无损。'
-    case 'no_change':
-      return '未检索到匹配修改条件的数据行，未发生文件写入。'
-    default:
-      return ''
-  }
-}
-
-function canDownloadWorkbook(summary?: AgentRunSummary | null): boolean {
-  return summary?.workbookStatus === 'committed' || summary?.workbookStatus === 'exported_unmodified'
-}
-
-async function downloadArtifactWorkbook(summary?: AgentRunSummary | null): Promise<void> {
-  const wbId = attachedWorkbook.value?.workbookId
-  if (!wbId) {
-    showToast('当前未绑定工作簿 ID，无法下载', 'error', 2500)
+async function downloadArtifactWorkbook(artifact?: AgentWorkbookArtifact): Promise<void> {
+  if (!artifact?.workbookId) {
+    showToast('当前未找到有效的工作簿信息，无法下载', 'error', 2500)
     return
   }
-  const rev = summary?.newRevision ?? attachedWorkbook.value?.revision
-  const baseName = attachedWorkbook.value?.fileName || `workbook_${wbId}.xlsx`
+  const rev = artifact.revision
+  const baseName = artifact.filename || `workbook_${artifact.workbookId}.xlsx`
   const targetName = baseName.replace(/\.xlsx$/i, `_v${rev}.xlsx`)
 
   try {
-    await downloadExcelWorkbookFile(wbId, targetName, rev, accessKey.value)
+    await downloadExcelWorkbookFile(artifact.workbookId, targetName, rev, accessKey.value)
     showToast('工作簿下载已启动', 'success', 2000)
-  } catch (err: any) {
-    showToast(err.message || '下载工作簿失败', 'error', 3000)
+  } catch (err: unknown) {
+    handleDownloadError(err, artifact.workbookId)
   }
 }
 
@@ -1264,7 +1395,7 @@ async function submitTask(): Promise<void> {
     model: runtime.model,
     agentTurnId: crypto.randomUUID(),
     messages: buildAgentContextMessages(task),
-    ...(attachedWorkbook.value ? {
+    ...(isExcelProfile.value && attachedWorkbook.value ? {
       workbookId: attachedWorkbook.value.workbookId,
       baseRevision: attachedWorkbook.value.revision,
     } : {}),
@@ -1334,9 +1465,46 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
   }
 
   if (agent.status.value === 'completed' && agent.answer.value.trim()) {
-    if (agent.summary.value?.newRevision && attachedWorkbook.value) {
-      attachedWorkbook.value.revision = agent.summary.value.newRevision
+    const summary = agent.summary.value
+    if (summary?.workbookId && attachedWorkbook.value?.workbookId) {
+      if (summary.workbookId !== attachedWorkbook.value.workbookId) {
+        console.warn('[agent] 回调工作簿 ID 与当前绑定不匹配，忽略版本递增')
+      } else if (summary.workbookStatus === 'committed' && summary.newRevision) {
+        attachedWorkbook.value.revision = summary.newRevision
+        if (activeSessionId.value) {
+          await db.agentSessions.update(activeSessionId.value, {
+            workbookRevision: summary.newRevision,
+            updatedAt: Date.now(),
+          })
+          await refreshAgentSessionList()
+        }
+      }
+    } else if (summary?.workbookStatus === 'committed' && summary.newRevision && attachedWorkbook.value) {
+      attachedWorkbook.value.revision = summary.newRevision
+      if (activeSessionId.value) {
+        await db.agentSessions.update(activeSessionId.value, {
+          workbookRevision: summary.newRevision,
+          updatedAt: Date.now(),
+        })
+        await refreshAgentSessionList()
+      }
     }
+
+    let artifact: AgentWorkbookArtifact | undefined = undefined
+    if (
+      summary?.workbookStatus &&
+      summary.workbookStatus !== 'no_change' &&
+      summary.workbookStatus !== 'cancelled'
+    ) {
+      artifact = {
+        workbookId: summary.workbookId || attachedWorkbook.value?.workbookId || '',
+        revision: summary.newRevision ?? attachedWorkbook.value?.revision ?? 1,
+        filename: attachedWorkbook.value?.fileName || `workbook_${summary.workbookId || 'data'}.xlsx`,
+        workbookStatus: summary.workbookStatus as WorkbookStatus,
+        createdAt: Date.now(),
+      }
+    }
+
     const assistantMessageId = crypto.randomUUID()
     const assistantMessage: WorkspaceMessage = {
       id: assistantMessageId,
@@ -1350,6 +1518,7 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
       } as Message),
       createdAt: Date.now(),
       execution: executionSnapshot,
+      workbookArtifact: artifact,
     }
     messages.value.push(assistantMessage)
     selectedExecutionMessageId.value = assistantMessageId
@@ -1392,6 +1561,7 @@ function clearWorkspace(): void {
   selectedProfile.value = 'agent-v1'
   attachedWorkbook.value = null
   workbookUploadError.value = ''
+  previousProfileBeforeBind.value = null
   agent.reset()
   clearSnapshots()
   if (isNarrowScreen.value) historyCollapsed.value = true
@@ -1438,6 +1608,7 @@ async function openAgentSession(sessionId: string): Promise<void> {
   messages.value = session.messages.map(message => ({
     ...message,
     execution: message.execution,
+    workbookArtifact: message.workbookArtifact,
     renderedContent: message.role === 'assistant'
       ? renderContent({
           id: message.id,
@@ -1564,6 +1735,7 @@ function toAgentStoredMessage(message: WorkspaceMessage): AgentStoredMessage {
     content: message.content,
     createdAt: message.createdAt,
     ...(message.execution ? { execution: message.execution } : {}),
+    ...(message.workbookArtifact ? { workbookArtifact: message.workbookArtifact } : {}),
   }
 }
 
@@ -3419,89 +3591,6 @@ textarea:disabled {
   display: none !important;
 }
 
-.workbook-bound-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
-  gap: 12px;
-}
-
-.workbook-bound-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-.workbook-icon-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: #107c41;
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.workbook-filename {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 320px;
-}
-
-.workbook-rev-badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  background: rgba(16, 124, 65, 0.2);
-  color: #107c41;
-  border: 1px solid rgba(16, 124, 65, 0.35);
-  flex-shrink: 0;
-}
-
-.workbook-bound-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.workbook-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 6px;
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
-  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.workbook-action-btn:hover:not(:disabled) {
-  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
-  color: var(--text-primary);
-}
-
-.workbook-action-btn.is-danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.35);
-}
-
 .workbook-upload-dropzone {
   display: flex;
   align-items: center;
@@ -3541,110 +3630,5 @@ textarea:disabled {
 .upload-subtext {
   font-size: 11px;
   color: var(--text-muted);
-}
-
-/* ─── Excel 成果与操作卡片 (聊天流内展示) ───────────────────────────── */
-.agent-workbook-artifact-card {
-  margin-top: 10px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: var(--bg-tertiary, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  animation: fadeIn 0.25s ease-out;
-}
-
-.agent-workbook-artifact-card.is-committed {
-  border-color: rgba(16, 124, 65, 0.4);
-  background: linear-gradient(135deg, rgba(16, 124, 65, 0.08), rgba(16, 124, 65, 0.02));
-}
-
-.agent-workbook-artifact-card.is-exported_unmodified {
-  border-color: rgba(59, 130, 246, 0.4);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
-}
-
-.agent-workbook-artifact-card.is-dry_run_discarded {
-  border-color: rgba(168, 85, 247, 0.4);
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(168, 85, 247, 0.02));
-}
-
-.artifact-card-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.artifact-icon-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: #107c41;
-  color: #fff;
-  flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(16, 124, 65, 0.35);
-}
-
-.artifact-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.artifact-title {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.artifact-subtext {
-  font-size: 11.5px;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.artifact-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.artifact-download-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  font-size: 12.5px;
-  font-weight: 600;
-  border-radius: 6px;
-  border: none;
-  background: #107c41;
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(16, 124, 65, 0.3);
-}
-
-.artifact-download-btn:hover {
-  background: #0e6b37;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 124, 65, 0.4);
-}
-
-.artifact-download-btn .revision-badge {
-  background: rgba(255, 255, 255, 0.25);
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 10.5px;
 }
 </style>

@@ -1,5 +1,5 @@
 import { db, type DBAgentMessage, type DBAgentSession, type DBAgentStoredExecution, type DBAgentRunSummary } from '../db'
-import { isAgentProfileId, isAgentProviderId, type AgentProfileId, type AgentProviderId, type AgentRequestMessage } from './agent'
+import { isAgentProfileId, isAgentProviderId, type AgentProfileId, type AgentProviderId, type AgentRequestMessage, type AgentWorkbookArtifact } from './agent'
 
 export type AgentStoredExecution = DBAgentStoredExecution
 export type AgentRunSummary = DBAgentRunSummary
@@ -17,6 +17,7 @@ export interface AgentStoredMessage extends AgentRequestMessage {
     id: string
     createdAt: number
     execution?: AgentStoredExecution
+    workbookArtifact?: AgentWorkbookArtifact
 }
 
 export interface AgentSessionListItem extends AgentSessionRuntime {
@@ -29,6 +30,29 @@ export interface AgentSessionListItem extends AgentSessionRuntime {
 
 export interface AgentStoredSession extends AgentSessionListItem {
     messages: AgentStoredMessage[]
+}
+
+export async function createAgentSessionWithWorkbook(
+    runtime: AgentSessionRuntime,
+    workbook: { workbookId: string; revision: number; fileName: string },
+    title?: string
+): Promise<AgentStoredSession> {
+    const id = crypto.randomUUID()
+    const row: DBAgentSession = {
+        id,
+        title: title || `表格: ${workbook.fileName}`,
+        ...runtime,
+        workbookId: workbook.workbookId,
+        workbookName: workbook.fileName,
+        workbookRevision: workbook.revision,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+    }
+    await db.agentSessions.add(row)
+    return {
+        ...toSessionListItem(row, 0),
+        messages: [],
+    }
 }
 
 export async function createAgentSession(
@@ -178,6 +202,7 @@ function toMessageRow(sessionId: string, message: AgentStoredMessage): DBAgentMe
         content: message.content,
         createdAt: message.createdAt,
         ...(cleanExecution ? { execution: cleanExecution } : {}),
+        ...(message.workbookArtifact ? { workbookArtifact: message.workbookArtifact } : {}),
     }
 }
 
@@ -206,6 +231,7 @@ function toStoredMessage(row: DBAgentMessage): AgentStoredMessage {
         content: row.content || '',
         createdAt: row.createdAt || Date.now(),
         ...(execution ? { execution } : {}),
+        ...(row.workbookArtifact ? { workbookArtifact: row.workbookArtifact } : {}),
     }
 }
 

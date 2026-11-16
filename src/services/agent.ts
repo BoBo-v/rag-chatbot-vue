@@ -55,6 +55,18 @@ export type WorkbookStatus =
     | 'cancelled'
     | 'exported_unmodified'
 
+export interface AgentWorkbookArtifact {
+    workbookId: string
+    revision: number
+    filename: string
+    workbookStatus: WorkbookStatus
+    createdAt: number
+}
+
+export function isValidExcelFile(file: File): boolean {
+    return file.name.toLowerCase().endsWith('.xlsx')
+}
+
 export interface ExcelWorkbookUploadResult {
     workbookId: string
     revision: number
@@ -365,6 +377,10 @@ export async function uploadExcelWorkbook(
     accessKey?: string,
     signal?: AbortSignal
 ): Promise<ExcelWorkbookUploadResult> {
+    if (!isValidExcelFile(file)) {
+        throw new AgentClientError('INVALID_FILE_TYPE', '仅支持上传 .xlsx 格式的 Excel 表格文件。')
+    }
+
     const formData = new FormData()
     formData.append('file', file)
 
@@ -441,7 +457,9 @@ export async function downloadExcelWorkbookFile(
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-    URL.revokeObjectURL(downloadUrl)
+    setTimeout(() => {
+        URL.revokeObjectURL(downloadUrl)
+    }, 1500)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

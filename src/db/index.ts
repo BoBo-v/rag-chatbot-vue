@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import type { GenerationRunStatus, MessageStatus, RagContextInfo } from '../types/chat'
 import type { ComparisonRunStatus, ModelRuntimeConfig } from '../types/model'
-import type { AgentEvent, AgentUsage } from '../services/agent'
+import type { AgentEvent, AgentUsage, AgentWorkbookArtifact } from '../services/agent'
 
 // 这个文件集中定义 IndexedDB 的表结构。
 // Dexie 是 IndexedDB 的封装库，可以把浏览器本地数据库当成类型化的表来操作。
@@ -147,6 +147,7 @@ export interface DBAgentRunSummary {
     toolCallCount: number
     usage: AgentUsage | null
     workbookStatus?: string
+    workbookId?: string
     newRevision?: number
     artifactFileId?: string
 }
@@ -170,6 +171,7 @@ export interface DBAgentMessage {
     content: string
     createdAt: number
     execution?: DBAgentStoredExecution
+    workbookArtifact?: AgentWorkbookArtifact
 }
 
 class ChatDB extends Dexie {

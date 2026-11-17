@@ -26,6 +26,7 @@ export interface AgentRunSummary {
     usage: AgentUsage | null
     workbookStatus?: string
     workbookId?: string
+    filename?: string
     newRevision?: number
     artifactFileId?: string
 }
@@ -138,6 +139,7 @@ export function useAgentRun() {
                     usage: readUsage(event.data.usage),
                     workbookStatus: typeof event.data.workbookStatus === 'string' ? event.data.workbookStatus : undefined,
                     workbookId: typeof event.data.workbookId === 'string' ? event.data.workbookId : undefined,
+                    filename: typeof event.data.filename === 'string' ? event.data.filename : undefined,
                     newRevision: typeof event.data.newRevision === 'number' ? event.data.newRevision : undefined,
                     artifactFileId: typeof event.data.artifactFileId === 'string' ? event.data.artifactFileId : undefined,
                 }

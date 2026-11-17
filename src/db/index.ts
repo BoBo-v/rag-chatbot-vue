@@ -148,6 +148,7 @@ export interface DBAgentRunSummary {
     usage: AgentUsage | null
     workbookStatus?: string
     workbookId?: string
+    filename?: string
     newRevision?: number
     artifactFileId?: string
 }

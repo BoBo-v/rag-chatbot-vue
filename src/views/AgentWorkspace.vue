@@ -264,87 +264,57 @@
                 <!-- Excel 成果与操作卡片 (随历史消息持久化) -->
                 <div
                   v-if="message.workbookArtifact"
-                  class="mt-3 p-3.5 rounded-xl border text-xs"
-                  :class="{
-                    'bg-emerald-500/5 border-emerald-500/30 text-emerald-950 dark:text-emerald-100 dark:bg-emerald-950/20':
-                      message.workbookArtifact.workbookStatus === 'committed' || message.workbookArtifact.workbookStatus === 'exported_unmodified',
-                    'bg-amber-500/5 border-amber-500/30 text-amber-950 dark:text-amber-100 dark:bg-amber-950/20':
-                      message.workbookArtifact.workbookStatus === 'dry_run_discarded',
-                    'bg-rose-500/5 border-rose-500/30 text-rose-950 dark:text-rose-100 dark:bg-rose-950/20':
-                      message.workbookArtifact.workbookStatus === 'error'
-                  }"
+                  class="agent-workbook-artifact-card"
+                  :class="`is-${message.workbookArtifact.workbookStatus}`"
                 >
-                  <div class="flex items-center justify-between gap-2 mb-2">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <FileSpreadsheet
-                        :size="16"
-                        :class="{
-                          'text-emerald-600 dark:text-emerald-400': message.workbookArtifact.workbookStatus === 'committed' || message.workbookArtifact.workbookStatus === 'exported_unmodified',
-                          'text-amber-600 dark:text-amber-400': message.workbookArtifact.workbookStatus === 'dry_run_discarded',
-                          'text-rose-600 dark:text-rose-400': message.workbookArtifact.workbookStatus === 'error'
-                        }"
-                        class="shrink-0"
-                      />
-                      <span class="font-medium truncate text-slate-800 dark:text-slate-200" :title="message.workbookArtifact.filename">
-                        {{ message.workbookArtifact.filename }}
-                      </span>
+                  <div class="artifact-card-main">
+                    <div class="artifact-icon-wrapper" :class="`is-${message.workbookArtifact.workbookStatus}`">
+                      <FileSpreadsheet :size="20" aria-hidden="true" />
                     </div>
 
-                    <!-- 状态徽标 -->
-                    <span
-                      v-if="message.workbookArtifact.workbookStatus === 'committed'"
-                      class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0"
-                    >
-                      已更新至 v{{ message.workbookArtifact.revision }}
-                    </span>
-                    <span
-                      v-else-if="message.workbookArtifact.workbookStatus === 'exported_unmodified'"
-                      class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0"
-                    >
-                      已导出工作簿 (v{{ message.workbookArtifact.revision }})
-                    </span>
-                    <span
-                      v-else-if="message.workbookArtifact.workbookStatus === 'dry_run_discarded'"
-                      class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0"
-                    >
-                      演习完成 (未修改文件)
-                    </span>
-                    <span
-                      v-else-if="message.workbookArtifact.workbookStatus === 'error'"
-                      class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/20 text-rose-700 dark:text-rose-300 shrink-0"
-                    >
-                      处理失败
-                    </span>
-                  </div>
+                    <div class="artifact-info">
+                      <div class="artifact-header-row">
+                        <span class="artifact-title" :title="message.workbookArtifact.filename">
+                          {{ message.workbookArtifact.filename }}
+                        </span>
+                        <span class="artifact-status-pill" :class="`is-${message.workbookArtifact.workbookStatus}`">
+                          <span class="pill-dot"></span>
+                          <span v-if="message.workbookArtifact.workbookStatus === 'committed'">已更新至 v{{ message.workbookArtifact.revision }}</span>
+                          <span v-else-if="message.workbookArtifact.workbookStatus === 'exported_unmodified'">导出的原文件 (v{{ message.workbookArtifact.revision }})</span>
+                          <span v-else-if="message.workbookArtifact.workbookStatus === 'dry_run_discarded'">演习完成 (未修改)</span>
+                          <span v-else-if="message.workbookArtifact.workbookStatus === 'error'">处理失败</span>
+                        </span>
+                      </div>
 
-                  <p class="text-slate-600 dark:text-slate-400 text-[11px] mb-3">
-                    <template v-if="message.workbookArtifact.workbookStatus === 'committed'">
-                      已安全保存修改 · 当前最新版本为 v{{ message.workbookArtifact.revision }}
-                    </template>
-                    <template v-else-if="message.workbookArtifact.workbookStatus === 'exported_unmodified'">
-                      数据未产生改动 · 原始工作簿已按要求导出
-                    </template>
-                    <template v-else-if="message.workbookArtifact.workbookStatus === 'dry_run_discarded'">
-                      演习模式已验证：系统已预估变动，工作簿文件未做实际改动
-                    </template>
-                    <template v-else-if="message.workbookArtifact.workbookStatus === 'error'">
-                      工作簿在处理过程中发生异常，未能保存修改，请调整指令后重试
-                    </template>
-                  </p>
+                      <p class="artifact-desc">
+                        <template v-if="message.workbookArtifact.workbookStatus === 'committed'">
+                          已安全保存修改 · 当前最新版本为 v{{ message.workbookArtifact.revision }}
+                        </template>
+                        <template v-else-if="message.workbookArtifact.workbookStatus === 'exported_unmodified'">
+                          数据未产生改动 · 原始/导出工作簿已生成独立副本，可随时下载
+                        </template>
+                        <template v-else-if="message.workbookArtifact.workbookStatus === 'dry_run_discarded'">
+                          演习模式已验证：系统已预估变动，工作簿文件未做实际改动
+                        </template>
+                        <template v-else-if="message.workbookArtifact.workbookStatus === 'error'">
+                          工作簿在处理过程中发生异常，未能保存修改，请调整指令后重试
+                        </template>
+                      </p>
 
-                  <!-- 仅在 committed 或 exported_unmodified 渲染大号下载按钮 -->
-                  <div
-                    v-if="message.workbookArtifact.workbookStatus === 'committed' || message.workbookArtifact.workbookStatus === 'exported_unmodified'"
-                    class="flex items-center gap-2"
-                  >
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 font-medium transition-colors shadow-sm disabled:opacity-50"
-                      @click="downloadArtifactWorkbook(message.workbookArtifact)"
-                    >
-                      <Download :size="14" aria-hidden="true" />
-                      <span>下载工作簿 (v{{ message.workbookArtifact.revision }})</span>
-                    </button>
+                      <div
+                        v-if="message.workbookArtifact.workbookStatus === 'committed' || message.workbookArtifact.workbookStatus === 'exported_unmodified'"
+                        class="artifact-action-row"
+                      >
+                        <button
+                          type="button"
+                          class="artifact-download-action-btn"
+                          @click="downloadArtifactWorkbook(message.workbookArtifact)"
+                        >
+                          <Download :size="13" aria-hidden="true" />
+                          <span>下载此版本工作簿 (.xlsx)</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </template>
@@ -459,31 +429,31 @@
                 class="agent-workbook-capsule"
                 :class="isExcelProfile ? 'is-active' : 'is-inactive'"
               >
-                <div class="flex items-center gap-2 min-w-0 flex-1">
+                <div class="capsule-info">
                   <FileSpreadsheet
                     :size="15"
-                    :class="isExcelProfile ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-400'"
-                    class="shrink-0"
+                    class="capsule-icon"
+                    :class="isExcelProfile ? 'text-emerald' : 'text-muted'"
                   />
                   <span
-                    class="truncate font-medium text-xs text-slate-800 dark:text-slate-200"
+                    class="capsule-name"
                     :title="attachedWorkbook.fileName"
                   >
                     {{ attachedWorkbook.fileName }}
                   </span>
                   <span
                     v-if="isExcelProfile"
-                    class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0"
+                    class="capsule-badge"
                   >
                     v{{ attachedWorkbook.revision }}
                   </span>
                   <template v-else>
-                    <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-500/20 text-slate-600 dark:text-slate-400 shrink-0">
+                    <span class="capsule-inactive-tag">
                       当前预设未启用表格
                     </span>
                     <button
                       type="button"
-                      class="text-sky-600 dark:text-sky-400 hover:underline font-medium text-[11px] shrink-0"
+                      class="capsule-switch-btn"
                       @click="selectedProfile = 'excel-agent-v1'"
                     >
                       切回表格模式
@@ -491,7 +461,7 @@
                   </template>
                 </div>
 
-                <div class="flex items-center gap-1 shrink-0">
+                <div class="capsule-actions">
                   <button
                     type="button"
                     class="capsule-btn"
@@ -1498,7 +1468,7 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
       artifact = {
         workbookId: summary.workbookId || attachedWorkbook.value?.workbookId || '',
         revision: summary.newRevision ?? attachedWorkbook.value?.revision ?? 1,
-        filename: attachedWorkbook.value?.fileName || `workbook_${summary.workbookId || 'data'}.xlsx`,
+        filename: summary.filename || attachedWorkbook.value?.fileName || `workbook_${summary.workbookId || 'data'}.xlsx`,
         workbookStatus: summary.workbookStatus as WorkbookStatus,
         createdAt: Date.now(),
       }
@@ -3701,5 +3671,279 @@ textarea:disabled {
 .upload-subtext {
   font-size: 10.5px;
   color: var(--text-muted);
+}
+
+/* ─── Excel 成果产物卡片 (消息气泡下方持久化渲染) ───────── */
+.agent-workbook-artifact-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  background: var(--bg-surface, #111019);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: all var(--motion-fast, 150ms) ease;
+  user-select: none;
+}
+
+[data-theme="light"] .agent-workbook-artifact-card {
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.agent-workbook-artifact-card.is-committed,
+.agent-workbook-artifact-card.is-exported_unmodified {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+[data-theme="light"] .agent-workbook-artifact-card.is-committed,
+[data-theme="light"] .agent-workbook-artifact-card.is-exported_unmodified {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: #f0fdf4;
+}
+
+.agent-workbook-artifact-card.is-dry_run_discarded {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+[data-theme="light"] .agent-workbook-artifact-card.is-dry_run_discarded {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: #fffbeb;
+}
+
+.agent-workbook-artifact-card.is-error {
+  border-color: rgba(244, 63, 94, 0.35);
+  background: rgba(244, 63, 94, 0.06);
+}
+
+[data-theme="light"] .agent-workbook-artifact-card.is-error {
+  border-color: rgba(244, 63, 94, 0.3);
+  background: #fff1f2;
+}
+
+.artifact-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.artifact-icon-wrapper {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--motion-fast, 150ms) ease;
+}
+
+.artifact-icon-wrapper.is-committed,
+.artifact-icon-wrapper.is-exported_unmodified {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.artifact-icon-wrapper.is-dry_run_discarded {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.artifact-icon-wrapper.is-error {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.25);
+}
+
+.artifact-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.artifact-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.artifact-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifact-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 550;
+  flex-shrink: 0;
+}
+
+.artifact-status-pill .pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.artifact-status-pill.is-committed,
+.artifact-status-pill.is-exported_unmodified {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.artifact-status-pill.is-committed .pill-dot,
+.artifact-status-pill.is-exported_unmodified .pill-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.artifact-status-pill.is-dry_run_discarded {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.artifact-status-pill.is-dry_run_discarded .pill-dot {
+  background: #f59e0b;
+}
+
+.artifact-status-pill.is-error {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.artifact-status-pill.is-error .pill-dot {
+  background: #f43f5e;
+}
+
+.artifact-desc {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.artifact-action-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.artifact-download-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 550;
+  color: #ffffff;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  cursor: pointer;
+  transition: all var(--motion-fast, 150ms) ease;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+
+.artifact-download-action-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.artifact-download-action-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.artifact-download-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ─── Excel 工作簿绑定胶囊内部结构 ───────────────────────── */
+.capsule-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.capsule-icon {
+  flex-shrink: 0;
+}
+
+.capsule-icon.text-emerald {
+  color: #10b981;
+}
+
+.capsule-icon.text-muted {
+  color: var(--text-muted);
+}
+
+.capsule-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capsule-badge {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+.capsule-inactive-tag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.capsule-switch-btn {
+  font-size: 11px;
+  font-weight: 500;
+  color: #38bdf8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.capsule-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 </style>

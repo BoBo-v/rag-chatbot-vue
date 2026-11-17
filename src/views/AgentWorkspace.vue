@@ -447,6 +447,14 @@
                   >
                     v{{ attachedWorkbook.revision }}
                   </span>
+                  <span
+                    v-if="isExcelProfile && activeDatasetSelection"
+                    class="capsule-dataset-pill"
+                    :title="`当前工具状态寄存器活跃选区: ${activeDatasetSelection.handle}`"
+                  >
+                    <span class="dataset-pulse-dot" aria-hidden="true"></span>
+                    选区: {{ activeDatasetSelection.count !== undefined ? `${activeDatasetSelection.count}行 ` : '' }}({{ activeDatasetSelection.handle }})
+                  </span>
                   <template v-else>
                     <span class="capsule-inactive-tag">
                       当前预设未启用表格
@@ -772,7 +780,13 @@ interface AttachedWorkbookState {
   revision: number
 }
 
+interface ActiveDatasetSelection {
+  handle: string
+  count?: number
+}
+
 const attachedWorkbook = ref<AttachedWorkbookState | null>(null)
+const activeDatasetSelection = ref<ActiveDatasetSelection | null>(null)
 const previousProfileBeforeBind = ref<AgentProfileId | null>(null)
 const workbookUploading = ref(false)
 const workbookUploadError = ref('')
@@ -1262,6 +1276,7 @@ async function handleWorkbookUpload(file: File): Promise<void> {
       fileName: res.fileName,
       revision: res.revision,
     }
+    activeDatasetSelection.value = null
 
     const currentRuntime = getCurrentSessionRuntime()
     if (!activeSessionId.value) {
@@ -1296,6 +1311,7 @@ async function detachWorkbook(): Promise<void> {
   if (agent.isRunning.value) return
   const fallbackProfile = previousProfileBeforeBind.value || 'agent-v1'
   attachedWorkbook.value = null
+  activeDatasetSelection.value = null
   workbookUploadError.value = ''
   previousProfileBeforeBind.value = null
   if (activeSessionId.value) {
@@ -1474,6 +1490,20 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
       }
     }
 
+    if (executionSnapshot?.events) {
+      for (const ev of executionSnapshot.events) {
+        if (ev.type === 'tool_completed' && ev.data && isRecord(ev.data.metadata)) {
+          const meta = ev.data.metadata
+          if (typeof meta.handle === 'string') {
+            activeDatasetSelection.value = {
+              handle: meta.handle,
+              count: typeof meta.matchedRows === 'number' ? meta.matchedRows : undefined,
+            }
+          }
+        }
+      }
+    }
+
     const assistantMessageId = crypto.randomUUID()
     const assistantMessage: WorkspaceMessage = {
       id: assistantMessageId,
@@ -1493,6 +1523,20 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
     selectedExecutionMessageId.value = assistantMessageId
     await persistAgentAssistantMessage(request, assistantMessage)
   } else if (agent.status.value === 'failed' || agent.status.value === 'cancelled') {
+    if (executionSnapshot?.events) {
+      for (const ev of executionSnapshot.events) {
+        if (ev.type === 'tool_completed' && ev.data && isRecord(ev.data.metadata)) {
+          const meta = ev.data.metadata
+          if (typeof meta.handle === 'string') {
+            activeDatasetSelection.value = {
+              handle: meta.handle,
+              count: typeof meta.matchedRows === 'number' ? meta.matchedRows : undefined,
+            }
+          }
+        }
+      }
+    }
+
     const assistantMessageId = crypto.randomUUID()
     const fallbackText = agent.answer.value.trim()
       ? agent.answer.value
@@ -3917,6 +3961,41 @@ textarea:disabled {
   background: rgba(16, 185, 129, 0.2);
   color: #10b981;
   flex-shrink: 0;
+}
+
+.capsule-dataset-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+[data-theme='dark'] .capsule-dataset-pill {
+  background: rgba(59, 130, 246, 0.25);
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+.dataset-pulse-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #2563eb;
+  box-shadow: 0 0 6px #2563eb;
+  display: inline-block;
+}
+
+[data-theme='dark'] .dataset-pulse-dot {
+  background-color: #60a5fa;
+  box-shadow: 0 0 6px #60a5fa;
 }
 
 .capsule-inactive-tag {

@@ -1,5 +1,5 @@
 import { db, type DBAgentMessage, type DBAgentSession, type DBAgentStoredExecution, type DBAgentRunSummary } from '../db'
-import { isAgentProfileId, isAgentProviderId, type AgentProfileId, type AgentProviderId, type AgentRequestMessage, type AgentWorkbookArtifact } from './agent'
+import { isAgentProfileId, isAgentProviderId, type AgentAuxiliaryWorkbookBinding, type AgentProfileId, type AgentProviderId, type AgentRequestMessage, type AgentWorkbookArtifact } from './agent'
 
 export type AgentStoredExecution = DBAgentStoredExecution
 export type AgentRunSummary = DBAgentRunSummary
@@ -11,6 +11,7 @@ export interface AgentSessionRuntime {
     workbookId?: string
     workbookName?: string
     workbookRevision?: number
+    auxiliaryWorkbooks?: AgentAuxiliaryWorkbookBinding[]
 }
 
 export interface AgentStoredMessage extends AgentRequestMessage {
@@ -96,6 +97,7 @@ export async function createAgentSession(
         workbookId: row.workbookId,
         workbookName: row.workbookName,
         workbookRevision: row.workbookRevision,
+        auxiliaryWorkbooks: row.auxiliaryWorkbooks,
         messageCount: 1,
         messages: [{ ...firstMessage }],
     }
@@ -245,6 +247,7 @@ function toSessionListItem(row: DBAgentSession, messageCount: number): AgentSess
         workbookId: row.workbookId,
         workbookName: row.workbookName,
         workbookRevision: row.workbookRevision,
+        auxiliaryWorkbooks: row.auxiliaryWorkbooks,
         messageCount,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,

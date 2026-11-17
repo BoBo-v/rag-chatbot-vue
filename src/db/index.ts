@@ -137,6 +137,7 @@ export interface DBAgentSession {
     workbookId?: string
     workbookName?: string
     workbookRevision?: number
+    auxiliaryWorkbooks?: Array<{ workbookId: string; fileName: string; revision: number }>
     createdAt: number
     updatedAt: number
 }

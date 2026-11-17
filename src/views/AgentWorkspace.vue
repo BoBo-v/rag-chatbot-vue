@@ -485,7 +485,7 @@
                     class="capsule-btn"
                     title="更换工作簿文件"
                     :disabled="agent.isRunning.value || workbookUploading"
-                    @click="triggerWorkbookUpload"
+                    @click="() => triggerWorkbookUpload()"
                   >
                     <FileUp :size="12" aria-hidden="true" />
                     <span>更换</span>
@@ -502,6 +502,47 @@
                 </div>
               </div>
 
+              <div v-if="attachedWorkbook && isExcelProfile" class="agent-source-workbooks">
+                <div v-for="source in auxiliaryWorkbooks" :key="source.workbookId" class="agent-source-workbook">
+                  <div class="source-workbook-info">
+                    <FileSpreadsheet :size="14" aria-hidden="true" />
+                    <span class="source-workbook-name" :title="source.fileName">{{ source.fileName }}</span>
+                    <span class="source-workbook-role">只读 · v{{ source.revision }}</span>
+                  </div>
+                  <div class="source-workbook-actions">
+                    <button
+                      type="button"
+                      class="capsule-btn"
+                      title="设为可写目标工作簿"
+                      :disabled="agent.isRunning.value"
+                      @click="promoteSourceToTarget(source)"
+                    >
+                      <Check :size="13" aria-hidden="true" />
+                      <span>设为目标</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="capsule-remove-btn"
+                      title="移除只读源工作簿"
+                      :disabled="agent.isRunning.value"
+                      @click="removeSourceWorkbook(source.workbookId)"
+                    >
+                      <X :size="13" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="source-workbook-add"
+                  :disabled="agent.isRunning.value || workbookUploading || auxiliaryWorkbooks.length >= 3"
+                  @click="() => triggerWorkbookUpload('source')"
+                >
+                  <Plus :size="14" aria-hidden="true" />
+                  添加只读源
+                  <span>{{ auxiliaryWorkbooks.length }}/3</span>
+                </button>
+              </div>
+
               <!-- 未绑定时拖拽与上传区 -->
               <div
                 v-else
@@ -509,8 +550,8 @@
                 role="button"
                 tabindex="0"
                 :class="{ 'is-uploading': workbookUploading }"
-                @click="triggerWorkbookUpload"
-                @keydown.enter="triggerWorkbookUpload"
+                @click="() => triggerWorkbookUpload()"
+                @keydown.enter="() => triggerWorkbookUpload()"
               >
                 <LoaderCircle v-if="workbookUploading" :size="16" class="spinning pointer-events-none" aria-hidden="true" />
                 <UploadCloud v-else :size="16" class="upload-icon pointer-events-none" aria-hidden="true" />
@@ -723,6 +764,7 @@ import {
 } from '../services/agentPersistence'
 import {
   AgentClientError,
+  fetchExcelWorkbookMeta,
   fetchAgentProviders,
   fetchAgentProfiles,
   type AgentProfileInfo,
@@ -733,6 +775,7 @@ import {
   type AgentProfileId,
   type AgentProviderInfo,
   type AgentRunRequest,
+  type AgentAuxiliaryWorkbookBinding,
   type AgentUsage,
   type AgentWorkbookArtifact,
   type WorkbookStatus,
@@ -786,6 +829,7 @@ interface ActiveDatasetSelection {
 }
 
 const attachedWorkbook = ref<AttachedWorkbookState | null>(null)
+const auxiliaryWorkbooks = ref<AgentAuxiliaryWorkbookBinding[]>([])
 const activeDatasetSelection = ref<ActiveDatasetSelection | null>(null)
 const previousProfileBeforeBind = ref<AgentProfileId | null>(null)
 const workbookUploading = ref(false)
@@ -793,6 +837,7 @@ const workbookUploadError = ref('')
 const isWorkbookDragOver = ref(false)
 let dragEnterCounter = 0
 const workbookFileInputRef = ref<HTMLInputElement | null>(null)
+const workbookUploadRole = ref<'target' | 'source'>('target')
 
 const isExcelProfile = computed(() =>
   selectedProfile.value.startsWith('excel-')
@@ -1192,8 +1237,10 @@ async function loadProviders(): Promise<void> {
   }
 }
 
-function triggerWorkbookUpload(): void {
+function triggerWorkbookUpload(role: 'target' | 'source' = 'target'): void {
   if (agent.isRunning.value || workbookUploading.value) return
+  if (role === 'source' && auxiliaryWorkbooks.value.length >= 3) return
+  workbookUploadRole.value = role
   workbookFileInputRef.value?.click()
 }
 
@@ -1248,6 +1295,7 @@ function getCurrentSessionRuntime(): AgentSessionRuntime {
     workbookId: attachedWorkbook.value?.workbookId,
     workbookName: attachedWorkbook.value?.fileName,
     workbookRevision: attachedWorkbook.value?.revision,
+    auxiliaryWorkbooks: auxiliaryWorkbooks.value.map(source => ({ ...source })),
   }
 }
 
@@ -1264,6 +1312,9 @@ async function handleWorkbookUpload(file: File): Promise<void> {
   workbookUploading.value = true
   workbookUploadError.value = ''
   try {
+    if (workbookUploadRole.value === 'source' && !attachedWorkbook.value) {
+      throw new Error('请先绑定可写目标工作簿，再添加只读源。')
+    }
     const res = await uploadExcelWorkbook(file, accessKey.value)
 
     if (!isExcelProfile.value) {
@@ -1271,12 +1322,20 @@ async function handleWorkbookUpload(file: File): Promise<void> {
     }
     selectedProfile.value = 'excel-agent-v1'
 
-    attachedWorkbook.value = {
+    const uploadedWorkbook: AttachedWorkbookState = {
       workbookId: res.workbookId,
       fileName: res.fileName,
       revision: res.revision,
     }
-    activeDatasetSelection.value = null
+    if (workbookUploadRole.value === 'source') {
+      if (auxiliaryWorkbooks.value.length >= 3) throw new Error('最多添加 3 个只读源工作簿。')
+      auxiliaryWorkbooks.value.push(uploadedWorkbook)
+    } else {
+      attachedWorkbook.value = uploadedWorkbook
+      activeDatasetSelection.value = null
+    }
+
+    if (!attachedWorkbook.value) throw new Error('请先绑定可写目标工作簿。')
 
     const currentRuntime = getCurrentSessionRuntime()
     if (!activeSessionId.value) {
@@ -1290,9 +1349,10 @@ async function handleWorkbookUpload(file: File): Promise<void> {
     } else {
       await db.agentSessions.update(activeSessionId.value, {
         ...currentRuntime,
-        workbookId: res.workbookId,
-        workbookName: res.fileName,
-        workbookRevision: res.revision,
+        workbookId: attachedWorkbook.value.workbookId,
+        workbookName: attachedWorkbook.value.fileName,
+        workbookRevision: attachedWorkbook.value.revision,
+        auxiliaryWorkbooks: auxiliaryWorkbooks.value.map(source => ({ ...source })),
         updatedAt: Date.now(),
       })
       await refreshAgentSessionList()
@@ -1311,6 +1371,7 @@ async function detachWorkbook(): Promise<void> {
   if (agent.isRunning.value) return
   const fallbackProfile = previousProfileBeforeBind.value || 'agent-v1'
   attachedWorkbook.value = null
+  auxiliaryWorkbooks.value = []
   activeDatasetSelection.value = null
   workbookUploadError.value = ''
   previousProfileBeforeBind.value = null
@@ -1319,12 +1380,40 @@ async function detachWorkbook(): Promise<void> {
       workbookId: undefined,
       workbookName: undefined,
       workbookRevision: undefined,
+      auxiliaryWorkbooks: [],
       updatedAt: Date.now(),
     })
     await refreshAgentSessionList()
   }
   selectedProfile.value = fallbackProfile
   showToast('已解绑当前工作簿', 'success', 1500)
+}
+
+async function persistWorkbookBindings(): Promise<void> {
+  if (!activeSessionId.value) return
+  await db.agentSessions.update(activeSessionId.value, {
+    ...getCurrentSessionRuntime(),
+    updatedAt: Date.now(),
+  })
+  await refreshAgentSessionList()
+}
+
+async function removeSourceWorkbook(workbookId: string): Promise<void> {
+  if (agent.isRunning.value) return
+  auxiliaryWorkbooks.value = auxiliaryWorkbooks.value.filter(source => source.workbookId !== workbookId)
+  await persistWorkbookBindings()
+}
+
+async function promoteSourceToTarget(source: AgentAuxiliaryWorkbookBinding): Promise<void> {
+  if (agent.isRunning.value) return
+  const sourceIndex = auxiliaryWorkbooks.value.findIndex(item => item.workbookId === source.workbookId)
+  if (sourceIndex < 0) return
+  const previousTarget = attachedWorkbook.value
+  attachedWorkbook.value = { ...source }
+  if (previousTarget) auxiliaryWorkbooks.value.splice(sourceIndex, 1, previousTarget)
+  else auxiliaryWorkbooks.value.splice(sourceIndex, 1)
+  activeDatasetSelection.value = null
+  await persistWorkbookBindings()
 }
 
 function handleDownloadError(err: unknown, targetWorkbookId: string): void {
@@ -1383,6 +1472,10 @@ async function submitTask(): Promise<void> {
     ...(isExcelProfile.value && attachedWorkbook.value ? {
       workbookId: attachedWorkbook.value.workbookId,
       baseRevision: attachedWorkbook.value.revision,
+      auxiliaryWorkbooks: auxiliaryWorkbooks.value.map(source => ({
+        workbookId: source.workbookId,
+        revision: source.revision,
+      })),
     } : {}),
   }
   lastRequest.value = request
@@ -1573,6 +1666,7 @@ function clearWorkspace(): void {
   prompt.value = ''
   selectedProfile.value = 'agent-v1'
   attachedWorkbook.value = null
+  auxiliaryWorkbooks.value = []
   workbookUploadError.value = ''
   previousProfileBeforeBind.value = null
   agent.reset()
@@ -1636,7 +1730,7 @@ async function openAgentSession(sessionId: string): Promise<void> {
   lastRequest.value = null
   prompt.value = ''
   agent.reset()
-  applyAgentSessionRuntime(session)
+  await applyAgentSessionRuntime(session)
   if (isNarrowScreen.value) historyCollapsed.value = true
   scrollToLatest()
 }
@@ -1710,16 +1804,37 @@ async function refreshAgentSessionList(): Promise<void> {
   historyError.value = ''
 }
 
-function applyAgentSessionRuntime(session: AgentSessionListItem): void {
+async function applyAgentSessionRuntime(session: AgentSessionListItem): Promise<void> {
   selectedProfile.value = session.agentProfile || 'agent-v1'
   if (session.workbookId) {
-    attachedWorkbook.value = {
-      workbookId: session.workbookId,
-      fileName: session.workbookName || '工作簿.xlsx',
-      revision: session.workbookRevision || 1,
+    try {
+      const revision = session.workbookRevision || 1
+      const meta = await fetchExcelWorkbookMeta(session.workbookId, accessKey.value, undefined, revision)
+      attachedWorkbook.value = {
+        workbookId: session.workbookId,
+        fileName: session.workbookName || meta.fileName,
+        revision,
+      }
+    } catch {
+      attachedWorkbook.value = null
+      showToast('原目标工作簿已失效或无权访问，请重新上传。', 'warning', 4000)
     }
   } else {
     attachedWorkbook.value = null
+  }
+  auxiliaryWorkbooks.value = []
+  for (const source of session.auxiliaryWorkbooks ?? []) {
+    if (auxiliaryWorkbooks.value.length >= 3) break
+    try {
+      const meta = await fetchExcelWorkbookMeta(source.workbookId, accessKey.value, undefined, source.revision)
+      auxiliaryWorkbooks.value.push({
+        workbookId: source.workbookId,
+        fileName: source.fileName || meta.fileName,
+        revision: source.revision,
+      })
+    } catch {
+      showToast(`只读源 ${source.fileName || source.workbookId} 已失效，已从会话绑定中移除。`, 'warning', 3500)
+    }
   }
   const modelKey = `${session.provider}:${session.model}`
   if (modelOptions.value.some(option => option.key === modelKey)) {
@@ -1731,6 +1846,7 @@ function applyAgentSessionRuntime(session: AgentSessionListItem): void {
 }
 
 function toAgentSessionRuntime(request: AgentRunRequest): AgentSessionRuntime {
+  const boundSources = new Map(auxiliaryWorkbooks.value.map(source => [source.workbookId, source]))
   return {
     agentProfile: request.agentProfile,
     provider: request.provider,
@@ -1738,6 +1854,10 @@ function toAgentSessionRuntime(request: AgentRunRequest): AgentSessionRuntime {
     workbookId: attachedWorkbook.value?.workbookId,
     workbookName: attachedWorkbook.value?.fileName,
     workbookRevision: attachedWorkbook.value?.revision,
+    auxiliaryWorkbooks: (request.auxiliaryWorkbooks ?? []).flatMap(source => {
+      const binding = boundSources.get(source.workbookId)
+      return binding && binding.revision === source.revision ? [{ ...binding }] : []
+    }),
   }
 }
 
@@ -3621,6 +3741,83 @@ textarea:disabled {
 .agent-workbook-capsule.is-inactive {
   background: rgba(148, 163, 184, 0.1);
   border: 1px solid rgba(148, 163, 184, 0.25);
+  color: var(--text-muted);
+}
+
+.agent-source-workbooks {
+  display: grid;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.agent-source-workbook,
+.source-workbook-info,
+.source-workbook-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.agent-source-workbook {
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  background: var(--bg-surface-2, rgba(255, 255, 255, 0.03));
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.source-workbook-info {
+  gap: 7px;
+  overflow: hidden;
+}
+
+.source-workbook-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-workbook-role {
+  flex: none;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.source-workbook-actions {
+  flex: none;
+  gap: 4px;
+}
+
+.source-workbook-add {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.source-workbook-add:hover:not(:disabled) {
+  border-color: var(--accent, #10b981);
+  color: var(--text-primary);
+}
+
+.source-workbook-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.source-workbook-add span {
   color: var(--text-muted);
 }
 

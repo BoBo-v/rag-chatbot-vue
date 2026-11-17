@@ -52,7 +52,14 @@ export interface AgentRunRequest {
     dryRun?: boolean
     workbookId?: string
     baseRevision?: number
+    auxiliaryWorkbooks?: Array<{ workbookId: string; revision: number }>
     idempotencyKey?: string
+}
+
+export interface AgentAuxiliaryWorkbookBinding {
+    workbookId: string
+    fileName: string
+    revision: number
 }
 
 export type WorkbookStatus =
@@ -86,6 +93,7 @@ export interface ExcelWorkbookMeta {
     workbookId: string
     principalId: string
     currentRevision: number
+    revision?: number
     activeFileId: string
     fileName: string
     createdAt: number
@@ -422,13 +430,15 @@ export function getExcelWorkbookDownloadUrl(workbookId: string, revision?: numbe
 export async function fetchExcelWorkbookMeta(
     workbookId: string,
     accessKey?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    revision?: number
 ): Promise<ExcelWorkbookMeta> {
     const headers: Record<string, string> = {}
     const normalizedKey = accessKey?.trim()
     if (normalizedKey) headers['x-agent-api-key'] = normalizedKey
 
-    const response = await apiFetch(`/api/excel/${encodeURIComponent(workbookId)}/meta`, {
+    const revisionQuery = revision === undefined ? '' : `?revision=${encodeURIComponent(String(revision))}`
+    const response = await apiFetch(`/api/excel/${encodeURIComponent(workbookId)}/meta${revisionQuery}`, {
         method: 'GET',
         headers,
         signal,

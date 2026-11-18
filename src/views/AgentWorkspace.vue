@@ -559,7 +559,7 @@
                   <span class="upload-primary-text">
                     {{ workbookUploading ? '正在上传并初始化工作簿快照...' : '点击或将 Excel 文件 (.xlsx) 拖拽至此处绑定' }}
                   </span>
-                  <span class="upload-subtext">单文件上限 20MB · 仅支持纯数据表格 (自动不可变隔离保护)</span>
+                  <span class="upload-subtext">单文件上限 400MB · 仅支持纯数据表格 (自动不可变隔离保护)</span>
                 </div>
               </div>
             </div>
@@ -1304,8 +1304,8 @@ async function handleWorkbookUpload(file: File): Promise<void> {
     showToast('仅支持上传 .xlsx 格式的 Excel 工作簿', 'error', 3000)
     return
   }
-  if (file.size > 20 * 1024 * 1024) {
-    showToast('工作簿文件大小超出 20MB 上限', 'error', 3000)
+  if (file.size > 400 * 1024 * 1024) {
+    showToast('工作簿文件大小超出 400MB 上限', 'error', 3000)
     return
   }
 

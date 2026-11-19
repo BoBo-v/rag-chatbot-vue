@@ -174,6 +174,7 @@ export interface DBAgentMessage {
     createdAt: number
     execution?: DBAgentStoredExecution
     workbookArtifact?: AgentWorkbookArtifact
+    actionOptions?: Array<{ label: string; prompt: string }>
 }
 
 class ChatDB extends Dexie {

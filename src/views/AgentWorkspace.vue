@@ -261,6 +261,65 @@
                   v-html="message.renderedContent"
                 ></div>
 
+                <!-- 业务冲突与决策卡片 (支持快速执行与重新弹窗) -->
+                <div
+                  v-if="message.actionOptions && message.actionOptions.length > 0"
+                  class="agent-msg-conflict-card"
+                >
+                  <div class="conflict-card-header">
+                    <div class="conflict-card-title">
+                      <TriangleAlert :size="15" class="conflict-card-icon" aria-hidden="true" />
+                      <span>跨表操作冲突待确认（请选择处理策略）：</span>
+                    </div>
+                    <button
+                      type="button"
+                      class="conflict-card-reopen-btn"
+                      title="打开大弹窗查看详细选项"
+                      @click="openConflictModalForMessage(message)"
+                    >
+                      <ExternalLink :size="12" aria-hidden="true" />
+                      <span>弹窗决策</span>
+                    </button>
+                  </div>
+                  <div class="conflict-card-options-grid">
+                    <div
+                      v-for="(opt, oIdx) in message.actionOptions"
+                      :key="oIdx"
+                      class="conflict-grid-item"
+                    >
+                      <div class="conflict-grid-info">
+                        <span class="conflict-grid-badge">{{ oIdx + 1 }}</span>
+                        <div class="conflict-grid-text-wrap">
+                          <span class="conflict-grid-label">{{ opt.label }}</span>
+                          <span class="conflict-grid-prompt" :title="opt.prompt">{{ opt.prompt }}</span>
+                        </div>
+                      </div>
+                      <div class="conflict-grid-actions">
+                        <button
+                          type="button"
+                          class="conflict-item-btn-run"
+                          :disabled="agent.isRunning.value"
+                          title="立即发送给 Agent 执行"
+                          @click="handleExecuteOption(opt.prompt)"
+                        >
+                          <Play :size="11" aria-hidden="true" />
+                          <span>立即执行</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="conflict-item-btn-fill"
+                          :disabled="agent.isRunning.value"
+                          title="填入输入框编辑"
+                          @click="handleSelectOption(opt.prompt)"
+                        >
+                          <ArrowUpRight :size="11" aria-hidden="true" />
+                          <span>填入</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Excel 成果与操作卡片 (随历史消息持久化) -->
                 <div
                   v-if="message.workbookArtifact"
@@ -708,6 +767,89 @@
       </aside>
     </div>
   </section>
+
+  <!-- 业务冲突决策模态弹窗 (弹提示) -->
+  <Teleport to="body">
+    <div
+      v-if="isConflictModalOpen && activeConflictDecision"
+      class="conflict-modal-overlay"
+      @click.self="closeConflictModal"
+    >
+      <div class="conflict-modal-card" role="dialog" aria-modal="true" aria-labelledby="conflict-modal-heading">
+        <header class="conflict-modal-header">
+          <div class="conflict-modal-header-info">
+            <span class="conflict-modal-badge">
+              <TriangleAlert :size="15" aria-hidden="true" />
+              <span>数据冲突保护 · 等待用户决策</span>
+            </span>
+            <h3 id="conflict-modal-heading" class="conflict-modal-title">{{ activeConflictDecision.title }}</h3>
+          </div>
+          <button type="button" class="conflict-modal-close" title="关闭弹窗" @click="closeConflictModal">
+            <X :size="18" aria-hidden="true" />
+          </button>
+        </header>
+
+        <div class="conflict-modal-body">
+          <div class="conflict-modal-reason-box">
+            <div class="reason-box-title">
+              <Sparkles :size="14" aria-hidden="true" />
+              <span>冲突原因说明</span>
+            </div>
+            <p class="reason-box-desc">{{ activeConflictDecision.reason }}</p>
+          </div>
+
+          <div class="conflict-modal-prompt">
+            <span>请选择是否允许写入及写入策略（点击「立即执行」直接生效）：</span>
+          </div>
+
+          <div class="conflict-modal-options-list">
+            <div
+              v-for="(opt, idx) in activeConflictDecision.options"
+              :key="idx"
+              class="conflict-modal-option-card"
+            >
+              <div class="option-card-main">
+                <span class="option-card-index">{{ idx + 1 }}</span>
+                <div class="option-card-content">
+                  <div class="option-card-label">{{ opt.label }}</div>
+                  <div class="option-card-prompt">{{ opt.prompt }}</div>
+                </div>
+              </div>
+              <div class="option-card-buttons">
+                <button
+                  type="button"
+                  class="btn-option-execute"
+                  :disabled="agent.isRunning.value"
+                  title="立即发送此决策给 Agent 执行"
+                  @click="handleExecuteOption(opt.prompt)"
+                >
+                  <Play :size="13" aria-hidden="true" />
+                  <span>立即执行</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn-option-fill"
+                  :disabled="agent.isRunning.value"
+                  title="填入输入框，可在修改后发送"
+                  @click="handleSelectOption(opt.prompt)"
+                >
+                  <ArrowUpRight :size="13" aria-hidden="true" />
+                  <span>填入编辑</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="conflict-modal-footer">
+          <span class="modal-footer-tip">💡 提示：您也可以关闭此弹窗，直接在下方输入框中用自然语言对 Agent 提出要求。</span>
+          <button type="button" class="btn-modal-dismiss" @click="closeConflictModal">
+            关闭
+          </button>
+        </footer>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -744,7 +886,10 @@ import {
   UserRound,
   Wrench,
   X,
+  ArrowUpRight,
   Download,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-vue-next'
 import { useAgentRun } from '../composables/useAgentRun'
 import { useConfirm } from '../composables/useConfirm'
@@ -802,6 +947,7 @@ interface WorkspaceMessage {
   createdAt: number
   execution?: AgentStoredExecution
   workbookArtifact?: AgentWorkbookArtifact
+  actionOptions?: Array<{ label: string; prompt: string }>
 }
 
 const AGENT_CONTEXT_MAX_MESSAGES = 20
@@ -958,6 +1104,124 @@ const agentSuggestions = [
 
 function applySuggestion(text: string) {
   prompt.value = text
+}
+
+interface ConflictDecisionState {
+  title: string
+  conflictCode?: string
+  reason: string
+  options: Array<{ label: string; prompt: string }>
+}
+
+const isConflictModalOpen = ref(false)
+const activeConflictDecision = ref<ConflictDecisionState | null>(null)
+
+function extractConflictReason(content: string): string {
+  if (
+    content.includes('【跨表操作被安全暂停：源工作表存在重复匹配键】') ||
+    content.includes('DUPLICATE_SOURCE_KEY') ||
+    content.includes('共用同一个编码') ||
+    content.includes('复合键') ||
+    (content.includes('源表') && content.includes('重复')) ||
+    (content.includes('源工作表') && content.includes('重复'))
+  ) {
+    const match = content.match(/原因说明：([^\n]+)/)
+    if (match) return match[1]
+    if (content.includes('HQF1VY') || content.includes('共用同一个编码')) {
+      return '源表中存在共用同一编码的重复记录（例如标配与带蒸笼款），推荐改用复合键（编码+产品名称）或指定保留策略以安全写入。'
+    }
+    return '源工作表匹配键存在重复记录，跨表关联存在多重对应歧义。系统已安全暂停写入，避免错误覆盖。'
+  }
+  if (content.includes('TARGET_COLUMN_NOT_FOUND') || content.includes('目标表列不存在')) {
+    return '目标表中未找到待更新的列，需要您确认是改为新增列还是映射到其他已有列。'
+  }
+  if (content.includes('TARGET_VALUE_CONFLICT') || content.includes('目标单元格已有不同值')) {
+    return '目标单元格中已存在不同的旧值，需要您确认是否允许直接覆盖或保留现有值。'
+  }
+  if (content.includes('SOURCE_COLUMN_NOT_MAPPED') || content.includes('未映射列')) {
+    return '源表中存在未映射到目标表的列，需要您确认是忽略未映射列还是取消并重新明确映射。'
+  }
+  return '检测到表格数据冲突或待确认事项，系统已暂停写入以保护文件。请确认是否允许写入及具体策略。'
+}
+
+function resolveActionOptions(events?: AgentEvent[], content?: string): Array<{ label: string; prompt: string }> | undefined {
+  if (events) {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i]
+      if (ev.type === 'tool_completed' && ev.data && isRecord(ev.data.metadata)) {
+        const opts = (ev.data.metadata as any).actionOptions
+        if (Array.isArray(opts) && opts.length > 0) {
+          return opts
+        }
+      }
+    }
+  }
+
+  // Fallback: 如果元数据没有，从文本内容正则识别
+  if (content) {
+    if (
+      content.includes('DUPLICATE_SOURCE_KEY') ||
+      content.includes('复合键') ||
+      content.includes('共用同一个编码') ||
+      content.includes('保留首条') ||
+      (content.includes('源表') && content.includes('重复')) ||
+      (content.includes('源工作表') && content.includes('重复'))
+    ) {
+      return [
+        { label: '使用复合键关联匹配', prompt: '确认使用复合键匹配：请结合商品编码和产品名称作为联合主键，将源表的商品图片完整合并补全到目标表' },
+        { label: '保留首条并写入', prompt: '允许写入，遇到重复键采用保留首条策略（use_first）继续合并商品图片' },
+        { label: '保留末条并写入', prompt: '允许写入，遇到重复键采用保留末条策略（use_last）继续合并商品图片' },
+        { label: '跳过重复项写入', prompt: '允许写入，但跳过存在重复键的行（skip）继续合并商品图片' },
+      ]
+    }
+    if (content.includes('TARGET_COLUMN_NOT_FOUND') || content.includes('目标表列不存在')) {
+      return [
+        { label: '改用追加新列', prompt: '目标表无此列，请改用 excel_merge 将其作为新列追加到目标表' },
+      ]
+    }
+    if (content.includes('TARGET_VALUE_CONFLICT') || content.includes('目标单元格已有不同值')) {
+      return [
+        { label: '允许覆盖目标值', prompt: '确认覆盖：允许将目标单元格已有的旧值覆盖为源表新值' },
+        { label: '保留目标现有值', prompt: '保留目标值：目标单元格已有值的请保持不变，仅填充空单元格' },
+      ]
+    }
+    if (content.includes('SOURCE_COLUMN_NOT_MAPPED') || content.includes('未映射列')) {
+      return [
+        { label: '忽略未映射列', prompt: '请忽略未映射的源表多余列，仅将已匹配列的数据追加到目标表' },
+      ]
+    }
+  }
+  return undefined
+}
+
+function openConflictModalForMessage(message: WorkspaceMessage) {
+  if (!message.actionOptions || message.actionOptions.length === 0) return
+  activeConflictDecision.value = {
+    title: 'Excel 跨表操作冲突确认（需用户确认）',
+    reason: extractConflictReason(message.content),
+    options: message.actionOptions,
+  }
+  isConflictModalOpen.value = true
+}
+
+function closeConflictModal() {
+  isConflictModalOpen.value = false
+}
+
+async function handleExecuteOption(promptText: string) {
+  isConflictModalOpen.value = false
+  if (agent.isRunning.value) return
+  prompt.value = promptText
+  await submitTask(promptText)
+}
+
+function handleSelectOption(text: string) {
+  isConflictModalOpen.value = false
+  prompt.value = text
+  nextTick(() => {
+    promptTextareaRef.value?.focus()
+  })
+  showToast('已载入决策指令，按 Enter 即可直接发送', 'success', 2000)
 }
 
 let providerController: AbortController | null = null
@@ -1458,8 +1722,8 @@ async function downloadArtifactWorkbook(artifact?: AgentWorkbookArtifact): Promi
   }
 }
 
-async function submitTask(): Promise<void> {
-  const task = prompt.value.trim()
+async function submitTask(eventOrCustomTask?: SubmitEvent | string): Promise<void> {
+  const task = (typeof eventOrCustomTask === 'string' ? eventOrCustomTask : prompt.value).trim()
   const runtime = selectedModel.value
   if (!task || !runtime || agent.isRunning.value) return
 
@@ -1597,6 +1861,16 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
       }
     }
 
+    const actionOptions = resolveActionOptions(executionSnapshot?.events, agent.answer.value)
+    if (actionOptions && actionOptions.length > 0) {
+      activeConflictDecision.value = {
+        title: '跨表操作冲突确认（需用户确认是否允许写入）',
+        reason: extractConflictReason(agent.answer.value),
+        options: actionOptions,
+      }
+      isConflictModalOpen.value = true
+    }
+
     const assistantMessageId = crypto.randomUUID()
     const assistantMessage: WorkspaceMessage = {
       id: assistantMessageId,
@@ -1611,6 +1885,7 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
       createdAt: Date.now(),
       execution: executionSnapshot,
       workbookArtifact: artifact,
+      actionOptions,
     }
     messages.value.push(assistantMessage)
     selectedExecutionMessageId.value = assistantMessageId
@@ -1630,10 +1905,21 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
       }
     }
 
-    const assistantMessageId = crypto.randomUUID()
     const fallbackText = agent.answer.value.trim()
       ? agent.answer.value
       : (agent.status.value === 'cancelled' ? 'Agent 运行已取消。' : (displayErrorMessage.value || 'Agent 运行中断。'))
+
+    const actionOptions = resolveActionOptions(executionSnapshot?.events, fallbackText)
+    if (actionOptions && actionOptions.length > 0) {
+      activeConflictDecision.value = {
+        title: '跨表操作冲突确认（需用户确认是否允许写入）',
+        reason: extractConflictReason(fallbackText),
+        options: actionOptions,
+      }
+      isConflictModalOpen.value = true
+    }
+
+    const assistantMessageId = crypto.randomUUID()
     const assistantMessage: WorkspaceMessage = {
       id: assistantMessageId,
       role: 'assistant',
@@ -1646,6 +1932,7 @@ async function executeRequest(request: AgentRunRequest): Promise<void> {
       } as Message),
       createdAt: Date.now(),
       execution: executionSnapshot,
+      actionOptions,
     }
     messages.value.push(assistantMessage)
     selectedExecutionMessageId.value = assistantMessageId
@@ -1716,6 +2003,7 @@ async function openAgentSession(sessionId: string): Promise<void> {
     ...message,
     execution: message.execution,
     workbookArtifact: message.workbookArtifact,
+    actionOptions: (message as any).actionOptions || resolveActionOptions(message.execution?.events, message.content),
     renderedContent: message.role === 'assistant'
       ? renderContent({
           id: message.id,
@@ -1869,6 +2157,7 @@ function toAgentStoredMessage(message: WorkspaceMessage): AgentStoredMessage {
     createdAt: message.createdAt,
     ...(message.execution ? { execution: message.execution } : {}),
     ...(message.workbookArtifact ? { workbookArtifact: message.workbookArtifact } : {}),
+    ...(message.actionOptions ? { actionOptions: message.actionOptions } : {}),
   }
 }
 
@@ -3912,6 +4201,543 @@ textarea:disabled {
 .upload-subtext {
   font-size: 10.5px;
   color: var(--text-muted);
+}
+
+/* ─── 业务冲突决策卡片 (气泡内) ───────── */
+.agent-msg-conflict-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 10px);
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-theme="light"] .agent-msg-conflict-card {
+  background: #fffbeb;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.conflict-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.conflict-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #f59e0b;
+}
+
+[data-theme="light"] .conflict-card-title {
+  color: #b45309;
+}
+
+.conflict-card-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.conflict-card-reopen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 5px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+[data-theme="light"] .conflict-card-reopen-btn {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.conflict-card-reopen-btn:hover {
+  background: rgba(245, 158, 11, 0.22);
+}
+
+.conflict-card-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.conflict-grid-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--bg-surface, #1e1b2e);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+}
+
+[data-theme="light"] .conflict-grid-item {
+  background: #ffffff;
+  border-color: #e5e7eb;
+}
+
+.conflict-grid-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.conflict-grid-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.conflict-grid-text-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.conflict-grid-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-color, #e5e7eb);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-theme="light"] .conflict-grid-label {
+  color: #1f2937;
+}
+
+.conflict-grid-prompt {
+  font-size: 11px;
+  color: var(--text-muted, #9ca3af);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conflict-grid-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.conflict-item-btn-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 5px;
+  background: #10b981;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.conflict-item-btn-run:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.conflict-item-btn-run:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.conflict-item-btn-fill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  font-size: 11.5px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted, #9ca3af);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.15));
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+[data-theme="light"] .conflict-item-btn-fill {
+  border-color: #d1d5db;
+  color: #4b5563;
+}
+
+.conflict-item-btn-fill:hover:not(:disabled) {
+  border-color: #10b981;
+  color: #10b981;
+}
+
+/* ─── 业务冲突决策模态弹窗 (弹提示) ───────── */
+.conflict-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  padding: 16px;
+  animation: fadeInModal 0.2s ease-out;
+}
+
+@keyframes fadeInModal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.conflict-modal-card {
+  width: 100%;
+  max-width: 600px;
+  border-radius: 14px;
+  background: var(--bg-surface, #1e1b2e);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5), 0 0 25px rgba(245, 158, 11, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: scaleUpModal 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes scaleUpModal {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+[data-theme="light"] .conflict-modal-card {
+  background: #ffffff;
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.15), 0 0 25px rgba(245, 158, 11, 0.1);
+}
+
+.conflict-modal-header {
+  padding: 16px 20px 14px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+[data-theme="light"] .conflict-modal-header {
+  border-color: #f3f4f6;
+}
+
+.conflict-modal-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.conflict-modal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 2px 8px;
+  border-radius: 12px;
+  align-self: flex-start;
+}
+
+[data-theme="light"] .conflict-modal-badge {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.conflict-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-color, #f3f4f6);
+}
+
+[data-theme="light"] .conflict-modal-title {
+  color: #111827;
+}
+
+.conflict-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #9ca3af);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.conflict-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-color, #ffffff);
+}
+
+[data-theme="light"] .conflict-modal-close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.conflict-modal-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.conflict-modal-reason-box {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.07);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-theme="light"] .conflict-modal-reason-box {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.reason-box-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #f59e0b;
+}
+
+[data-theme="light"] .reason-box-title {
+  color: #b45309;
+}
+
+.reason-box-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-color, #e5e7eb);
+}
+
+[data-theme="light"] .reason-box-desc {
+  color: #374151;
+}
+
+.conflict-modal-prompt {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-color, #e5e7eb);
+}
+
+[data-theme="light"] .conflict-modal-prompt {
+  color: #1f2937;
+}
+
+.conflict-modal-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.conflict-modal-option-card {
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: var(--bg-surface-2, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: all 0.15s ease;
+}
+
+[data-theme="light"] .conflict-modal-option-card {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.conflict-modal-option-card:hover {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.option-card-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.option-card-index {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  font-weight: 700;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.option-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.option-card-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-color, #f3f4f6);
+}
+
+[data-theme="light"] .option-card-label {
+  color: #111827;
+}
+
+.option-card-prompt {
+  font-size: 11.5px;
+  color: var(--text-muted, #9ca3af);
+  line-height: 1.4;
+}
+
+.option-card-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-option-execute {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: #10b981;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+}
+
+.btn-option-execute:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.4);
+}
+
+.btn-option-execute:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-option-fill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--text-muted, #9ca3af);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.15));
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+[data-theme="light"] .btn-option-fill {
+  border-color: #d1d5db;
+  color: #4b5563;
+}
+
+.btn-option-fill:hover:not(:disabled) {
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.conflict-modal-footer {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+[data-theme="light"] .conflict-modal-footer {
+  border-color: #f3f4f6;
+}
+
+.modal-footer-tip {
+  font-size: 11.5px;
+  color: var(--text-muted, #9ca3af);
+}
+
+.btn-modal-dismiss {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: transparent;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.16));
+  color: var(--text-muted, #9ca3af);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+[data-theme="light"] .btn-modal-dismiss {
+  border-color: #d1d5db;
+  color: #4b5563;
+}
+
+.btn-modal-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-color, #ffffff);
+}
+
+[data-theme="light"] .btn-modal-dismiss:hover {
+  background: #f3f4f6;
+  color: #111827;
 }
 
 /* ─── Excel 成果产物卡片 (消息气泡下方持久化渲染) ───────── */

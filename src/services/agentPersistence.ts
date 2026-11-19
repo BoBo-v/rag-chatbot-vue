@@ -19,6 +19,7 @@ export interface AgentStoredMessage extends AgentRequestMessage {
     createdAt: number
     execution?: AgentStoredExecution
     workbookArtifact?: AgentWorkbookArtifact
+    actionOptions?: Array<{ label: string; prompt: string }>
 }
 
 export interface AgentSessionListItem extends AgentSessionRuntime {
@@ -205,6 +206,7 @@ function toMessageRow(sessionId: string, message: AgentStoredMessage): DBAgentMe
         createdAt: message.createdAt,
         ...(cleanExecution ? { execution: cleanExecution } : {}),
         ...(message.workbookArtifact ? { workbookArtifact: message.workbookArtifact } : {}),
+        ...(message.actionOptions ? { actionOptions: message.actionOptions } : {}),
     }
 }
 
@@ -234,6 +236,7 @@ function toStoredMessage(row: DBAgentMessage): AgentStoredMessage {
         createdAt: row.createdAt || Date.now(),
         ...(execution ? { execution } : {}),
         ...(row.workbookArtifact ? { workbookArtifact: row.workbookArtifact } : {}),
+        ...(row.actionOptions ? { actionOptions: row.actionOptions } : {}),
     }
 }
 

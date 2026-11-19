@@ -128,6 +128,7 @@ function dismiss() {
   box-shadow: var(--shadow-sm, 0 4px 18px rgba(0, 0, 0, 0.05));
   overflow: hidden;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .checklist-header {

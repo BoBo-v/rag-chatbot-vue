@@ -1114,7 +1114,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 260px;
+    min-height: 260px;
+    height: auto;
     gap: 14px;
     color: var(--text-faint);
 }
@@ -1825,7 +1826,7 @@
     .msg-image { max-width: 150px; max-height: 150px; }
     .input-hint  { font-size: 10px; margin-top: 7px; }
 
-    .empty-state { height: 200px; }
+    .empty-state { min-height: 200px; height: auto; }
     .empty-icon  { font-size: 28px; }
     .empty-state p { font-size: 13px; }
 
@@ -3085,6 +3086,8 @@ datalist option {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    height: auto;
+    width: 100%;
     min-height: min(52vh, 460px);
     padding: 24px 16px;
     gap: 8px;
@@ -3120,10 +3123,11 @@ datalist option {
 
 .chat-shell .empty-suggestions {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 12px;
     max-width: 960px;
     width: 100%;
+    flex-shrink: 0;
 }
 
 @media (max-width: 900px) {
@@ -4372,6 +4376,7 @@ datalist option {
     text-align: left;
     transition: all var(--motion-fast, 140ms) ease;
     box-sizing: border-box;
+    flex-shrink: 0;
 }
 
 .chat-shell .demo-entry-card:hover {
